@@ -10,7 +10,7 @@ export async function registerErrorHandler(app: FastifyInstance) {
       success: false,
       error: {
         code: error.code || 'INTERNAL_ERROR',
-        message: statusCode === 500 ? 'Internal server error' : error.message,
+        message: error.message,
       },
     });
   });

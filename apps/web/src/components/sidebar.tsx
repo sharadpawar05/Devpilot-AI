@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Settings, Users } from 'lucide-react';
+import { LayoutDashboard, Settings, Users, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface SidebarLink {
@@ -10,6 +10,7 @@ interface SidebarLink {
 
 const links: SidebarLink[] = [
   { label: 'Overview', href: '/dashboard', icon: LayoutDashboard },
+  { label: 'Playground', href: '/playground', icon: Sparkles },
   { label: 'Teams', href: '/dashboard/teams', icon: Users },
   { label: 'Settings', href: '/dashboard/settings', icon: Settings },
 ];

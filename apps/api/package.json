@@ -19,6 +19,9 @@
     "db:reset": "prisma migrate reset --force && pnpm db:seed"
   },
   "dependencies": {
+    "@devpilot/ai-core": "workspace:*",
+    "@devpilot/ai-providers": "workspace:*",
+    "@devpilot/config": "workspace:*",
     "@devpilot/shared": "workspace:*",
     "@devpilot/types": "workspace:*",
     "@fastify/cors": "^9.0.0",

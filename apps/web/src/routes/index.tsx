@@ -5,6 +5,7 @@ import { AppLayout } from '@/layouts/app-layout';
 import { LandingPage } from '@/pages/landing';
 import { LoginPage } from '@/pages/login';
 import { DashboardPage } from '@/pages/dashboard';
+import { PlaygroundPage } from '@/pages/playground';
 import { NotFoundPage } from '@/pages/not-found';
 
 const routes: RouteObject[] = [
@@ -30,6 +31,15 @@ const routes: RouteObject[] = [
       </ProtectedRoute>
     ),
     children: [{ index: true, element: <DashboardPage /> }],
+  },
+  {
+    path: '/playground',
+    element: (
+      <ProtectedRoute>
+        <AppLayout />
+      </ProtectedRoute>
+    ),
+    children: [{ index: true, element: <PlaygroundPage /> }],
   },
   { path: '*', element: <NotFoundPage /> },
 ];

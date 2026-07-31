@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import Fastify from 'fastify';
 import { loadEnv } from '@/config';
 import { registerPlugins } from '@/plugins';
@@ -18,9 +19,12 @@ const app = Fastify({
 async function bootstrap() {
   await registerPlugins(app);
 
-  await app.register(async (v1) => {
-    await v1.register(apiV1Routes);
-  }, { prefix: env.API_PREFIX });
+  await app.register(
+    async (v1) => {
+      await v1.register(apiV1Routes);
+    },
+    { prefix: env.API_PREFIX },
+  );
 
   const shutdown = async () => {
     app.log.info('Shutting down gracefully...');
