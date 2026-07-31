@@ -1,6 +1,6 @@
-# @engineering-ai/shared
+# @devpilot/shared
 
-Shared business logic and domain types for the Engineering AI platform.
+Shared business logic and domain types for the DevPilot platform.
 
 ## Purpose
 
@@ -9,5 +9,5 @@ This package contains shared business logic, domain models, and interfaces that 
 ## Usage
 
 ```typescript
-import type { AuthContext, GenerationRequest } from '@engineering-ai/shared';
+import type { AuthContext, GenerationRequest } from '@devpilot/shared';
 ```

@@ -1,4 +1,4 @@
-import type { ApiResponse } from '@engineering-ai/types';
+import type { ApiResponse } from '@devpilot/types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
@@ -9,10 +9,7 @@ class ApiClient {
     this.baseUrl = baseUrl;
   }
 
-  private async request<T>(
-    endpoint: string,
-    options?: RequestInit,
-  ): Promise<ApiResponse<T>> {
+  private async request<T>(endpoint: string, options?: RequestInit): Promise<ApiResponse<T>> {
     const url = `${this.baseUrl}${endpoint}`;
     const response = await fetch(url, {
       ...options,

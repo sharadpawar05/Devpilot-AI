@@ -1,6 +1,6 @@
-# @engineering-ai/web
+# @devpilot/web
 
-Frontend React application for the Engineering AI platform.
+Frontend React application for the DevPilot platform.
 
 ## Purpose
 

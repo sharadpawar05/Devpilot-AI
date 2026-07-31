@@ -1,6 +1,6 @@
-# @engineering-ai/types
+# @devpilot/types
 
-Shared TypeScript type definitions for the Engineering AI platform.
+Shared TypeScript type definitions for the DevPilot platform.
 
 ## Purpose
 
@@ -9,5 +9,5 @@ This package contains all shared type definitions, interfaces, and enums used ac
 ## Usage
 
 ```typescript
-import type { User, Team, ApiResponse } from '@engineering-ai/types';
+import type { User, Team, ApiResponse } from '@devpilot/types';
 ```

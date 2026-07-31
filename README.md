@@ -1,4 +1,4 @@
-# Engineering AI
+# DevPilot
 
 An AI-powered SaaS platform for engineering management automation.
 
@@ -18,8 +18,8 @@ An AI-powered SaaS platform for engineering management automation.
 ### Installation
 
 ```bash
-git clone https://github.com/your-org/engineering-ai.git
-cd engineering-ai
+git clone https://github.com/your-org/devpilot.git
+cd devpilot
 pnpm install
 ```
 
@@ -35,7 +35,7 @@ pnpm typecheck    # Type check all packages
 ## Project Structure
 
 ```
-engineering-ai/
+devpilot/
 ├── apps/
 │   ├── web/              # Frontend React application
 │   └── api/              # Backend Fastify API

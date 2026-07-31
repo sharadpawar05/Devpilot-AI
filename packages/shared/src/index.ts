@@ -1,4 +1,4 @@
-import type { User, Team, TeamMember } from '@engineering-ai/types';
+import type { User, Team, TeamMember } from '@devpilot/types';
 
 export type { User, Team, TeamMember };
 

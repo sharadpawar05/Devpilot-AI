@@ -1,6 +1,6 @@
-# @engineering-ai/ai-providers
+# @devpilot/ai-providers
 
-AI provider abstractions for the Engineering AI platform.
+AI provider abstractions for the DevPilot platform.
 
 ## Purpose
 
@@ -9,5 +9,5 @@ This package contains provider-specific implementations for different AI service
 ## Usage
 
 ```typescript
-import { OpenAIProvider, AnthropicProvider } from '@engineering-ai/ai-providers';
+import { OpenAIProvider, AnthropicProvider } from '@devpilot/ai-providers';
 ```

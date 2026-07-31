@@ -1,6 +1,6 @@
-# @engineering-ai/config
+# @devpilot/config
 
-Shared configuration for the Engineering AI platform.
+Shared configuration for the DevPilot platform.
 
 ## Purpose
 
@@ -9,5 +9,5 @@ This package contains centralized configuration management, including environmen
 ## Usage
 
 ```typescript
-import { config } from '@engineering-ai/config';
+import { config } from '@devpilot/config';
 ```

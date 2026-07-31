@@ -1,5 +1,5 @@
 {
-  "name": "@engineering-ai/ai-providers",
+  "name": "@devpilot/ai-providers",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -16,7 +16,7 @@
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
-    "@engineering-ai/types": "workspace:*"
+    "@devpilot/types": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.4.0"

@@ -1,5 +1,5 @@
 {
-  "name": "@engineering-ai/shared",
+  "name": "@devpilot/shared",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -16,8 +16,8 @@
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
-    "@engineering-ai/types": "workspace:*",
-    "@engineering-ai/utils": "workspace:*"
+    "@devpilot/types": "workspace:*",
+    "@devpilot/utils": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.4.0"

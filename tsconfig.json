@@ -22,22 +22,15 @@
     "verbatimModuleSyntax": true,
     "baseUrl": ".",
     "paths": {
-      "@engineering-ai/ai-core": ["packages/ai-core/src"],
-      "@engineering-ai/ai-providers": ["packages/ai-providers/src"],
-      "@engineering-ai/ai-prompts": ["packages/ai-prompts/src"],
-      "@engineering-ai/ui": ["packages/ui/src"],
-      "@engineering-ai/config": ["packages/config/src"],
-      "@engineering-ai/shared": ["packages/shared/src"],
-      "@engineering-ai/types": ["packages/types/src"],
-      "@engineering-ai/utils": ["packages/utils/src"]
+      "@devpilot/ai-core": ["packages/ai-core/src"],
+      "@devpilot/ai-providers": ["packages/ai-providers/src"],
+      "@devpilot/ai-prompts": ["packages/ai-prompts/src"],
+      "@devpilot/ui": ["packages/ui/src"],
+      "@devpilot/config": ["packages/config/src"],
+      "@devpilot/shared": ["packages/shared/src"],
+      "@devpilot/types": ["packages/types/src"],
+      "@devpilot/utils": ["packages/utils/src"]
     }
   },
-  "exclude": [
-    "node_modules",
-    "dist",
-    "build",
-    "coverage",
-    "*.config.ts",
-    "*.config.js"
-  ]
+  "exclude": ["node_modules", "dist", "build", "coverage", "*.config.ts", "*.config.js"]
 }

@@ -1,6 +1,6 @@
-# @engineering-ai/ai-core
+# @devpilot/ai-core
 
-Core AI orchestration layer for the Engineering AI platform.
+Core AI orchestration layer for the DevPilot platform.
 
 ## Purpose
 
@@ -9,5 +9,5 @@ This package provides the central AI routing and orchestration logic. It coordin
 ## Usage
 
 ```typescript
-import { aiRouter } from '@engineering-ai/ai-core';
+import { aiRouter } from '@devpilot/ai-core';
 ```

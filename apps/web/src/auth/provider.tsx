@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
-import type { Session, AuthUser, AuthProvider as OAuthProvider } from '@engineering-ai/types';
+import type { Session, AuthUser, AuthProvider as OAuthProvider } from '@devpilot/types';
 import { supabase } from '@/lib/supabase';
 
 interface AuthContextType {

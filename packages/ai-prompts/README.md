@@ -1,6 +1,6 @@
-# @engineering-ai/ai-prompts
+# @devpilot/ai-prompts
 
-AI prompt templates for the Engineering AI platform.
+AI prompt templates for the DevPilot platform.
 
 ## Purpose
 
@@ -9,5 +9,5 @@ This package manages prompt templates for different generation tasks (sprint sum
 ## Usage
 
 ```typescript
-import { registerTemplate, compilePrompt } from '@engineering-ai/ai-prompts';
+import { registerTemplate, compilePrompt } from '@devpilot/ai-prompts';
 ```

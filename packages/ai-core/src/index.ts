@@ -1,4 +1,4 @@
-import type { AIGenerationRequest, AIGenerationResponse, AIModel } from '@engineering-ai/ai-providers';
+import type { AIGenerationRequest, AIGenerationResponse, AIModel } from '@devpilot/ai-providers';
 
 export class AIRouter {
   async generate(_request: AIGenerationRequest): Promise<AIGenerationResponse> {

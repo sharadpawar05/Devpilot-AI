@@ -1,6 +1,6 @@
-# @engineering-ai/ui
+# @devpilot/ui
 
-Shared React UI components for the Engineering AI platform.
+Shared React UI components for the DevPilot platform.
 
 ## Purpose
 
@@ -9,5 +9,5 @@ This package contains reusable React UI components that are shared across the fr
 ## Usage
 
 ```typescript
-import { Button } from '@engineering-ai/ui';
+import { Button } from '@devpilot/ui';
 ```

@@ -1,5 +1,5 @@
 {
-  "name": "@engineering-ai/ai-core",
+  "name": "@devpilot/ai-core",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -16,9 +16,9 @@
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
-    "@engineering-ai/types": "workspace:*",
-    "@engineering-ai/ai-providers": "workspace:*",
-    "@engineering-ai/ai-prompts": "workspace:*"
+    "@devpilot/types": "workspace:*",
+    "@devpilot/ai-providers": "workspace:*",
+    "@devpilot/ai-prompts": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.4.0"

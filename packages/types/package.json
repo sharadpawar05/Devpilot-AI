@@ -1,5 +1,5 @@
 {
-  "name": "@engineering-ai/types",
+  "name": "@devpilot/types",
   "version": "0.1.0",
   "private": true,
   "type": "module",
