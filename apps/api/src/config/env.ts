@@ -9,6 +9,7 @@ const envSchema = z.object({
   CORS_ORIGIN: z.string().default('*'),
   SUPABASE_URL: z.string().url('SUPABASE_URL must be a valid URL'),
   SUPABASE_ANON_KEY: z.string().min(1, 'SUPABASE_ANON_KEY is required'),
+  DATABASE_URL: z.string().url('DATABASE_URL must be a valid PostgreSQL connection string'),
 });
 
 export type Env = z.infer<typeof envSchema>;

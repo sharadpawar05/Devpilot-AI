@@ -9,8 +9,8 @@ export async function registerSwagger(app: FastifyInstance) {
   await app.register(swagger, {
     openapi: {
       info: {
-        title: 'Engineering AI API',
-        description: 'API for Engineering AI platform',
+        title: 'DevPilot API',
+        description: 'API for DevPilot platform',
         version: PACKAGE_VERSION,
       },
       servers: [

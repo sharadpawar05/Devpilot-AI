@@ -1,0 +1,172 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  USER
+}
+
+enum OrganizationPlan {
+  FREE
+  STARTER
+  PRO
+  ENTERPRISE
+}
+
+enum OrganizationStatus {
+  ACTIVE
+  SUSPENDED
+  CANCELLED
+}
+
+enum ProjectStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum IntegrationProvider {
+  GITHUB
+  JIRA
+  LINEAR
+  SLACK
+}
+
+enum IntegrationStatus {
+  ACTIVE
+  INACTIVE
+  ERROR
+}
+
+enum AIReportType {
+  SPRINT_SUMMARY
+  PR_SUMMARY
+  RELEASE_NOTES
+  STATUS_REPORT
+  INCIDENT_SUMMARY
+}
+
+// ─── Models ───────────────────────────────────────────────────────────────────
+
+model Organization {
+  id        String             @id @default(uuid()) @db.Uuid
+  name      String
+  slug      String             @unique
+  plan      OrganizationPlan   @default(FREE)
+  status    OrganizationStatus @default(ACTIVE)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  users        User[]
+  projects     Project[]
+  integrations Integration[]
+  aiReports    AIReport[]
+  auditLogs    AuditLog[]
+
+  @@index([slug])
+  @@map("organizations")
+}
+
+model User {
+  id               String     @id @default(uuid()) @db.Uuid
+  supabaseUserId   String     @unique
+  email            String     @unique
+  fullName         String
+  avatarUrl        String?
+  role             UserRole   @default(USER)
+  organizationId   String     @db.Uuid
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  aiReports      AIReport[]
+  auditLogs      AuditLog[]
+
+  @@index([supabaseUserId])
+  @@index([email])
+  @@index([organizationId])
+  @@map("users")
+}
+
+model Project {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String        @db.Uuid
+  name           String
+  description    String?
+  status         ProjectStatus @default(ACTIVE)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  aiReports    AIReport[]
+
+  @@index([organizationId])
+  @@map("projects")
+}
+
+model Integration {
+  id             String              @id @default(uuid()) @db.Uuid
+  organizationId String              @db.Uuid
+  provider       IntegrationProvider
+  status         IntegrationStatus   @default(ACTIVE)
+  encryptedConfig String
+  lastSyncAt     DateTime?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("integrations")
+}
+
+model AIReport {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  projectId      String       @db.Uuid
+  type           AIReportType
+  title          String
+  prompt         String
+  response       String?
+  model          String
+  tokensUsed     Int          @default(0)
+  cost           Float        @default(0)
+  createdBy      String?      @db.Uuid
+  createdAt      DateTime     @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  creator      User?        @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, type])
+  @@index([projectId])
+  @@index([createdBy])
+  @@map("ai_reports")
+}
+
+model AuditLog {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  userId         String?  @db.Uuid
+  action         String
+  resourceType   String
+  resourceId     String?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([userId])
+  @@map("audit_logs")
+}

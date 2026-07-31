@@ -1,6 +1,6 @@
-# @engineering-ai/api
+# @devpilot/api
 
-Backend Fastify API for the Engineering AI platform.
+Backend Fastify API for the DevPilot platform.
 
 ## Purpose
 
