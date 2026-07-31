@@ -1,0 +1,43 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "allowJs": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "verbatimModuleSyntax": true,
+    "baseUrl": ".",
+    "paths": {
+      "@engineering-ai/ai-core": ["packages/ai-core/src"],
+      "@engineering-ai/ai-providers": ["packages/ai-providers/src"],
+      "@engineering-ai/ai-prompts": ["packages/ai-prompts/src"],
+      "@engineering-ai/ui": ["packages/ui/src"],
+      "@engineering-ai/config": ["packages/config/src"],
+      "@engineering-ai/shared": ["packages/shared/src"],
+      "@engineering-ai/types": ["packages/types/src"],
+      "@engineering-ai/utils": ["packages/utils/src"]
+    }
+  },
+  "exclude": [
+    "node_modules",
+    "dist",
+    "build",
+    "coverage",
+    "*.config.ts",
+    "*.config.js"
+  ]
+}
