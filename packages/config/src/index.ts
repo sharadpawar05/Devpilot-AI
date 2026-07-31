@@ -1,27 +1,113 @@
+import { z } from 'zod';
+
+const envSchema = z.object({
+  API_PORT: z.coerce.number().default(3001),
+  API_URL: z.string().default('http://localhost:3001'),
+  WEB_PORT: z.coerce.number().default(3000),
+  WEB_URL: z.string().default('http://localhost:3000'),
+  DATABASE_URL: z.string().default('postgresql://localhost:5432/engineering_ai'),
+  REDIS_URL: z.string().default('redis://localhost:6379'),
+  SUPABASE_URL: z.string().default(''),
+  SUPABASE_ANON_KEY: z.string().default(''),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().default(''),
+  GEMINI_API_KEY: z.string().default(''),
+  OPENAI_API_KEY: z.string().default(''),
+  ANTHROPIC_API_KEY: z.string().default(''),
+  OPENROUTER_API_KEY: z.string().default(''),
+  AI_DEFAULT_MODEL: z.string().default('gemini-2.0-flash'),
+  AI_MAX_TOKENS: z.coerce.number().default(4096),
+});
+
+export type Env = z.infer<typeof envSchema>;
+
+let cachedEnv: Env | null = null;
+
+function loadEnv(): Env {
+  if (cachedEnv) return cachedEnv;
+
+  const result = envSchema.safeParse(process.env);
+
+  if (!result.success) {
+    const formatted = result.error.format();
+    const errors = Object.entries(formatted)
+      .filter(([key]) => key !== '_errors')
+      .map(([key, value]) => {
+        const errors = (value as { _errors?: string[] })._errors;
+        return errors?.length ? `${key}: ${errors.join(', ')}` : null;
+      })
+      .filter(Boolean);
+
+    if (errors.length > 0) {
+      console.warn(`[config] Environment validation warnings:\n  ${errors.join('\n  ')}`);
+    }
+  }
+
+  cachedEnv = result.success ? result.data : envSchema.parse({});
+  return cachedEnv;
+}
+
+export function getEnv(): Env {
+  return loadEnv();
+}
+
 export const config = {
   api: {
-    port: Number(process.env.API_PORT) || 3001,
-    url: process.env.API_URL || 'http://localhost:3001',
+    get port() {
+      return getEnv().API_PORT;
+    },
+    get url() {
+      return getEnv().API_URL;
+    },
   },
   web: {
-    port: Number(process.env.WEB_PORT) || 3000,
-    url: process.env.WEB_URL || 'http://localhost:3000',
+    get port() {
+      return getEnv().WEB_PORT;
+    },
+    get url() {
+      return getEnv().WEB_URL;
+    },
   },
   database: {
-    url: process.env.DATABASE_URL || 'postgresql://localhost:5432/engineering_ai',
+    get url() {
+      return getEnv().DATABASE_URL;
+    },
   },
   redis: {
-    url: process.env.REDIS_URL || 'redis://localhost:6379',
+    get url() {
+      return getEnv().REDIS_URL;
+    },
   },
   auth: {
-    supabaseUrl: process.env.SUPABASE_URL || '',
-    supabaseAnonKey: process.env.SUPABASE_ANON_KEY || '',
-    supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+    get supabaseUrl() {
+      return getEnv().SUPABASE_URL;
+    },
+    get supabaseAnonKey() {
+      return getEnv().SUPABASE_ANON_KEY;
+    },
+    get supabaseServiceRoleKey() {
+      return getEnv().SUPABASE_SERVICE_ROLE_KEY;
+    },
   },
   ai: {
-    openaiApiKey: process.env.OPENAI_API_KEY || '',
-    anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
-    defaultModel: process.env.AI_DEFAULT_MODEL || 'gpt-4',
-    maxTokens: Number(process.env.AI_MAX_TOKENS) || 4096,
+    get geminiApiKey() {
+      return getEnv().GEMINI_API_KEY;
+    },
+    get openaiApiKey() {
+      return getEnv().OPENAI_API_KEY;
+    },
+    get anthropicApiKey() {
+      return getEnv().ANTHROPIC_API_KEY;
+    },
+    get openrouterApiKey() {
+      return getEnv().OPENROUTER_API_KEY;
+    },
+    get defaultModel() {
+      return getEnv().AI_DEFAULT_MODEL;
+    },
+    get maxTokens() {
+      return getEnv().AI_MAX_TOKENS;
+    },
   },
 } as const;
+
+export { envSchema };

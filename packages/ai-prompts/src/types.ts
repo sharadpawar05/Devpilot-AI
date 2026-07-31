@@ -1,4 +1,11 @@
-export type PromptCategory = 'sprint_summary' | 'pr_summary' | 'release_notes' | 'status_report' | 'incident_summary';
+export type PromptCategory =
+  | 'sprint_summary'
+  | 'pr_summary'
+  | 'release_notes'
+  | 'status_report'
+  | 'incident_summary'
+  | 'code_analysis'
+  | 'general';
 
 export interface PromptTemplate {
   id: string;

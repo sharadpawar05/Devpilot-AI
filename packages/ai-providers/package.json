@@ -16,7 +16,8 @@
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
-    "@devpilot/types": "workspace:*"
+    "@devpilot/types": "workspace:*",
+    "@google/generative-ai": "^0.21.0"
   },
   "devDependencies": {
     "typescript": "^5.4.0"

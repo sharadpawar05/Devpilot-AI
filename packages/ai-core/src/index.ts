@@ -1,18 +1,42 @@
-import type { AIGenerationRequest, AIGenerationResponse, AIModel } from '@devpilot/ai-providers';
+export type {
+  AIProviderName,
+  AIModel,
+  TokenUsage,
+  CostBreakdown,
+  AIRequest,
+  AIResponse,
+  AIProviderConfig,
+  ProviderCapabilities,
+  AIErrorCode,
+  AIError,
+  RetryPolicy,
+  AIProvider,
+} from '@devpilot/ai-providers';
 
-export class AIRouter {
-  async generate(_request: AIGenerationRequest): Promise<AIGenerationResponse> {
-    throw new Error('AI Router not yet implemented');
-  }
+export { DEFAULT_RETRY_POLICY } from '@devpilot/ai-providers';
 
-  selectModel(_criteria: {
-    complexity: 'low' | 'medium' | 'high';
-    contextLength: number;
-    speed: 'fast' | 'balanced' | 'quality';
-    cost: 'low' | 'medium' | 'high';
-  }): AIModel {
-    return 'gpt-4';
-  }
-}
+export {
+  GeminiProvider,
+  OpenAIProvider,
+  AnthropicProvider,
+  OpenRouterProvider,
+} from '@devpilot/ai-providers';
 
-export const aiRouter = new AIRouter();
+export type { GatewayConfig, ProviderStatus, HealthStatus, RequestLogEntry } from './types';
+export { DEFAULT_GATEWAY_CONFIG } from './types';
+
+export {
+  AIGatewayError,
+  createProviderNotInitializedError,
+  createTimeoutError,
+  createNetworkError,
+} from './errors';
+
+export { calculateDelay, shouldRetry, executeWithRetry } from './retry';
+
+export { ProviderFactory } from './factory';
+export { GatewayService } from './gateway';
+export { AIService } from './service';
+export type { GenerateOptions, StructuredJSONOptions } from './service';
+
+export { RequestLogger, buildProviderStatus, buildHealthStatus } from './logger';
