@@ -7,6 +7,8 @@ const envSchema = z.object({
   API_PREFIX: z.string().default('/api/v1'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   CORS_ORIGIN: z.string().default('*'),
+  SUPABASE_URL: z.string().url('SUPABASE_URL must be a valid URL'),
+  SUPABASE_ANON_KEY: z.string().min(1, 'SUPABASE_ANON_KEY is required'),
 });
 
 export type Env = z.infer<typeof envSchema>;

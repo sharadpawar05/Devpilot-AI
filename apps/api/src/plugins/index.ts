@@ -4,6 +4,7 @@ import { registerHelmet } from './helmet';
 import { registerSwagger } from './swagger';
 import { registerErrorHandler } from './error-handler';
 import { registerRequestLogger } from './request-logger';
+import { registerAuth } from './auth';
 
 export async function registerPlugins(app: FastifyInstance) {
   await registerErrorHandler(app);
@@ -11,4 +12,5 @@ export async function registerPlugins(app: FastifyInstance) {
   await registerCors(app);
   await registerHelmet(app);
   await registerSwagger(app);
+  await registerAuth(app);
 }

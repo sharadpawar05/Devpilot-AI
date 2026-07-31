@@ -38,3 +38,12 @@ export interface ApiError {
   message: string;
   details?: Record<string, unknown>;
 }
+
+export {
+  type AuthProvider,
+  type Role,
+  type AuthUser,
+  type Session,
+  type OAuthConfig,
+  type AuthState,
+} from './auth';
