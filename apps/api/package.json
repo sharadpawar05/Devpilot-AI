@@ -25,7 +25,7 @@
     "@devpilot/config": "workspace:*",
     "@devpilot/shared": "workspace:*",
     "@devpilot/types": "workspace:*",
-    "@fastify/cookie": "^11.0.0",
+    "@fastify/cookie": "9.4.0",
     "@fastify/cors": "^9.0.0",
     "@fastify/helmet": "^11.0.0",
     "@fastify/rate-limit": "^9.0.0",
