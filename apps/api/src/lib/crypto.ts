@@ -9,8 +9,7 @@ let cachedKey: Buffer | null = null;
 function getEncryptionKey(): Buffer {
   if (cachedKey) return cachedKey;
   const env = getEnv();
-  const secret = env.SUPABASE_JWT_SECRET || env.SUPABASE_ANON_KEY;
-  cachedKey = scryptSync(secret, 'devpilot-github-token-salt', 32);
+  cachedKey = scryptSync(env.ENCRYPTION_SECRET, 'devpilot-github-token-salt', 32);
   return cachedKey;
 }
 

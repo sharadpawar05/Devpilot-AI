@@ -122,20 +122,22 @@ export async function githubRoutes(app: FastifyInstance) {
       const state = crypto.randomUUID();
       const auth = _request as { auth: { sub: string } };
 
-      // Store state in HTTP-only cookie (10 min expiry)
+      // Store state in signed HTTP-only cookie (10 min expiry)
       reply.setCookie('github_oauth_state', state, {
         path: '/',
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: env.NODE_ENV === 'production',
+        signed: true,
         maxAge: 600, // 10 minutes
         sameSite: 'lax',
       });
 
-      // Also store userId in a separate cookie for callback
+      // Also store userId in a separate signed cookie for callback
       reply.setCookie('github_oauth_user', auth.auth.sub, {
         path: '/',
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: env.NODE_ENV === 'production',
+        signed: true,
         maxAge: 600,
         sameSite: 'lax',
       });
@@ -189,7 +191,8 @@ export async function githubRoutes(app: FastifyInstance) {
       }
 
       // Validate state from signed cookie (CSRF protection)
-      const expectedState = request.cookies?.github_oauth_state;
+      const rawState = request.cookies?.github_oauth_state;
+      const expectedState = rawState ? request.unsignCookie(rawState).value : undefined;
 
       // Clear the cookies
       reply.clearCookie('github_oauth_state', { path: '/' });
