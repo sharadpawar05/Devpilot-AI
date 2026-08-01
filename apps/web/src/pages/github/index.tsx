@@ -87,7 +87,8 @@ function renderMarkdown(text: string): string {
   let html = text;
   html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_m, lang: string, code: string) => {
     const escaped = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    return `<div class="relative my-3 rounded-md border border-input bg-muted/50"><div class="flex items-center justify-between px-3 py-1.5 text-xs text-muted-foreground border-b border-input"><span>${lang || 'code'}</span><button onclick="(async()=>{const t=this.closest('.relative').querySelector('code').textContent;await navigator.clipboard.writeText(t);const s=this.querySelector('span');s.textContent='Copied!';setTimeout(()=>s.textContent='Copy',2000)})()" class="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"><svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><span>Copy</span></button></div><pre class="overflow-x-auto p-4 font-mono text-sm"><code>${escaped}</code></pre></div>`;
+    const codeId = `code-${Math.random().toString(36).slice(2, 9)}`;
+    return `<div class="relative my-3 rounded-md border border-input bg-muted/50"><div class="flex items-center justify-between px-3 py-1.5 text-xs text-muted-foreground border-b border-input"><span>${lang || 'code'}</span><button data-copy-target="${codeId}" class="copy-button flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"><svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><span>Copy</span></button></div><pre class="overflow-x-auto p-4 font-mono text-sm"><code id="${codeId}">${escaped}</code></pre></div>`;
   });
   html = html.replace(
     /`([^`]+)`/g,
@@ -106,7 +107,7 @@ function renderMarkdown(text: string): string {
   );
   html = html.replace(/^\d+\. (.+)$/gm, '<li class="ml-4 list-decimal">$1</li>');
   html = html.replace(/^(?!<[a-z/])((?!^\s*$).+)$/gm, '<p class="mb-2">$1</p>');
-  return DOMPurify.sanitize(html, { ADD_ATTR: ['onclick'] });
+  return DOMPurify.sanitize(html);
 }
 
 function extractSections(text: string): { title: string; content: string }[] {
@@ -200,6 +201,33 @@ export function GitHubReviewPage() {
       });
     }
   }, [gh.connected, gh.handleCallback]);
+
+  // Event delegation for copy buttons in markdown content
+  useEffect(() => {
+    const handleCopyClick = async (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const copyButton = target.closest('.copy-button');
+      if (!copyButton) return;
+
+      const codeId = copyButton.getAttribute('data-copy-target');
+      if (!codeId) return;
+
+      const codeElement = document.getElementById(codeId);
+      if (!codeElement) return;
+
+      await navigator.clipboard.writeText(codeElement.textContent || '');
+      const span = copyButton.querySelector('span');
+      if (span) {
+        span.textContent = 'Copied!';
+        setTimeout(() => {
+          span.textContent = 'Copy';
+        }, 2000);
+      }
+    };
+
+    document.addEventListener('click', handleCopyClick);
+    return () => document.removeEventListener('click', handleCopyClick);
+  }, []);
 
   const handleConnect = useCallback(async () => {
     setConnecting(true);

@@ -4,21 +4,24 @@ import { Octokit } from 'octokit';
 import { authenticate } from '@/middleware/auth';
 import { getEnv } from '@/config';
 import { db } from '@/lib/db';
+import { encrypt, decrypt } from '@/lib/crypto';
 import { PromptRegistry, loadMarkdownPrompts } from '@devpilot/ai-prompts';
 import { aiService } from '@/lib/ai';
 
 const registry = new PromptRegistry();
 registry.registerAll(loadMarkdownPrompts());
 
-// In-memory state store: userId -> OAuth state (CSRF protection)
-const stateStore = new Map<string, string>();
-
 async function getGitHubToken(userId: string): Promise<string | null> {
   const user = await db.user.findUnique({
     where: { supabaseUserId: userId },
     select: { githubAccessToken: true },
   });
-  return user?.githubAccessToken ?? null;
+  if (!user?.githubAccessToken) return null;
+  try {
+    return decrypt(user.githubAccessToken);
+  } catch {
+    return null;
+  }
 }
 
 async function setGitHubToken(
@@ -27,14 +30,15 @@ async function setGitHubToken(
   email?: string,
   name?: string,
 ): Promise<void> {
+  const encryptedToken = encrypt(token);
   await db.user.upsert({
     where: { supabaseUserId: userId },
-    update: { githubAccessToken: token },
+    update: { githubAccessToken: encryptedToken },
     create: {
       supabaseUserId: userId,
       email: email || `${userId}@placeholder.local`,
       fullName: name || 'GitHub User',
-      githubAccessToken: token,
+      githubAccessToken: encryptedToken,
     },
   });
 }
@@ -105,7 +109,27 @@ export async function githubRoutes(app: FastifyInstance) {
       }
 
       const state = crypto.randomUUID();
-      stateStore.set((_request as { auth: { sub: string } }).auth.sub, state);
+      const auth = _request as { auth: { sub: string } };
+
+      // Store state in signed HTTP-only cookie (10 min expiry)
+      reply.setCookie('github_oauth_state', state, {
+        path: '/',
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        signed: true,
+        maxAge: 600, // 10 minutes
+        sameSite: 'lax',
+      });
+
+      // Also store userId in a separate cookie for callback
+      reply.setCookie('github_oauth_user', auth.auth.sub, {
+        path: '/',
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        signed: true,
+        maxAge: 600,
+        sameSite: 'lax',
+      });
 
       const params = new URLSearchParams({
         client_id: env.GITHUB_CLIENT_ID,
@@ -155,9 +179,13 @@ export async function githubRoutes(app: FastifyInstance) {
         });
       }
 
-      // Validate state parameter (CSRF protection)
-      const expectedState = stateStore.get(auth.sub);
-      stateStore.delete(auth.sub);
+      // Validate state from signed cookie (CSRF protection)
+      const expectedState = request.cookies?.github_oauth_state;
+      const cookieUserId = request.cookies?.github_oauth_user;
+
+      // Clear the cookies
+      reply.clearCookie('github_oauth_state', { path: '/' });
+      reply.clearCookie('github_oauth_user', { path: '/' });
 
       if (!expectedState || expectedState !== state) {
         return reply.status(403).send({
