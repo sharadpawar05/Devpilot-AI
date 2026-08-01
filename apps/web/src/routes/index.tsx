@@ -7,6 +7,7 @@ import { LoginPage } from '@/pages/login';
 import { DashboardPage } from '@/pages/dashboard';
 import { PlaygroundPage } from '@/pages/playground';
 import { CodeReviewPage } from '@/pages/code-review';
+import { GitHubReviewPage } from '@/pages/github';
 import { NotFoundPage } from '@/pages/not-found';
 
 const routes: RouteObject[] = [
@@ -50,6 +51,15 @@ const routes: RouteObject[] = [
       </ProtectedRoute>
     ),
     children: [{ index: true, element: <CodeReviewPage /> }],
+  },
+  {
+    path: '/github',
+    element: (
+      <ProtectedRoute>
+        <AppLayout />
+      </ProtectedRoute>
+    ),
+    children: [{ index: true, element: <GitHubReviewPage /> }],
   },
   { path: '*', element: <NotFoundPage /> },
 ];
