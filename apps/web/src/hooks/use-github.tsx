@@ -200,12 +200,23 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
     [token],
   );
 
+  const apiFetch = useCallback(
+    async (url: string, init?: RequestInit) => {
+      return fetch(url, {
+        credentials: 'include',
+        ...init,
+        headers: { ...authHeaders(), ...init?.headers },
+      });
+    },
+    [authHeaders],
+  );
+
   const fetchRepositories = useCallback(async () => {
     if (!token) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE_URL}/github/repositories`, { headers: authHeaders() });
+      const res = await apiFetch(`${API_BASE_URL}/github/repositories`);
       const data = await res.json();
       if (data.success) {
         setRepositories(data.repositories);
@@ -216,12 +227,12 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
       setError('Failed to fetch repositories');
     }
     setLoading(false);
-  }, [token, authHeaders]);
+  }, [token, apiFetch]);
 
   const checkConnection = useCallback(async () => {
     if (!token) return;
     try {
-      const res = await fetch(`${API_BASE_URL}/github/status`, { headers: authHeaders() });
+      const res = await apiFetch(`${API_BASE_URL}/github/status`);
       const data = await res.json();
       if (data.success && data.connected) {
         setConnected(true);
@@ -250,9 +261,7 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
         if (returnTo) {
           localStorage.setItem('github_oauth_return', returnTo);
         }
-        const res = await fetch(`${API_BASE_URL}/github/auth-url`, {
-          headers: authHeaders(),
-        });
+        const res = await apiFetch(`${API_BASE_URL}/github/auth-url`);
         const data = await res.json();
         if (data.success && data.url) {
           return data.url;
@@ -264,7 +273,7 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
         return null;
       }
     },
-    [token, authHeaders],
+    [token, apiFetch],
   );
 
   const handleCallback = useCallback(
@@ -273,9 +282,8 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(
+        const res = await apiFetch(
           `${API_BASE_URL}/github/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`,
-          { headers: authHeaders() },
         );
         const data = await res.json();
         if (data.success) {
@@ -300,9 +308,8 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
   const disconnect = useCallback(async () => {
     if (!token) return;
     try {
-      await fetch(`${API_BASE_URL}/github/disconnect`, {
+      await apiFetch(`${API_BASE_URL}/github/disconnect`, {
         method: 'DELETE',
-        headers: authHeaders(),
       });
       setConnected(false);
       setGithubUser(null);
@@ -320,7 +327,7 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
     } catch {
       /* noop */
     }
-  }, [token, authHeaders]);
+  }, [token, apiFetch]);
 
   const fetchBranches = useCallback(
     async (owner: string, repo: string) => {
@@ -328,9 +335,7 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`${API_BASE_URL}/github/repositories/${owner}/${repo}/branches`, {
-          headers: authHeaders(),
-        });
+        const res = await apiFetch(`${API_BASE_URL}/github/repositories/${owner}/${repo}/branches`);
         const data = await res.json();
         if (data.success) {
           setBranches(data.branches);
@@ -342,7 +347,7 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
       }
       setLoading(false);
     },
-    [token, authHeaders],
+    [token, apiFetch],
   );
 
   const fetchPulls = useCallback(
@@ -351,9 +356,7 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`${API_BASE_URL}/github/repositories/${owner}/${repo}/pulls`, {
-          headers: authHeaders(),
-        });
+        const res = await apiFetch(`${API_BASE_URL}/github/repositories/${owner}/${repo}/pulls`);
         const data = await res.json();
         if (data.success) {
           setPulls(data.pulls);
@@ -365,7 +368,7 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
       }
       setLoading(false);
     },
-    [token, authHeaders],
+    [token, apiFetch],
   );
 
   const fetchFiles = useCallback(
@@ -374,9 +377,8 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(
+        const res = await apiFetch(
           `${API_BASE_URL}/github/pulls/${owner}/${repo}/${pullNumber}/files`,
-          { headers: authHeaders() },
         );
         const data = await res.json();
         if (data.success) {
@@ -389,7 +391,7 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
       }
       setLoading(false);
     },
-    [token, authHeaders],
+    [token, apiFetch],
   );
 
   const reviewPR = useCallback(
@@ -406,9 +408,8 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`${API_BASE_URL}/github/review`, {
+        const res = await apiFetch(`${API_BASE_URL}/github/review`, {
           method: 'POST',
-          headers: authHeaders(),
           body: JSON.stringify(params),
         });
         const data = await res.json();
@@ -425,7 +426,7 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
         return null;
       }
     },
-    [token, authHeaders],
+    [token, apiFetch],
   );
 
   const analyzePR = useCallback(
@@ -439,9 +440,8 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`${API_BASE_URL}/github/analyze`, {
+        const res = await apiFetch(`${API_BASE_URL}/github/analyze`, {
           method: 'POST',
-          headers: authHeaders(),
           body: JSON.stringify(params),
         });
         const data = await res.json();
@@ -458,7 +458,7 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
         return null;
       }
     },
-    [token, authHeaders],
+    [token, apiFetch],
   );
 
   const selectRepo = useCallback((fullName: string | null) => {
