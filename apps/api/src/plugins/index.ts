@@ -5,10 +5,12 @@ import { registerSwagger } from './swagger';
 import { registerErrorHandler } from './error-handler';
 import { registerRequestLogger } from './request-logger';
 import { registerAuth } from './auth';
+import { registerCookies } from './cookie';
 
 export async function registerPlugins(app: FastifyInstance) {
   await registerErrorHandler(app);
   await registerRequestLogger(app);
+  await registerCookies(app);
   await registerCors(app);
   await registerHelmet(app);
   await registerSwagger(app);

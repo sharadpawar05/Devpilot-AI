@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Settings, Users, Sparkles, Code } from 'lucide-react';
+import { LayoutDashboard, Settings, Users, Sparkles, Code, Github } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface SidebarLink {
@@ -23,6 +23,7 @@ const groups: SidebarGroup[] = [
     links: [
       { label: 'Playground', href: '/playground', icon: Sparkles },
       { label: 'Code Review', href: '/code-review', icon: Code },
+      { label: 'GitHub Review', href: '/github', icon: Github },
     ],
   },
   {

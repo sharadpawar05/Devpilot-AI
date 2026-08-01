@@ -9,7 +9,13 @@ const envSchema = z.object({
   CORS_ORIGIN: z.string().default('*'),
   SUPABASE_URL: z.string().url('SUPABASE_URL must be a valid URL'),
   SUPABASE_ANON_KEY: z.string().min(1, 'SUPABASE_ANON_KEY is required'),
+  SUPABASE_JWT_SECRET: z.string().min(1, 'SUPABASE_JWT_SECRET is required'),
   DATABASE_URL: z.string().url('DATABASE_URL must be a valid PostgreSQL connection string'),
+  ENCRYPTION_SECRET: z.string().min(16, 'ENCRYPTION_SECRET must be at least 16 characters'),
+  COOKIE_SECRET: z.string().min(16, 'COOKIE_SECRET must be at least 16 characters'),
+  GITHUB_CLIENT_ID: z.string().default(''),
+  GITHUB_CLIENT_SECRET: z.string().default(''),
+  GITHUB_REDIRECT_URI: z.string().default('http://localhost:3000/github'),
 });
 
 export type Env = z.infer<typeof envSchema>;
