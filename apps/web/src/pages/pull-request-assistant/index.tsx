@@ -14,7 +14,6 @@ import {
   FileText,
   ClipboardCheck,
   BarChart3,
-  RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -570,24 +569,10 @@ export function PullRequestAssistantPage() {
                       Connected
                     </span>
                   </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={gh.refreshConnection}
-                      disabled={gh.loading}
-                      className="flex-1"
-                    >
-                      <RefreshCw
-                        className={`mr-1 h-3 w-3 ${gh.loading ? 'animate-spin' : 'hidden'}`}
-                      />
-                      Refresh
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={gh.disconnect} className="flex-1">
-                      <Unlink className="mr-1 h-3 w-3" />
-                      Disconnect
-                    </Button>
-                  </div>
+                  <Button variant="outline" size="sm" onClick={gh.disconnect} className="w-full">
+                    <Unlink className="mr-1 h-3 w-3" />
+                    Disconnect
+                  </Button>
                 </div>
               ) : (
                 <Button variant="outline" onClick={handleConnect} disabled={connecting}>
