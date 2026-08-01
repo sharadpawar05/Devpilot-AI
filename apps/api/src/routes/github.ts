@@ -3,20 +3,40 @@ import { z } from 'zod';
 import { Octokit } from 'octokit';
 import { authenticate } from '@/middleware/auth';
 import { getEnv } from '@/config';
+import { db } from '@/lib/db';
 import { PromptRegistry, loadMarkdownPrompts } from '@devpilot/ai-prompts';
 import { aiService } from '@/lib/ai';
 
 const registry = new PromptRegistry();
 registry.registerAll(loadMarkdownPrompts());
 
-// In-memory token store: userId -> github access token
-const tokenStore = new Map<string, string>();
-
 // In-memory state store: userId -> OAuth state (CSRF protection)
 const stateStore = new Map<string, string>();
 
-function getOctokit(userId: string): Octokit {
-  const token = tokenStore.get(userId);
+async function getGitHubToken(userId: string): Promise<string | null> {
+  const user = await db.user.findUnique({
+    where: { supabaseUserId: userId },
+    select: { githubAccessToken: true },
+  });
+  return user?.githubAccessToken ?? null;
+}
+
+async function setGitHubToken(userId: string, token: string): Promise<void> {
+  await db.user.update({
+    where: { supabaseUserId: userId },
+    data: { githubAccessToken: token },
+  });
+}
+
+async function deleteGitHubToken(userId: string): Promise<void> {
+  await db.user.update({
+    where: { supabaseUserId: userId },
+    data: { githubAccessToken: null },
+  });
+}
+
+async function getOctokit(userId: string): Promise<Octokit> {
+  const token = await getGitHubToken(userId);
   if (!token) {
     throw new Error('GitHub not connected. Please connect your GitHub account first.');
   }
@@ -179,7 +199,7 @@ export async function githubRoutes(app: FastifyInstance) {
           });
         }
 
-        tokenStore.set(auth.sub, data.access_token);
+        await setGitHubToken(auth.sub, data.access_token);
 
         const octokit = new Octokit({ auth: data.access_token });
         const { data: ghUser } = await octokit.rest.users.getAuthenticated();
@@ -216,7 +236,7 @@ export async function githubRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const auth = (request as { auth: { sub: string } }).auth;
-      const token = tokenStore.get(auth.sub);
+      const token = await getGitHubToken(auth.sub);
 
       if (!token) {
         return reply.send({ success: true, connected: false });
@@ -235,7 +255,7 @@ export async function githubRoutes(app: FastifyInstance) {
           },
         });
       } catch {
-        tokenStore.delete(auth.sub);
+        await deleteGitHubToken(auth.sub);
         return reply.send({ success: true, connected: false });
       }
     },
@@ -254,7 +274,7 @@ export async function githubRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const auth = (request as { auth: { sub: string } }).auth;
-      tokenStore.delete(auth.sub);
+      await deleteGitHubToken(auth.sub);
       return reply.send({ success: true });
     },
   );
@@ -273,7 +293,7 @@ export async function githubRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const auth = (request as { auth: { sub: string } }).auth;
       try {
-        const octokit = getOctokit(auth.sub);
+        const octokit = await getOctokit(auth.sub);
         const { data } = await octokit.rest.repos.listForAuthenticatedUser({
           sort: 'updated',
           per_page: 100,
@@ -316,7 +336,7 @@ export async function githubRoutes(app: FastifyInstance) {
       const auth = (request as { auth: { sub: string } }).auth;
       const { owner, repo } = request.params as { owner: string; repo: string };
       try {
-        const octokit = getOctokit(auth.sub);
+        const octokit = await getOctokit(auth.sub);
         const { data } = await octokit.rest.repos.listBranches({
           owner,
           repo,
@@ -354,7 +374,7 @@ export async function githubRoutes(app: FastifyInstance) {
       const auth = (request as { auth: { sub: string } }).auth;
       const { owner, repo } = request.params as { owner: string; repo: string };
       try {
-        const octokit = getOctokit(auth.sub);
+        const octokit = await getOctokit(auth.sub);
         const { data } = await octokit.rest.pulls.list({
           owner,
           repo,
@@ -396,6 +416,15 @@ export async function githubRoutes(app: FastifyInstance) {
         description: 'List files changed in a pull request',
         tags: ['github'],
         security: [{ bearerAuth: [] }],
+        params: {
+          type: 'object',
+          required: ['owner', 'repo', 'pull_number'],
+          properties: {
+            owner: { type: 'string', minLength: 1 },
+            repo: { type: 'string', minLength: 1 },
+            pull_number: { type: 'string', pattern: '^[1-9]\\d*$' },
+          },
+        },
       },
     },
     async (request, reply) => {
@@ -405,12 +434,19 @@ export async function githubRoutes(app: FastifyInstance) {
         repo: string;
         pull_number: string;
       };
+      const pullNumber = parseInt(pull_number, 10);
+      if (isNaN(pullNumber) || pullNumber < 1) {
+        return reply.status(400).send({
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: 'Invalid pull request number' },
+        });
+      }
       try {
-        const octokit = getOctokit(auth.sub);
+        const octokit = await getOctokit(auth.sub);
         const { data } = await octokit.rest.pulls.listFiles({
           owner,
           repo,
-          pull_number: parseInt(pull_number, 10),
+          pull_number: pullNumber,
           per_page: 100,
         });
         return reply.send({
@@ -463,7 +499,7 @@ export async function githubRoutes(app: FastifyInstance) {
 
       let octokit: Octokit;
       try {
-        octokit = getOctokit(auth.sub);
+        octokit = await getOctokit(auth.sub);
       } catch (error) {
         return reply.status(400).send({
           success: false,

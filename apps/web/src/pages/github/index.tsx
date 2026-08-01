@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, Suspense, lazy } from 'react';
+import DOMPurify from 'dompurify';
 import {
   Github,
   Unlink,
@@ -105,7 +106,7 @@ function renderMarkdown(text: string): string {
   );
   html = html.replace(/^\d+\. (.+)$/gm, '<li class="ml-4 list-decimal">$1</li>');
   html = html.replace(/^(?!<[a-z/])((?!^\s*$).+)$/gm, '<p class="mb-2">$1</p>');
-  return html;
+  return DOMPurify.sanitize(html, { ADD_ATTR: ['onclick'] });
 }
 
 function extractSections(text: string): { title: string; content: string }[] {
