@@ -115,7 +115,7 @@ export interface GitHubContextValue {
   selectedRepoName: string | null;
   selectedBranch: string | null;
   selectedPRNumber: number | null;
-  connect: () => Promise<string | null>;
+  connect: (returnTo?: string) => Promise<string | null>;
   handleCallback: (code: string, state: string) => Promise<boolean>;
   disconnect: () => Promise<void>;
   refreshConnection: () => Promise<void>;
@@ -242,21 +242,27 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
     checkConnection();
   }, [checkConnection]);
 
-  const connect = useCallback(async (): Promise<string | null> => {
-    if (!token) return null;
-    try {
-      const res = await fetch(`${API_BASE_URL}/github/auth-url`, { headers: authHeaders() });
-      const data = await res.json();
-      if (data.success && data.url) {
-        return data.url;
+  const connect = useCallback(
+    async (returnTo?: string): Promise<string | null> => {
+      if (!token) return null;
+      try {
+        const params = returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : '';
+        const res = await fetch(`${API_BASE_URL}/github/auth-url${params}`, {
+          headers: authHeaders(),
+        });
+        const data = await res.json();
+        if (data.success && data.url) {
+          return data.url;
+        }
+        setError(data.error?.message ?? 'Failed to get GitHub auth URL');
+        return null;
+      } catch {
+        setError('Failed to connect to server');
+        return null;
       }
-      setError(data.error?.message ?? 'Failed to get GitHub auth URL');
-      return null;
-    } catch {
-      setError('Failed to connect to server');
-      return null;
-    }
-  }, [token, authHeaders]);
+    },
+    [token, authHeaders],
+  );
 
   const handleCallback = useCallback(
     async (code: string, state: string): Promise<boolean> => {

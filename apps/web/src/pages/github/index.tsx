@@ -182,7 +182,7 @@ export function GitHubReviewPage() {
 
   const handleConnect = useCallback(async () => {
     setConnecting(true);
-    const url = await gh.connect();
+    const url = await gh.connect('/github');
     setConnecting(false);
     if (url) window.location.href = url;
   }, [gh]);

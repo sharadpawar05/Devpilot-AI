@@ -407,7 +407,7 @@ export function PullRequestAssistantPage() {
 
   const handleConnect = useCallback(async () => {
     setConnecting(true);
-    const url = await gh.connect();
+    const url = await gh.connect('/pull-request-assistant');
     setConnecting(false);
     if (url) window.location.href = url;
   }, [gh]);
