@@ -21,10 +21,21 @@ async function getGitHubToken(userId: string): Promise<string | null> {
   return user?.githubAccessToken ?? null;
 }
 
-async function setGitHubToken(userId: string, token: string): Promise<void> {
-  await db.user.update({
+async function setGitHubToken(
+  userId: string,
+  token: string,
+  email?: string,
+  name?: string,
+): Promise<void> {
+  await db.user.upsert({
     where: { supabaseUserId: userId },
-    data: { githubAccessToken: token },
+    update: { githubAccessToken: token },
+    create: {
+      supabaseUserId: userId,
+      email: email || `${userId}@placeholder.local`,
+      fullName: name || 'GitHub User',
+      githubAccessToken: token,
+    },
   });
 }
 
@@ -130,7 +141,11 @@ export async function githubRoutes(app: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const auth = (request as { auth: { sub: string } }).auth;
+      const auth = (
+        request as {
+          auth: { sub: string; email?: string; user_metadata?: Record<string, unknown> };
+        }
+      ).auth;
       const { code, state } = request.query as { code: string; state: string };
 
       if (!code || !state) {
@@ -199,7 +214,12 @@ export async function githubRoutes(app: FastifyInstance) {
           });
         }
 
-        await setGitHubToken(auth.sub, data.access_token);
+        await setGitHubToken(
+          auth.sub,
+          data.access_token,
+          auth.email,
+          auth.user_metadata?.full_name as string | undefined,
+        );
 
         const octokit = new Octokit({ auth: data.access_token });
         const { data: ghUser } = await octokit.rest.users.getAuthenticated();
