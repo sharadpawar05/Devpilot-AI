@@ -5,6 +5,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 export interface CodeReviewRequest {
   language: string;
   reviewType: string;
+  reviewDepth: string;
   code: string;
   context?: string;
   provider?: string;
@@ -19,6 +20,7 @@ export interface CodeReviewResponse {
   model: string;
   response: string;
   latencyMs: number;
+  reviewDepth: string;
   usage: {
     input: number;
     output: number;

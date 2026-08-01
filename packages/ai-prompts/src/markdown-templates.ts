@@ -7,7 +7,7 @@ name: Code Review
 category: code_review
 description: Comprehensive code review with actionable feedback on correctness, performance, security, and maintainability
 tags: [code-review, quality, best-practices]
-version: 1
+version: 2
 author: devpilot
 temperature: 0.2
 maxTokens: 4096
@@ -24,22 +24,39 @@ variables:
     description: Type of review to perform
     required: true
     type: string
+  - name: reviewDepth
+    description: Depth of review (Quick, Standard, Deep)
+    required: true
+    type: string
   - name: context
     description: Additional context about the code
     required: false
     type: string
+  - name: isQuick
+    description: Whether this is a quick review
+    required: false
+    type: string
+  - name: isStandard
+    description: Whether this is a standard review
+    required: false
+    type: string
+  - name: isDeep
+    description: Whether this is a deep review
+    required: false
+    type: string
 systemPrompt: |
-  You are an expert code reviewer with deep knowledge of software engineering best practices.
-  Review code for correctness, performance, security, and maintainability.
-  Provide specific, actionable feedback with code examples where appropriate.
-  Rate each issue by severity: Critical, Major, Minor, or Suggestion.
-  Always explain WHY something is an issue and HOW to fix it.
-  Always respond in Markdown format with clearly defined sections.
+  You are an expert code reviewer. Adapt your review depth to the reviewDepth parameter.
+  - Quick: 100-200 words. Only Executive Summary, Top 3 Issues, Final Recommendation.
+  - Standard: 300-500 words. Full review with all sections.
+  - Deep: Comprehensive. Unlimited length when necessary.
+  For small code (< 20 lines), be concise. Skip sections with no findings (e.g., "No security concerns detected.").
+  Rate issues by severity: Critical, Major, Minor, Suggestion.
+  Always respond in Markdown format.
 createdAt: "2026-08-01"
 updatedAt: "2026-08-01"
 ---
 
-Review the following {{language}} code:
+Review the following {{language}} code (Review Depth: {{reviewDepth}}):
 
 \`\`\`{{language}}
 {{code}}
@@ -51,51 +68,91 @@ Context: {{context}}
 
 Review Type: {{reviewType}}
 
-Please provide a thorough review in the following structure:
+{{#if isQuick}}
+Provide a CONCISE review (100-200 words). Include ONLY:
 
 # Executive Summary
+One paragraph summary.
 
-A concise summary of the code quality and your overall assessment.
+# Top 3 Issues
+Only the 3 most critical issues. Format:
+- **Severity**: level | **Location**: where | **Fix**: how
+
+# Final Recommendation
+One sentence.
+{{/if}}
+
+{{#if isStandard}}
+Provide a STANDARD review (300-500 words). Include:
+
+# Executive Summary
+Brief summary of code quality.
 
 # Overall Score
-
-Return a score out of 10 (e.g., **8.6 / 10**) with a brief justification.
+Score out of 10 (e.g., **8.6 / 10**) with brief justification.
 
 # Strengths
-
 Bullet list of what the code does well.
 
 # Issues Found
-
-For each issue, provide:
+For each issue:
 - **Severity**: Critical / Major / Minor / Suggestion
 - **Location**: Line or function name
 - **Description**: What the issue is
 - **Recommendation**: How to fix it
 
 # Performance Analysis
-
-Identify performance bottlenecks, inefficiencies, and optimization opportunities.
+Brief analysis. If no issues, state: "No performance concerns detected."
 
 # Security Analysis
-
-Identify security vulnerabilities, injection risks, and data exposure concerns.
-
-# Maintainability
-
-Assess code readability, modularity, testability, and documentation.
-
-# Clean Code Review
-
-Evaluate naming conventions, code duplication, single responsibility, and adherence to clean code principles.
-
-# Suggested Refactored Code
-
-Provide a refactored version of the code addressing the key issues found. Use a markdown code block.
+Brief analysis. If no issues, state: "No security concerns detected."
 
 # Final Recommendations
+Top 3-5 improvements.
+{{/if}}
 
-Prioritized list of the most important improvements to make.`;
+{{#if isDeep}}
+Provide a COMPREHENSIVE review (unlimited). Include ALL sections:
+
+# Executive Summary
+Detailed summary of code quality and overall assessment.
+
+# Overall Score
+Score out of 10 (e.g., **8.6 / 10**) with justification.
+
+# Strengths
+Bullet list of what the code does well.
+
+# Issues Found
+For each issue:
+- **Severity**: Critical / Major / Minor / Suggestion
+- **Location**: Line or function name
+- **Description**: What the issue is
+- **Recommendation**: How to fix it
+
+# Performance Analysis
+Detailed analysis. If no issues, state: "No performance concerns detected."
+
+# Security Analysis
+Detailed analysis. If no issues, state: "No security concerns detected."
+
+# Maintainability
+Assess readability, modularity, testability, documentation.
+
+# Clean Code Review
+Evaluate naming, duplication, single responsibility, clean code principles.
+
+# Suggested Refactored Code
+Refactored version addressing key issues. Use a markdown code block.
+
+# Final Recommendations
+Prioritized list of improvements.
+{{/if}}
+
+IMPORTANT RULES:
+- For code under 20 lines, keep the review brief even for Standard/Deep.
+- If a section has no findings, write a single sentence: "No [concern] detected." — do NOT generate filler.
+- Always return the Overall Score as a number out of 10.`;
 
 const DEBUG_CODE = `---
 id: prompt_debug_code

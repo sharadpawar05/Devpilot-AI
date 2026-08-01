@@ -34,6 +34,24 @@ export const REVIEW_TYPES = [
   },
 ] as const;
 
+export const REVIEW_DEPTHS = [
+  {
+    value: 'Quick',
+    label: 'Quick',
+    description: 'Summary + top 3 issues (~100-200 words)',
+  },
+  {
+    value: 'Standard',
+    label: 'Standard',
+    description: 'Full review with all sections (~300-500 words)',
+  },
+  {
+    value: 'Deep',
+    label: 'Deep',
+    description: 'Comprehensive analysis (unlimited)',
+  },
+] as const;
+
 export const MONACO_LANG_MAP: Record<string, string> = {
   typescript: 'typescript',
   javascript: 'javascript',

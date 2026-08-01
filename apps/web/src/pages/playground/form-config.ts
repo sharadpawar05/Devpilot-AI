@@ -76,6 +76,18 @@ export const TEMPLATE_FORMS: Record<string, TemplateFormConfig> = {
         validationMessage: 'Please select a review type.',
       },
       {
+        name: 'reviewDepth',
+        label: 'Review Depth',
+        type: 'select',
+        required: true,
+        options: [
+          { value: 'Quick', label: 'Quick' },
+          { value: 'Standard', label: 'Standard' },
+          { value: 'Deep', label: 'Deep' },
+        ],
+        validationMessage: 'Please select a review depth.',
+      },
+      {
         name: 'context',
         label: 'Additional Context',
         type: 'textarea',
@@ -83,7 +95,7 @@ export const TEMPLATE_FORMS: Record<string, TemplateFormConfig> = {
         placeholder: 'Any background information about this code (optional)',
       },
     ],
-    defaults: { language: 'typescript', reviewType: 'Standard' },
+    defaults: { language: 'typescript', reviewType: 'Standard', reviewDepth: 'Standard' },
   },
 
   prompt_debug_code: {

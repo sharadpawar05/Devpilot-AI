@@ -15,9 +15,18 @@ const REVIEW_TYPES = [
   'Interview Feedback',
 ] as const;
 
+const REVIEW_DEPTHS = ['Quick', 'Standard', 'Deep'] as const;
+
+const DEPTH_MAX_TOKENS: Record<string, number> = {
+  Quick: 1024,
+  Standard: 2048,
+  Deep: 4096,
+};
+
 const codeReviewSchema = z.object({
   language: z.string().min(1, 'Language is required'),
   reviewType: z.enum(REVIEW_TYPES).default('Standard'),
+  reviewDepth: z.enum(REVIEW_DEPTHS).default('Standard'),
   code: z.string().min(1, 'Code is required').max(100000, 'Code too long'),
   context: z.string().max(10000, 'Context too long').optional(),
   provider: z.enum(['gemini', 'openai', 'anthropic', 'openrouter']).default('gemini'),
@@ -50,6 +59,7 @@ export async function codeReviewRoutes(app: FastifyInstance) {
           properties: {
             language: { type: 'string', minLength: 1 },
             reviewType: { type: 'string', enum: [...REVIEW_TYPES] },
+            reviewDepth: { type: 'string', enum: [...REVIEW_DEPTHS] },
             code: { type: 'string', minLength: 1, maxLength: 100000 },
             context: { type: 'string', maxLength: 10000 },
             provider: { type: 'string', enum: ['gemini', 'openai', 'anthropic', 'openrouter'] },
@@ -67,6 +77,7 @@ export async function codeReviewRoutes(app: FastifyInstance) {
               model: { type: 'string' },
               response: { type: 'string' },
               latencyMs: { type: 'number' },
+              reviewDepth: { type: 'string' },
               usage: {
                 type: 'object',
                 properties: {
@@ -93,8 +104,17 @@ export async function codeReviewRoutes(app: FastifyInstance) {
         });
       }
 
-      const { language, reviewType, code, context, provider, model, temperature, maxTokens } =
-        parsed.data;
+      const {
+        language,
+        reviewType,
+        reviewDepth,
+        code,
+        context,
+        provider,
+        model,
+        temperature,
+        maxTokens,
+      } = parsed.data;
 
       const availableProviders = aiService.getAvailableProviders();
       if (!availableProviders.includes(provider)) {
@@ -114,6 +134,10 @@ export async function codeReviewRoutes(app: FastifyInstance) {
           code,
           context: context ?? '',
           reviewType,
+          reviewDepth,
+          isQuick: reviewDepth === 'Quick' ? 'yes' : undefined,
+          isStandard: reviewDepth === 'Standard' ? 'yes' : undefined,
+          isDeep: reviewDepth === 'Deep' ? 'yes' : undefined,
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -127,13 +151,17 @@ export async function codeReviewRoutes(app: FastifyInstance) {
         });
       }
 
+      const effectiveMaxTokens = maxTokens ?? DEPTH_MAX_TOKENS[reviewDepth] ?? 2048;
+
       try {
         const result = await aiService.generate(rendered.userPrompt, rendered.systemPrompt, {
           provider,
           model: (model ?? DEFAULT_MODELS[provider] ?? DEFAULT_MODELS.gemini) as never,
           temperature,
-          maxTokens,
+          maxTokens: effectiveMaxTokens,
         });
+
+        const totalTokens = result.tokens.total || result.tokens.input + result.tokens.output;
 
         return reply.send({
           success: true,
@@ -141,10 +169,11 @@ export async function codeReviewRoutes(app: FastifyInstance) {
           model: result.model,
           response: result.content,
           latencyMs: result.latencyMs,
+          reviewDepth,
           usage: {
             input: result.tokens.input,
             output: result.tokens.output,
-            total: result.tokens.total,
+            total: totalTokens,
           },
         });
       } catch (error) {
