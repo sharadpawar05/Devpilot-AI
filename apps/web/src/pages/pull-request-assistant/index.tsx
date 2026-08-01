@@ -12,10 +12,7 @@ import {
   FileCode,
   ExternalLink,
   FileText,
-  Tag,
-  BookOpen,
   ClipboardCheck,
-  UserCheck,
   BarChart3,
   RefreshCw,
 } from 'lucide-react';
@@ -69,23 +66,12 @@ const PROGRESS_MESSAGES = [
 const TAB_ITEMS = [
   { id: 'overview', label: 'Overview', icon: BarChart3 },
   { id: 'review', label: 'AI Review', icon: FileCode },
-  { id: 'description', label: 'PR Description', icon: FileText },
-  { id: 'commit', label: 'Commit Message', icon: Tag },
-  { id: 'release', label: 'Release Notes', icon: BookOpen },
-  { id: 'test-checklist', label: 'Testing Checklist', icon: ClipboardCheck },
-  { id: 'reviewer-checklist', label: 'Reviewer Checklist', icon: UserCheck },
+  { id: 'docs', label: 'Documentation', icon: FileText },
+  { id: 'quality', label: 'Quality', icon: ClipboardCheck },
   { id: 'metrics', label: 'Metrics', icon: BarChart3 },
 ] as const;
 
-type TabId =
-  | 'overview'
-  | 'review'
-  | 'description'
-  | 'commit'
-  | 'release'
-  | 'test-checklist'
-  | 'reviewer-checklist'
-  | 'metrics';
+type TabId = 'overview' | 'review' | 'docs' | 'quality' | 'metrics';
 
 function LoadingProgress() {
   const [messageIndex, setMessageIndex] = useState(0);
@@ -544,12 +530,30 @@ export function PullRequestAssistantPage() {
       if (tab === 'overview') return extractExecutiveSummary(activeResponse);
 
       const tabSectionMap: Record<string, string[]> = {
-        review: ['EXECUTIVE_SUMMARY', 'RISK_ASSESSMENT', 'RISK'],
-        description: ['PR_DESCRIPTION', 'PR DESCRIPTION'],
-        commit: ['COMMIT_MESSAGE', 'COMMIT MESSAGE'],
-        release: ['RELEASE_NOTES', 'RELEASE NOTES'],
-        'test-checklist': ['TEST_CHECKLIST', 'TEST CHECKLIST'],
-        'reviewer-checklist': ['REVIEWER_CHECKLIST', 'REVIEWER CHECKLIST', 'REVIEW CHECKLIST'],
+        review: [
+          'RISK_ASSESSMENT',
+          'RISK',
+          'RECOMMENDATIONS',
+          'SECURITY',
+          'PERFORMANCE',
+          'ARCHITECTURE',
+        ],
+        docs: [
+          'PR_DESCRIPTION',
+          'PR DESCRIPTION',
+          'COMMIT_MESSAGE',
+          'COMMIT MESSAGE',
+          'RELEASE_NOTES',
+          'RELEASE NOTES',
+        ],
+        quality: [
+          'TEST_CHECKLIST',
+          'TEST CHECKLIST',
+          'TESTING CHECKLIST',
+          'REVIEWER_CHECKLIST',
+          'REVIEWER CHECKLIST',
+          'REVIEW CHECKLIST',
+        ],
       };
 
       const keywords = tabSectionMap[tab] ?? [];
