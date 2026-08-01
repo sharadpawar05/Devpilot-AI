@@ -55,7 +55,6 @@ const routes: RouteObject[] = [
     children: [{ index: true, element: <CodeReviewPage /> }],
   },
   {
-    path: '/github',
     element: (
       <ProtectedRoute>
         <GitHubProvider>
@@ -63,18 +62,10 @@ const routes: RouteObject[] = [
         </GitHubProvider>
       </ProtectedRoute>
     ),
-    children: [{ index: true, element: <GitHubReviewPage /> }],
-  },
-  {
-    path: '/pull-request-assistant',
-    element: (
-      <ProtectedRoute>
-        <GitHubProvider>
-          <AppLayout />
-        </GitHubProvider>
-      </ProtectedRoute>
-    ),
-    children: [{ index: true, element: <PullRequestAssistantPage /> }],
+    children: [
+      { path: '/github', element: <GitHubReviewPage /> },
+      { path: '/pull-request-assistant', element: <PullRequestAssistantPage /> },
+    ],
   },
   { path: '*', element: <NotFoundPage /> },
 ];
