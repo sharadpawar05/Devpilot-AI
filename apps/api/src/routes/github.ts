@@ -12,6 +12,9 @@ registry.registerAll(loadMarkdownPrompts());
 // In-memory token store: userId -> github access token
 const tokenStore = new Map<string, string>();
 
+// In-memory state store: userId -> OAuth state (CSRF protection)
+const stateStore = new Map<string, string>();
+
 function getOctokit(userId: string): Octokit {
   const token = tokenStore.get(userId);
   if (!token) {
@@ -71,6 +74,8 @@ export async function githubRoutes(app: FastifyInstance) {
       }
 
       const state = crypto.randomUUID();
+      stateStore.set((_request as { auth: { sub: string } }).auth.sub, state);
+
       const params = new URLSearchParams({
         client_id: env.GITHUB_CLIENT_ID,
         redirect_uri: env.GITHUB_REDIRECT_URI,
@@ -96,21 +101,36 @@ export async function githubRoutes(app: FastifyInstance) {
         security: [{ bearerAuth: [] }],
         querystring: {
           type: 'object',
-          required: ['code'],
+          required: ['code', 'state'],
           properties: {
             code: { type: 'string' },
+            state: { type: 'string' },
           },
         },
       },
     },
     async (request, reply) => {
       const auth = (request as { auth: { sub: string } }).auth;
-      const { code } = request.query as { code: string };
+      const { code, state } = request.query as { code: string; state: string };
 
-      if (!code) {
+      if (!code || !state) {
         return reply.status(400).send({
           success: false,
-          error: { code: 'MISSING_CODE', message: 'Authorization code is required' },
+          error: { code: 'MISSING_PARAMS', message: 'Authorization code and state are required' },
+        });
+      }
+
+      // Validate state parameter (CSRF protection)
+      const expectedState = stateStore.get(auth.sub);
+      stateStore.delete(auth.sub);
+
+      if (!expectedState || expectedState !== state) {
+        return reply.status(403).send({
+          success: false,
+          error: {
+            code: 'INVALID_STATE',
+            message: 'Invalid or expired OAuth state. Please try again.',
+          },
         });
       }
 

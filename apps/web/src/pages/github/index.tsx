@@ -184,8 +184,9 @@ export function GitHubReviewPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const code = params.get('code');
-    if (code && gh.connected === false) {
-      gh.handleCallback(code).then((success) => {
+    const state = params.get('state');
+    if (code && state && gh.connected === false) {
+      gh.handleCallback(code, state).then((success) => {
         if (success) {
           window.history.replaceState({}, '', '/github');
         }

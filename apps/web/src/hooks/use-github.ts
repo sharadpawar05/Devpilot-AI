@@ -156,14 +156,17 @@ export function useGitHub() {
   }, [token, authHeaders]);
 
   const handleCallback = useCallback(
-    async (code: string): Promise<boolean> => {
+    async (code: string, state: string): Promise<boolean> => {
       if (!token) return false;
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`${API_BASE_URL}/github/callback?code=${code}`, {
-          headers: authHeaders(),
-        });
+        const res = await fetch(
+          `${API_BASE_URL}/github/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`,
+          {
+            headers: authHeaders(),
+          },
+        );
         const data = await res.json();
         if (data.success) {
           setConnected(true);
