@@ -395,7 +395,7 @@ export function GitHubReviewPage() {
             )}
 
             {/* PR Selector */}
-            {selectedRepo && (
+            {gh.connected && selectedRepo && (
               <div className="space-y-1.5">
                 <label htmlFor="pr" className="text-sm font-medium">
                   Pull Request
