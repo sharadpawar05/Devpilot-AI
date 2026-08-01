@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, Suspense, lazy, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Github,
   Unlink,
@@ -85,6 +86,7 @@ function LoadingProgress() {
 
 export function GitHubReviewPage() {
   const gh = useGitHub();
+  const navigate = useNavigate();
   const { theme } = useTheme();
   const monacoTheme = theme === 'dark' ? 'vs-dark' : 'vs';
 
@@ -145,13 +147,20 @@ export function GitHubReviewPage() {
       callbackProcessed.current = true;
       gh.handleCallback(code, state).then((success) => {
         if (success) {
-          window.history.replaceState({}, '', '/github');
+          // Check for return URL in localStorage
+          const returnUrl = localStorage.getItem('github_oauth_return');
+          localStorage.removeItem('github_oauth_return');
+          if (returnUrl && returnUrl !== '/github') {
+            navigate(returnUrl, { replace: true });
+          } else {
+            window.history.replaceState({}, '', '/github');
+          }
         } else {
           callbackProcessed.current = false;
         }
       });
     }
-  }, [gh.connected, gh.handleCallback]);
+  }, [gh.connected, gh.handleCallback, navigate]);
 
   // Event delegation for copy buttons in markdown content
   useEffect(() => {

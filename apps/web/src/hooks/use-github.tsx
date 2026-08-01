@@ -246,8 +246,11 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
     async (returnTo?: string): Promise<string | null> => {
       if (!token) return null;
       try {
-        const params = returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : '';
-        const res = await fetch(`${API_BASE_URL}/github/auth-url${params}`, {
+        // Store return URL in localStorage before redirecting
+        if (returnTo) {
+          localStorage.setItem('github_oauth_return', returnTo);
+        }
+        const res = await fetch(`${API_BASE_URL}/github/auth-url`, {
           headers: authHeaders(),
         });
         const data = await res.json();

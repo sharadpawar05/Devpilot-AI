@@ -164,17 +164,6 @@ export async function githubRoutes(app: FastifyInstance) {
         sameSite: 'lax',
       });
 
-      // Store return URL for post-OAuth redirect
-      const returnUrl = (_request.query as Record<string, string>)?.returnTo || '/github';
-      reply.setCookie('github_oauth_return', returnUrl, {
-        path: '/',
-        httpOnly: true,
-        secure: env.NODE_ENV === 'production',
-        signed: true,
-        maxAge: 600,
-        sameSite: 'lax',
-      });
-
       const params = new URLSearchParams({
         client_id: env.GITHUB_CLIENT_ID,
         redirect_uri: env.GITHUB_REDIRECT_URI,
@@ -272,13 +261,6 @@ export async function githubRoutes(app: FastifyInstance) {
       reply.clearCookie('github_oauth_state', { path: '/' });
       reply.clearCookie('github_oauth_user', { path: '/' });
 
-      // Get return URL from cookie
-      const rawReturnUrl = request.cookies?.github_oauth_return;
-      const returnUrl = rawReturnUrl
-        ? request.unsignCookie(rawReturnUrl).value || '/github'
-        : '/github';
-      reply.clearCookie('github_oauth_return', { path: '/' });
-
       if (!expectedState || expectedState !== state) {
         return reply.status(403).send({
           success: false,
@@ -345,8 +327,14 @@ export async function githubRoutes(app: FastifyInstance) {
           { id: ghUser.id, login: ghUser.login, avatar_url: ghUser.avatar_url },
         );
 
-        // Redirect to the return URL
-        return reply.redirect(returnUrl);
+        return reply.send({
+          success: true,
+          user: {
+            login: ghUser.login,
+            avatar_url: ghUser.avatar_url,
+            name: ghUser.name,
+          },
+        });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         app.log.error({ err: error }, 'GitHub OAuth callback failed');
@@ -883,16 +871,6 @@ export async function githubRoutes(app: FastifyInstance) {
 
       const filenames = filesData.map((f) => f.filename);
       const fileTypes = detectFileTypes(filenames);
-
-      const context = [
-        `PR #${pull_number}: ${prData.title}`,
-        prData.body ? `Description: ${prData.body}` : '',
-        `Author: ${prData.user?.login}`,
-        `Files changed: ${filesData.length}`,
-        `+${prData.additions || 0} -${prData.deletions || 0}`,
-      ]
-        .filter(Boolean)
-        .join('\n');
 
       let rendered;
       try {
