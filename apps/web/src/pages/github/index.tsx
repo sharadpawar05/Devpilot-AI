@@ -143,11 +143,10 @@ export function GitHubReviewPage() {
     const params = new URLSearchParams(window.location.search);
     const code = params.get('code');
     const state = params.get('state');
-    if (code && state && gh.connected === false) {
+    if (code && state) {
       callbackProcessed.current = true;
       gh.handleCallback(code, state).then((success) => {
         if (success) {
-          // Check for return URL in localStorage
           const returnUrl = localStorage.getItem('github_oauth_return');
           localStorage.removeItem('github_oauth_return');
           if (returnUrl && returnUrl !== '/github') {
@@ -160,7 +159,7 @@ export function GitHubReviewPage() {
         }
       });
     }
-  }, [gh.connected, gh.handleCallback, navigate]);
+  }, [gh.handleCallback, navigate]);
 
   // Event delegation for copy buttons in markdown content
   useEffect(() => {
