@@ -310,23 +310,23 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
   const disconnect = useCallback(async () => {
     if (!token) return;
     setDisconnecting(true);
+    setConnected(false);
+    setGithubUser(null);
+    setConnectedAt(null);
+    setRepositories([]);
+    setBranches([]);
+    setPulls([]);
+    setFiles([]);
+    setSelectedRepoName(null);
+    setSelectedBranch(null);
+    setSelectedPRNumber(null);
+    storeValue(STORAGE_KEYS.REPO, null);
+    storeValue(STORAGE_KEYS.BRANCH, null);
+    storeValue(STORAGE_KEYS.PR, null);
     try {
       await apiFetch(`${API_BASE_URL}/github/disconnect`, {
         method: 'DELETE',
       });
-      setConnected(false);
-      setGithubUser(null);
-      setConnectedAt(null);
-      setRepositories([]);
-      setBranches([]);
-      setPulls([]);
-      setFiles([]);
-      setSelectedRepoName(null);
-      setSelectedBranch(null);
-      setSelectedPRNumber(null);
-      storeValue(STORAGE_KEYS.REPO, null);
-      storeValue(STORAGE_KEYS.BRANCH, null);
-      storeValue(STORAGE_KEYS.PR, null);
     } catch {
       /* noop */
     } finally {
