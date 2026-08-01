@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Github,
   Unlink,
@@ -343,8 +343,6 @@ export function PullRequestAssistantPage() {
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const callbackProcessed = useRef(false);
-
   const score = useMemo(() => {
     const result = analysisType === 'full' ? analyzeResult?.response : reviewResult?.response;
     return result ? extractScore(result) : null;
@@ -386,24 +384,6 @@ export function PullRequestAssistantPage() {
       }
     }
   }, [gh.selectedPRNumber, gh.pulls, selectedPR, selectedRepo, gh.fetchFiles]);
-
-  // Handle GitHub OAuth callback
-  useEffect(() => {
-    if (callbackProcessed.current) return;
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get('code');
-    const state = params.get('state');
-    if (code && state && gh.connected === false) {
-      callbackProcessed.current = true;
-      gh.handleCallback(code, state).then((success) => {
-        if (success) {
-          window.history.replaceState({}, '', '/pull-request-assistant');
-        } else {
-          callbackProcessed.current = false;
-        }
-      });
-    }
-  }, [gh.connected, gh.handleCallback]);
 
   const handleConnect = useCallback(async () => {
     setConnecting(true);
