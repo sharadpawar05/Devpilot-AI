@@ -61,6 +61,21 @@ export const TEMPLATE_FORMS: Record<string, TemplateFormConfig> = {
         validationMessage: 'Please paste your code.',
       },
       {
+        name: 'reviewType',
+        label: 'Review Type',
+        type: 'select',
+        required: true,
+        options: [
+          { value: 'Standard', label: 'Standard' },
+          { value: 'Performance', label: 'Performance' },
+          { value: 'Security', label: 'Security' },
+          { value: 'Maintainability', label: 'Maintainability' },
+          { value: 'Architecture', label: 'Architecture' },
+          { value: 'Interview Feedback', label: 'Interview Feedback' },
+        ],
+        validationMessage: 'Please select a review type.',
+      },
+      {
         name: 'context',
         label: 'Additional Context',
         type: 'textarea',
@@ -68,7 +83,7 @@ export const TEMPLATE_FORMS: Record<string, TemplateFormConfig> = {
         placeholder: 'Any background information about this code (optional)',
       },
     ],
-    defaults: { language: 'typescript' },
+    defaults: { language: 'typescript', reviewType: 'Standard' },
   },
 
   prompt_debug_code: {

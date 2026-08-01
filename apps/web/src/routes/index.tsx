@@ -6,6 +6,7 @@ import { LandingPage } from '@/pages/landing';
 import { LoginPage } from '@/pages/login';
 import { DashboardPage } from '@/pages/dashboard';
 import { PlaygroundPage } from '@/pages/playground';
+import { CodeReviewPage } from '@/pages/code-review';
 import { NotFoundPage } from '@/pages/not-found';
 
 const routes: RouteObject[] = [
@@ -40,6 +41,15 @@ const routes: RouteObject[] = [
       </ProtectedRoute>
     ),
     children: [{ index: true, element: <PlaygroundPage /> }],
+  },
+  {
+    path: '/code-review',
+    element: (
+      <ProtectedRoute>
+        <AppLayout />
+      </ProtectedRoute>
+    ),
+    children: [{ index: true, element: <CodeReviewPage /> }],
   },
   { path: '*', element: <NotFoundPage /> },
 ];

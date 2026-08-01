@@ -34,11 +34,22 @@ export interface ChatError {
 export function useChat() {
   return useMutation<ChatResponse, ChatError, ChatRequest>({
     mutationFn: async (request) => {
-      const res = await fetch(`${API_BASE_URL}/ai/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(request),
-      });
+      let res: Response;
+      try {
+        res = await fetch(`${API_BASE_URL}/ai/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(request),
+        });
+      } catch {
+        throw {
+          success: false,
+          error: {
+            code: 'NETWORK_ERROR',
+            message: 'Unable to connect to the server. Please make sure the API is running.',
+          },
+        } as ChatError;
+      }
 
       const data = await res.json();
 

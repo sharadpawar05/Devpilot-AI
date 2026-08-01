@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@devpilot/ai-core": "workspace:*",
+    "@devpilot/ai-prompts": "workspace:*",
     "@devpilot/ai-providers": "workspace:*",
     "@devpilot/config": "workspace:*",
     "@devpilot/shared": "workspace:*",

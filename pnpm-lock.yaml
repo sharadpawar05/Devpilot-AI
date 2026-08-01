@@ -44,6 +44,9 @@ importers:
       '@devpilot/ai-core':
         specifier: workspace:*
         version: link:../../packages/ai-core
+      '@devpilot/ai-prompts':
+        specifier: workspace:*
+        version: link:../../packages/ai-prompts
       '@devpilot/ai-providers':
         specifier: workspace:*
         version: link:../../packages/ai-providers
