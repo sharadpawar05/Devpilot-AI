@@ -16,7 +16,10 @@ export function Navbar() {
         </Link>
 
         <nav className="flex flex-1 items-center gap-6 text-sm">
-          <Link to="/" className="transition-colors hover:text-foreground/80 text-foreground/60">
+          <Link
+            to={isAuthenticated ? '/dashboard' : '/'}
+            className="transition-colors hover:text-foreground/80 text-foreground/60"
+          >
             Home
           </Link>
           {isAuthenticated && (

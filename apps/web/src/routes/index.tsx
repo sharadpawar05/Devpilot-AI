@@ -2,6 +2,7 @@ import { createBrowserRouter, type RouteObject } from 'react-router-dom';
 import { ProtectedRoute, PublicRoute } from '@/auth';
 import { MarketingLayout } from '@/layouts/marketing-layout';
 import { AppLayout } from '@/layouts/app-layout';
+import { GitHubProvider } from '@/hooks/use-github';
 import { LandingPage } from '@/pages/landing';
 import { LoginPage } from '@/pages/login';
 import { DashboardPage } from '@/pages/dashboard';
@@ -57,7 +58,9 @@ const routes: RouteObject[] = [
     path: '/github',
     element: (
       <ProtectedRoute>
-        <AppLayout />
+        <GitHubProvider>
+          <AppLayout />
+        </GitHubProvider>
       </ProtectedRoute>
     ),
     children: [{ index: true, element: <GitHubReviewPage /> }],
@@ -66,7 +69,9 @@ const routes: RouteObject[] = [
     path: '/pull-request-assistant',
     element: (
       <ProtectedRoute>
-        <AppLayout />
+        <GitHubProvider>
+          <AppLayout />
+        </GitHubProvider>
       </ProtectedRoute>
     ),
     children: [{ index: true, element: <PullRequestAssistantPage /> }],

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
 import { useAuth } from '@/auth';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
@@ -102,12 +102,49 @@ interface GitHubAnalyzeResponse {
   };
 }
 
-interface GitHubReviewError {
-  success: false;
-  error: { code: string; message: string };
+export interface GitHubContextValue {
+  connected: boolean;
+  githubUser: GitHubUser | null;
+  connectedAt: string | null;
+  repositories: GitHubRepo[];
+  branches: GitHubBranch[];
+  pulls: GitHubPull[];
+  files: GitHubFile[];
+  loading: boolean;
+  error: string | null;
+  selectedRepoName: string | null;
+  selectedBranch: string | null;
+  selectedPRNumber: number | null;
+  connect: () => Promise<string | null>;
+  handleCallback: (code: string, state: string) => Promise<boolean>;
+  disconnect: () => Promise<void>;
+  refreshConnection: () => Promise<void>;
+  fetchRepositories: () => Promise<void>;
+  fetchBranches: (owner: string, repo: string) => Promise<void>;
+  fetchPulls: (owner: string, repo: string) => Promise<void>;
+  fetchFiles: (owner: string, repo: string, pullNumber: number) => Promise<void>;
+  reviewPR: (params: {
+    owner: string;
+    repo: string;
+    pull_number: number;
+    files?: string[];
+    reviewType?: string;
+    reviewDepth?: string;
+    provider?: string;
+  }) => Promise<GitHubReviewResponse | null>;
+  analyzePR: (params: {
+    owner: string;
+    repo: string;
+    pull_number: number;
+    provider?: string;
+  }) => Promise<GitHubAnalyzeResponse | null>;
+  selectRepo: (fullName: string | null) => void;
+  selectBranch: (branch: string | null) => void;
+  selectPR: (prNumber: number | null) => void;
+  setFiles: React.Dispatch<React.SetStateAction<GitHubFile[]>>;
 }
 
-export type { GitHubReviewError };
+const GitHubContext = createContext<GitHubContextValue | undefined>(undefined);
 
 function loadStoredValue<T>(key: string, fallback: T): T {
   try {
@@ -127,11 +164,11 @@ function storeValue(key: string, value: unknown): void {
       localStorage.setItem(key, JSON.stringify(value));
     }
   } catch {
-    // localStorage unavailable or full — fail silently
+    /* noop */
   }
 }
 
-export function useGitHub() {
+export function GitHubProvider({ children }: { children: ReactNode }) {
   const { session } = useAuth();
   const token = session?.accessToken;
 
@@ -145,7 +182,6 @@ export function useGitHub() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Persisted selections
   const [selectedRepoName, setSelectedRepoName] = useState<string | null>(() =>
     loadStoredValue<string | null>(STORAGE_KEYS.REPO, null),
   );
@@ -182,7 +218,6 @@ export function useGitHub() {
     setLoading(false);
   }, [token, authHeaders]);
 
-  // Lightweight status check — does NOT call GitHub API
   const checkConnection = useCallback(async () => {
     if (!token) return;
     try {
@@ -231,9 +266,7 @@ export function useGitHub() {
       try {
         const res = await fetch(
           `${API_BASE_URL}/github/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`,
-          {
-            headers: authHeaders(),
-          },
+          { headers: authHeaders() },
         );
         const data = await res.json();
         if (data.success) {
@@ -442,7 +475,7 @@ export function useGitHub() {
     await checkConnection();
   }, [checkConnection]);
 
-  return {
+  const value: GitHubContextValue = {
     connected,
     githubUser,
     connectedAt,
@@ -470,6 +503,16 @@ export function useGitHub() {
     selectPR,
     setFiles,
   };
+
+  return <GitHubContext.Provider value={value}>{children}</GitHubContext.Provider>;
+}
+
+export function useGitHub(): GitHubContextValue {
+  const context = useContext(GitHubContext);
+  if (context === undefined) {
+    throw new Error('useGitHub must be used within a GitHubProvider');
+  }
+  return context;
 }
 
 export type {
