@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, Suspense, lazy } from 'react';
+import { useState, useEffect, useCallback, useMemo, Suspense, lazy, useRef } from 'react';
 import DOMPurify from 'dompurify';
 import {
   Github,
@@ -181,19 +181,25 @@ export function GitHubReviewPage() {
     [result],
   );
 
+  const callbackProcessed = useRef(false);
+
   // Handle GitHub OAuth callback
   useEffect(() => {
+    if (callbackProcessed.current) return;
     const params = new URLSearchParams(window.location.search);
     const code = params.get('code');
     const state = params.get('state');
     if (code && state && gh.connected === false) {
+      callbackProcessed.current = true;
       gh.handleCallback(code, state).then((success) => {
         if (success) {
           window.history.replaceState({}, '', '/github');
+        } else {
+          callbackProcessed.current = false;
         }
       });
     }
-  }, [gh]);
+  }, [gh.connected, gh.handleCallback]);
 
   const handleConnect = useCallback(async () => {
     setConnecting(true);
