@@ -119,12 +119,11 @@ export async function githubRoutes(app: FastifyInstance) {
       const state = crypto.randomUUID();
       const auth = _request as { auth: { sub: string } };
 
-      // Store state in signed HTTP-only cookie (10 min expiry)
+      // Store state in HTTP-only cookie (10 min expiry)
       reply.setCookie('github_oauth_state', state, {
         path: '/',
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        signed: true,
         maxAge: 600, // 10 minutes
         sameSite: 'lax',
       });
@@ -134,7 +133,6 @@ export async function githubRoutes(app: FastifyInstance) {
         path: '/',
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        signed: true,
         maxAge: 600,
         sameSite: 'lax',
       });
