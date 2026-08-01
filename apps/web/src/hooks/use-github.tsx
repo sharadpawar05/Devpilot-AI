@@ -111,6 +111,7 @@ export interface GitHubContextValue {
   pulls: GitHubPull[];
   files: GitHubFile[];
   loading: boolean;
+  disconnecting: boolean;
   error: string | null;
   selectedRepoName: string | null;
   selectedBranch: string | null;
@@ -180,6 +181,7 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
   const [pulls, setPulls] = useState<GitHubPull[]>([]);
   const [files, setFiles] = useState<GitHubFile[]>([]);
   const [loading, setLoading] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [selectedRepoName, setSelectedRepoName] = useState<string | null>(() =>
@@ -307,6 +309,7 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
 
   const disconnect = useCallback(async () => {
     if (!token) return;
+    setDisconnecting(true);
     try {
       await apiFetch(`${API_BASE_URL}/github/disconnect`, {
         method: 'DELETE',
@@ -326,6 +329,8 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
       storeValue(STORAGE_KEYS.PR, null);
     } catch {
       /* noop */
+    } finally {
+      setDisconnecting(false);
     }
   }, [token, apiFetch]);
 
@@ -493,6 +498,7 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
     pulls,
     files,
     loading,
+    disconnecting,
     error,
     selectedRepoName,
     selectedBranch,

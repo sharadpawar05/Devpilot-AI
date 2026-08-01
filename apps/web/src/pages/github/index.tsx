@@ -342,9 +342,19 @@ export function GitHubReviewPage() {
                       Connected since {new Date(gh.connectedAt).toLocaleDateString()}
                     </p>
                   )}
-                  <Button variant="outline" size="sm" onClick={gh.disconnect} className="w-full">
-                    <Unlink className="mr-1 h-3 w-3" />
-                    Disconnect
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={gh.disconnect}
+                    disabled={gh.disconnecting}
+                    className="w-full"
+                  >
+                    {gh.disconnecting ? (
+                      <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                    ) : (
+                      <Unlink className="mr-1 h-3 w-3" />
+                    )}
+                    {gh.disconnecting ? 'Disconnecting...' : 'Disconnect'}
                   </Button>
                 </div>
               ) : (
