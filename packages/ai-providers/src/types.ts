@@ -1,9 +1,12 @@
 export type AIProviderName = 'gemini' | 'openai' | 'anthropic' | 'openrouter';
 
 export type AIModel =
+  | 'gemini-2.5-flash'
+  | 'gemini-2.5-pro'
   | 'gemini-2.0-flash'
-  | 'gemini-1.5-pro'
-  | 'gemini-1.5-flash'
+  | 'gemini-flash-latest'
+  | 'gemini-3.5-flash'
+  | 'gemini-3.6-flash'
   | 'gpt-4'
   | 'gpt-4-turbo'
   | 'gpt-4o'

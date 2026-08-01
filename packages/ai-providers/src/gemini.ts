@@ -10,12 +10,22 @@ import type {
 } from './types';
 
 const GEMINI_COST_TABLE: Record<string, { input: number; output: number }> = {
+  'gemini-2.5-flash': { input: 0.00015, output: 0.0006 },
+  'gemini-2.5-pro': { input: 0.00125, output: 0.01 },
   'gemini-2.0-flash': { input: 0.000075, output: 0.0003 },
-  'gemini-1.5-pro': { input: 0.00125, output: 0.005 },
-  'gemini-1.5-flash': { input: 0.000075, output: 0.0003 },
+  'gemini-flash-latest': { input: 0.000075, output: 0.0003 },
+  'gemini-3.5-flash': { input: 0.000075, output: 0.0003 },
+  'gemini-3.6-flash': { input: 0.000075, output: 0.0003 },
 };
 
-const GEMINI_MODELS: AIModel[] = ['gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'];
+const GEMINI_MODELS: AIModel[] = [
+  'gemini-2.5-flash',
+  'gemini-2.5-pro',
+  'gemini-2.0-flash',
+  'gemini-flash-latest',
+  'gemini-3.5-flash',
+  'gemini-3.6-flash',
+];
 
 export class GeminiProvider implements AIProvider {
   readonly name: AIProviderName = 'gemini';

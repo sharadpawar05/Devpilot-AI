@@ -11,7 +11,7 @@ const aiService = new AIService({
 if (config.ai.geminiApiKey) {
   aiService.registerProvider('gemini', {
     apiKey: config.ai.geminiApiKey,
-    defaultModel: 'gemini-2.0-flash',
+    defaultModel: 'gemini-flash-latest',
     timeout: 60000,
   });
 }
