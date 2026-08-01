@@ -1,5 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
-import { apiClient } from '@/services/api-client';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 export interface ChatRequest {
   provider: string;
@@ -33,13 +34,19 @@ export interface ChatError {
 export function useChat() {
   return useMutation<ChatResponse, ChatError, ChatRequest>({
     mutationFn: async (request) => {
-      const result = await apiClient.post<ChatResponse>('/ai/chat', request);
+      const res = await fetch(`${API_BASE_URL}/ai/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+      });
 
-      if (!result.success) {
-        throw result as ChatError;
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw data as ChatError;
       }
 
-      return result.data as ChatResponse;
+      return data as ChatResponse;
     },
   });
 }
