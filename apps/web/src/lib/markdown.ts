@@ -40,7 +40,7 @@ export function extractSections(text: string): { title: string; content: string 
     if (match) {
       if (currentTitle)
         sections.push({ title: currentTitle, content: currentContent.join('\n').trim() });
-      currentTitle = match[1].replace(/\*\*/g, '');
+      currentTitle = match[1].replace(/\*\*/g, '').replace(/[:]+$/, '').trim();
       currentContent = [];
     } else {
       currentContent.push(line);
