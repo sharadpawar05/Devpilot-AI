@@ -8,6 +8,7 @@ import { DashboardPage } from '@/pages/dashboard';
 import { PlaygroundPage } from '@/pages/playground';
 import { CodeReviewPage } from '@/pages/code-review';
 import { GitHubReviewPage } from '@/pages/github';
+import { PullRequestAssistantPage } from '@/pages/pull-request-assistant';
 import { NotFoundPage } from '@/pages/not-found';
 
 const routes: RouteObject[] = [
@@ -60,6 +61,15 @@ const routes: RouteObject[] = [
       </ProtectedRoute>
     ),
     children: [{ index: true, element: <GitHubReviewPage /> }],
+  },
+  {
+    path: '/pull-request-assistant',
+    element: (
+      <ProtectedRoute>
+        <AppLayout />
+      </ProtectedRoute>
+    ),
+    children: [{ index: true, element: <PullRequestAssistantPage /> }],
   },
   { path: '*', element: <NotFoundPage /> },
 ];

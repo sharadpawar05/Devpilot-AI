@@ -3,10 +3,17 @@ import { useAuth } from '@/auth';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
+const STORAGE_KEYS = {
+  REPO: 'devpilot_github_selected_repo',
+  BRANCH: 'devpilot_github_selected_branch',
+  PR: 'devpilot_github_selected_pr',
+} as const;
+
 interface GitHubUser {
   login: string;
   avatar_url: string;
   name: string | null;
+  id?: number;
 }
 
 interface GitHubRepo {
@@ -71,6 +78,30 @@ interface GitHubReviewResponse {
   };
 }
 
+interface GitHubAnalyzeResponse {
+  success: boolean;
+  provider: string;
+  model: string;
+  response: string;
+  latencyMs: number;
+  truncated: boolean;
+  fileTypes: string;
+  pr: {
+    number: number;
+    title: string;
+    url: string;
+    author: string | null;
+    filesChanged: number;
+    additions: number;
+    deletions: number;
+  };
+  usage: {
+    input: number;
+    output: number;
+    total: number;
+  };
+}
+
 interface GitHubReviewError {
   success: false;
   error: { code: string; message: string };
@@ -78,18 +109,52 @@ interface GitHubReviewError {
 
 export type { GitHubReviewError };
 
+function loadStoredValue<T>(key: string, fallback: T): T {
+  try {
+    const stored = localStorage.getItem(key);
+    if (stored === null) return fallback;
+    return JSON.parse(stored) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function storeValue(key: string, value: unknown): void {
+  try {
+    if (value === null || value === undefined) {
+      localStorage.removeItem(key);
+    } else {
+      localStorage.setItem(key, JSON.stringify(value));
+    }
+  } catch {
+    // localStorage unavailable or full — fail silently
+  }
+}
+
 export function useGitHub() {
   const { session } = useAuth();
   const token = session?.accessToken;
 
   const [connected, setConnected] = useState(false);
   const [githubUser, setGithubUser] = useState<GitHubUser | null>(null);
+  const [connectedAt, setConnectedAt] = useState<string | null>(null);
   const [repositories, setRepositories] = useState<GitHubRepo[]>([]);
   const [branches, setBranches] = useState<GitHubBranch[]>([]);
   const [pulls, setPulls] = useState<GitHubPull[]>([]);
   const [files, setFiles] = useState<GitHubFile[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Persisted selections
+  const [selectedRepoName, setSelectedRepoName] = useState<string | null>(() =>
+    loadStoredValue<string | null>(STORAGE_KEYS.REPO, null),
+  );
+  const [selectedBranch, setSelectedBranch] = useState<string | null>(() =>
+    loadStoredValue<string | null>(STORAGE_KEYS.BRANCH, null),
+  );
+  const [selectedPRNumber, setSelectedPRNumber] = useState<number | null>(() =>
+    loadStoredValue<number | null>(STORAGE_KEYS.PR, null),
+  );
 
   const authHeaders = useCallback(
     () => ({
@@ -117,18 +182,21 @@ export function useGitHub() {
     setLoading(false);
   }, [token, authHeaders]);
 
+  // Lightweight status check — does NOT call GitHub API
   const checkConnection = useCallback(async () => {
     if (!token) return;
     try {
-      const res = await fetch(`${API_BASE_URL}/github/account`, { headers: authHeaders() });
+      const res = await fetch(`${API_BASE_URL}/github/status`, { headers: authHeaders() });
       const data = await res.json();
       if (data.success && data.connected) {
         setConnected(true);
         setGithubUser(data.user);
+        setConnectedAt(data.connectedAt);
         fetchRepositories();
       } else {
         setConnected(false);
         setGithubUser(null);
+        setConnectedAt(null);
       }
     } catch {
       setConnected(false);
@@ -196,10 +264,17 @@ export function useGitHub() {
       });
       setConnected(false);
       setGithubUser(null);
+      setConnectedAt(null);
       setRepositories([]);
       setBranches([]);
       setPulls([]);
       setFiles([]);
+      setSelectedRepoName(null);
+      setSelectedBranch(null);
+      setSelectedPRNumber(null);
+      storeValue(STORAGE_KEYS.REPO, null);
+      storeValue(STORAGE_KEYS.BRANCH, null);
+      storeValue(STORAGE_KEYS.PR, null);
     } catch {
       /* noop */
     }
@@ -311,25 +386,97 @@ export function useGitHub() {
     [token, authHeaders],
   );
 
+  const analyzePR = useCallback(
+    async (params: {
+      owner: string;
+      repo: string;
+      pull_number: number;
+      provider?: string;
+    }): Promise<GitHubAnalyzeResponse | null> => {
+      if (!token) return null;
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fetch(`${API_BASE_URL}/github/analyze`, {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify(params),
+        });
+        const data = await res.json();
+        if (data.success) {
+          setLoading(false);
+          return data as GitHubAnalyzeResponse;
+        }
+        setError(data.error?.message ?? 'Analysis failed');
+        setLoading(false);
+        return null;
+      } catch {
+        setError('Failed to connect to server');
+        setLoading(false);
+        return null;
+      }
+    },
+    [token, authHeaders],
+  );
+
+  const selectRepo = useCallback((fullName: string | null) => {
+    setSelectedRepoName(fullName);
+    setSelectedBranch(null);
+    setSelectedPRNumber(null);
+    storeValue(STORAGE_KEYS.REPO, fullName);
+    storeValue(STORAGE_KEYS.BRANCH, null);
+    storeValue(STORAGE_KEYS.PR, null);
+  }, []);
+
+  const selectBranch = useCallback((branch: string | null) => {
+    setSelectedBranch(branch);
+    storeValue(STORAGE_KEYS.BRANCH, branch);
+  }, []);
+
+  const selectPR = useCallback((prNumber: number | null) => {
+    setSelectedPRNumber(prNumber);
+    storeValue(STORAGE_KEYS.PR, prNumber);
+  }, []);
+
+  const refreshConnection = useCallback(async () => {
+    await checkConnection();
+  }, [checkConnection]);
+
   return {
     connected,
     githubUser,
+    connectedAt,
     repositories,
     branches,
     pulls,
     files,
     loading,
     error,
+    selectedRepoName,
+    selectedBranch,
+    selectedPRNumber,
     connect,
     handleCallback,
     disconnect,
+    refreshConnection,
     fetchRepositories,
     fetchBranches,
     fetchPulls,
     fetchFiles,
     reviewPR,
+    analyzePR,
+    selectRepo,
+    selectBranch,
+    selectPR,
     setFiles,
   };
 }
 
-export type { GitHubRepo, GitHubBranch, GitHubPull, GitHubFile, GitHubReviewResponse };
+export type {
+  GitHubRepo,
+  GitHubBranch,
+  GitHubPull,
+  GitHubFile,
+  GitHubReviewResponse,
+  GitHubAnalyzeResponse,
+};

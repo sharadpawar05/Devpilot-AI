@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useMemo, Suspense, lazy, useRef } from 'react';
-import DOMPurify from 'dompurify';
 import {
   Github,
   Unlink,
@@ -22,6 +21,14 @@ import {
   type GitHubReviewResponse,
 } from '@/hooks/use-github';
 import { useTheme } from '@/hooks/use-theme';
+import {
+  renderMarkdown,
+  extractSections,
+  extractScore,
+  getScoreColor,
+  getScoreLabel,
+  getScoreBg,
+} from '@/lib/markdown';
 
 const Editor = lazy(() => import('@monaco-editor/react'));
 
@@ -49,89 +56,6 @@ const PROGRESS_MESSAGES = [
   'Checking for issues...',
   'Generating report...',
 ];
-
-function extractScore(text: string): number | null {
-  const patterns = [/\*\*(\d+\.?\d*)\s*\/\s*10\*\*/, /(\d+\.?\d*)\s*\/\s*10/];
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
-    if (match) {
-      const score = parseFloat(match[1]);
-      if (score >= 0 && score <= 10) return score;
-    }
-  }
-  return null;
-}
-
-function getScoreColor(score: number): string {
-  if (score >= 9) return 'text-green-500';
-  if (score >= 7) return 'text-blue-500';
-  if (score >= 5) return 'text-amber-500';
-  return 'text-red-500';
-}
-
-function getScoreLabel(score: number): string {
-  if (score >= 9) return 'Excellent';
-  if (score >= 7) return 'Good';
-  if (score >= 5) return 'Needs Improvement';
-  return 'Poor';
-}
-
-function getScoreBg(score: number): string {
-  if (score >= 9) return 'bg-green-500/10 border-green-500/30';
-  if (score >= 7) return 'bg-blue-500/10 border-blue-500/30';
-  if (score >= 5) return 'bg-amber-500/10 border-amber-500/30';
-  return 'bg-red-500/10 border-red-500/30';
-}
-
-function renderMarkdown(text: string): string {
-  let html = text;
-  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_m, lang: string, code: string) => {
-    const escaped = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const codeId = `code-${Math.random().toString(36).slice(2, 9)}`;
-    return `<div class="relative my-3 rounded-md border border-input bg-muted/50"><div class="flex items-center justify-between px-3 py-1.5 text-xs text-muted-foreground border-b border-input"><span>${lang || 'code'}</span><button data-copy-target="${codeId}" class="copy-button flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"><svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><span>Copy</span></button></div><pre class="overflow-x-auto p-4 font-mono text-sm"><code id="${codeId}">${escaped}</code></pre></div>`;
-  });
-  html = html.replace(
-    /`([^`]+)`/g,
-    '<code class="rounded bg-muted px-1.5 py-0.5 font-mono text-sm">$1</code>',
-  );
-  html = html.replace(/^### (.+)$/gm, '<h3 class="mt-4 mb-2 text-base font-semibold">$1</h3>');
-  html = html.replace(/^## (.+)$/gm, '<h2 class="mt-5 mb-2 text-lg font-bold">$1</h2>');
-  html = html.replace(/^# (.+)$/gm, '<h1 class="mt-6 mb-3 text-xl font-bold">$1</h1>');
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-  html = html.replace(/^---$/gm, '<hr class="my-4 border-input" />');
-  html = html.replace(/^- (.+)$/gm, '<li class="ml-4 list-disc">$1</li>');
-  html = html.replace(
-    /(<li[^>]*>.*<\/li>\n?)+/g,
-    (match) => `<ul class="my-2 space-y-1">${match}</ul>`,
-  );
-  html = html.replace(/^\d+\. (.+)$/gm, '<li class="ml-4 list-decimal">$1</li>');
-  html = html.replace(/^(?!<[a-z/])((?!^\s*$).+)$/gm, '<p class="mb-2">$1</p>');
-  return DOMPurify.sanitize(html);
-}
-
-function extractSections(text: string): { title: string; content: string }[] {
-  const sections: { title: string; content: string }[] = [];
-  const lines = text.split('\n');
-  let currentTitle = '';
-  let currentContent: string[] = [];
-  for (const line of lines) {
-    const h1Match = line.match(/^# (.+)$/);
-    const h2Match = line.match(/^## (.+)$/);
-    const match = h1Match || h2Match;
-    if (match) {
-      if (currentTitle)
-        sections.push({ title: currentTitle, content: currentContent.join('\n').trim() });
-      currentTitle = match[1].replace(/\*\*/g, '');
-      currentContent = [];
-    } else {
-      currentContent.push(line);
-    }
-  }
-  if (currentTitle)
-    sections.push({ title: currentTitle, content: currentContent.join('\n').trim() });
-  return sections;
-}
 
 function LoadingProgress() {
   const [messageIndex, setMessageIndex] = useState(0);
@@ -183,6 +107,33 @@ export function GitHubReviewPage() {
   );
 
   const callbackProcessed = useRef(false);
+
+  // Restore selected repo from localStorage when repositories load
+  useEffect(() => {
+    if (gh.selectedRepoName && gh.repositories.length > 0 && !selectedRepo) {
+      const stored = gh.repositories.find((r) => r.full_name === gh.selectedRepoName);
+      if (stored) {
+        setSelectedRepo(stored);
+        const [owner, name] = stored.full_name.split('/');
+        gh.fetchBranches(owner, name);
+        gh.fetchPulls(owner, name);
+      }
+    }
+  }, [gh.selectedRepoName, gh.repositories, selectedRepo, gh.fetchBranches, gh.fetchPulls]);
+
+  // Restore selected PR from localStorage when pulls load
+  useEffect(() => {
+    if (gh.selectedPRNumber !== null && gh.pulls.length > 0 && !selectedPR) {
+      const stored = gh.pulls.find((p) => p.number === gh.selectedPRNumber);
+      if (stored) {
+        setSelectedPR(stored);
+        if (selectedRepo) {
+          const [owner, name] = selectedRepo.full_name.split('/');
+          gh.fetchFiles(owner, name, stored.number);
+        }
+      }
+    }
+  }, [gh.selectedPRNumber, gh.pulls, selectedPR, selectedRepo, gh.fetchFiles]);
 
   // Handle GitHub OAuth callback
   useEffect(() => {
@@ -243,6 +194,7 @@ export function GitHubReviewPage() {
       setSelectedPR(null);
       setSelectedFiles(new Set());
       setResult(null);
+      gh.selectRepo(fullName || null);
       if (repo) {
         const [owner, name] = fullName.split('/');
         gh.fetchBranches(owner, name);
@@ -258,6 +210,7 @@ export function GitHubReviewPage() {
       setSelectedPR(pr);
       setSelectedFiles(new Set());
       setResult(null);
+      gh.selectPR(prNumber || null);
       if (pr && selectedRepo) {
         const [owner, name] = selectedRepo.full_name.split('/');
         gh.fetchFiles(owner, name, pr.number);
@@ -352,24 +305,53 @@ export function GitHubReviewPage() {
             <div className="rounded-md border border-input p-4">
               <h3 className="mb-3 text-sm font-medium">GitHub Account</h3>
               {gh.connected && gh.githubUser ? (
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <img
-                      src={gh.githubUser.avatar_url}
-                      alt={gh.githubUser.login}
-                      className="h-8 w-8 rounded-full"
-                    />
-                    <div>
-                      <p className="text-sm font-medium">
-                        {gh.githubUser.name || gh.githubUser.login}
-                      </p>
-                      <p className="text-xs text-muted-foreground">@{gh.githubUser.login}</p>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="relative">
+                        <img
+                          src={gh.githubUser.avatar_url}
+                          alt={gh.githubUser.login}
+                          className="h-10 w-10 rounded-full"
+                        />
+                        <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background bg-green-500" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">
+                          {gh.githubUser.name || gh.githubUser.login}
+                        </p>
+                        <p className="text-xs text-muted-foreground">@{gh.githubUser.login}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="rounded-full bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-600 dark:text-green-400">
+                        Connected
+                      </span>
                     </div>
                   </div>
-                  <Button variant="outline" size="sm" onClick={gh.disconnect}>
-                    <Unlink className="mr-1 h-3 w-3" />
-                    Disconnect
-                  </Button>
+                  {gh.connectedAt && (
+                    <p className="text-xs text-muted-foreground">
+                      Connected since {new Date(gh.connectedAt).toLocaleDateString()}
+                    </p>
+                  )}
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={gh.refreshConnection}
+                      disabled={gh.loading}
+                      className="flex-1"
+                    >
+                      <Loader2
+                        className={`mr-1 h-3 w-3 ${gh.loading ? 'animate-spin' : 'hidden'}`}
+                      />
+                      Refresh
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={gh.disconnect} className="flex-1">
+                      <Unlink className="mr-1 h-3 w-3" />
+                      Disconnect
+                    </Button>
+                  </div>
                 </div>
               ) : (
                 <Button variant="outline" onClick={handleConnect} disabled={connecting}>

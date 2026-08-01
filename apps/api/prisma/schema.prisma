@@ -77,16 +77,20 @@ model Organization {
 }
 
 model User {
-  id               String     @id @default(uuid()) @db.Uuid
-  supabaseUserId   String     @unique
-  email            String     @unique
-  fullName         String
-  avatarUrl        String?
-  role             UserRole   @default(USER)
-  organizationId   String?    @db.Uuid
+  id                String     @id @default(uuid()) @db.Uuid
+  supabaseUserId    String     @unique
+  email             String     @unique
+  fullName          String
+  avatarUrl         String?
+  role              UserRole   @default(USER)
+  organizationId    String?    @db.Uuid
   githubAccessToken String?
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
+  githubUserId      Int?
+  githubUsername    String?
+  githubAvatar      String?
+  githubConnectedAt DateTime?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
 
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   aiReports      AIReport[]

@@ -38,16 +38,38 @@ async function setGitHubToken(
   token: string,
   email?: string,
   name?: string,
+  githubUser?: { id: number; login: string; avatar_url: string },
 ): Promise<void> {
   const encryptedToken = encrypt(token);
+  const updateData: {
+    githubAccessToken: string;
+    githubUserId?: number;
+    githubUsername?: string;
+    githubAvatar?: string;
+    githubConnectedAt?: Date;
+  } = {
+    githubAccessToken: encryptedToken,
+  };
+
+  if (githubUser) {
+    updateData.githubUserId = githubUser.id;
+    updateData.githubUsername = githubUser.login;
+    updateData.githubAvatar = githubUser.avatar_url;
+    updateData.githubConnectedAt = new Date();
+  }
+
   await db.user.upsert({
     where: { supabaseUserId: userId },
-    update: { githubAccessToken: encryptedToken },
+    update: updateData,
     create: {
       supabaseUserId: userId,
       email: email || `${userId}@placeholder.local`,
       fullName: name || 'GitHub User',
       githubAccessToken: encryptedToken,
+      githubUserId: githubUser?.id,
+      githubUsername: githubUser?.login,
+      githubAvatar: githubUser?.avatar_url,
+      githubConnectedAt: githubUser ? new Date() : undefined,
     },
   });
 }
@@ -156,6 +178,47 @@ export async function githubRoutes(app: FastifyInstance) {
     },
   );
 
+  // GET /github/status - Lightweight connection status check (no GitHub API call)
+  app.get(
+    '/github/status',
+    {
+      preHandler: [authenticate],
+      schema: {
+        description: 'Check GitHub connection status without calling GitHub API',
+        tags: ['github'],
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (request, reply) => {
+      const auth = (request as { auth: { sub: string } }).auth;
+      const user = await db.user.findUnique({
+        where: { supabaseUserId: auth.sub },
+        select: {
+          githubAccessToken: true,
+          githubUserId: true,
+          githubUsername: true,
+          githubAvatar: true,
+          githubConnectedAt: true,
+        },
+      });
+
+      if (!user?.githubAccessToken) {
+        return reply.send({ success: true, connected: false });
+      }
+
+      return reply.send({
+        success: true,
+        connected: true,
+        user: {
+          id: user.githubUserId,
+          login: user.githubUsername,
+          avatar_url: user.githubAvatar,
+        },
+        connectedAt: user.githubConnectedAt?.toISOString() ?? null,
+      });
+    },
+  );
+
   // GET /github/callback - Exchange code for token
   app.get(
     '/github/callback',
@@ -253,15 +316,16 @@ export async function githubRoutes(app: FastifyInstance) {
           });
         }
 
+        const octokit = new Octokit({ auth: data.access_token });
+        const { data: ghUser } = await octokit.rest.users.getAuthenticated();
+
         await setGitHubToken(
           auth.sub,
           data.access_token,
           auth.email,
           auth.user_metadata?.full_name as string | undefined,
+          { id: ghUser.id, login: ghUser.login, avatar_url: ghUser.avatar_url },
         );
-
-        const octokit = new Octokit({ auth: data.access_token });
-        const { data: ghUser } = await octokit.rest.users.getAuthenticated();
 
         return reply.send({
           success: true,
@@ -295,23 +359,64 @@ export async function githubRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const auth = (request as { auth: { sub: string } }).auth;
-      const token = await getGitHubToken(auth.sub);
+      const user = await db.user.findUnique({
+        where: { supabaseUserId: auth.sub },
+        select: {
+          githubAccessToken: true,
+          githubUserId: true,
+          githubUsername: true,
+          githubAvatar: true,
+          githubConnectedAt: true,
+        },
+      });
 
-      if (!token) {
+      if (!user?.githubAccessToken) {
         return reply.send({ success: true, connected: false });
       }
 
-      try {
-        const octokit = new Octokit({ auth: token });
-        const { data: user } = await octokit.rest.users.getAuthenticated();
+      // Serve from cache if available
+      if (user.githubUsername && user.githubAvatar) {
         return reply.send({
           success: true,
           connected: true,
           user: {
-            login: user.login,
-            avatar_url: user.avatar_url,
-            name: user.name,
+            login: user.githubUsername,
+            avatar_url: user.githubAvatar,
+            id: user.githubUserId,
           },
+          connectedAt: user.githubConnectedAt?.toISOString() ?? null,
+        });
+      }
+
+      // Fallback: call GitHub API if no cached metadata
+      try {
+        const token = await getGitHubToken(auth.sub);
+        if (!token) {
+          return reply.send({ success: true, connected: false });
+        }
+        const octokit = new Octokit({ auth: token });
+        const { data: ghUser } = await octokit.rest.users.getAuthenticated();
+
+        // Cache the metadata for future requests
+        await db.user.update({
+          where: { supabaseUserId: auth.sub },
+          data: {
+            githubUserId: ghUser.id,
+            githubUsername: ghUser.login,
+            githubAvatar: ghUser.avatar_url,
+            githubConnectedAt: user.githubConnectedAt ?? new Date(),
+          },
+        });
+
+        return reply.send({
+          success: true,
+          connected: true,
+          user: {
+            login: ghUser.login,
+            avatar_url: ghUser.avatar_url,
+            id: ghUser.id,
+          },
+          connectedAt: (user.githubConnectedAt ?? new Date()).toISOString(),
         });
       } catch (error) {
         // Only delete token if it's definitively invalid (401 Unauthorized)
@@ -692,6 +797,216 @@ export async function githubRoutes(app: FastifyInstance) {
       }
     },
   );
+
+  // POST /github/analyze - Comprehensive PR analysis with multiple sections
+  app.post(
+    '/github/analyze',
+    {
+      preHandler: [authenticate],
+      schema: {
+        description: 'Comprehensive AI-powered PR analysis generating all report sections',
+        tags: ['github'],
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (request, reply) => {
+      const auth = (request as { auth: { sub: string } }).auth;
+      const parsed = analyzeSchema.safeParse(request.body);
+
+      if (!parsed.success) {
+        return reply.status(400).send({
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: parsed.error.errors.map((e) => e.message).join(', '),
+          },
+        });
+      }
+
+      const { owner, repo, pull_number, provider } = parsed.data;
+
+      let octokit: Octokit;
+      try {
+        octokit = await getOctokit(auth.sub);
+      } catch (error) {
+        return reply.status(400).send({
+          success: false,
+          error: { code: 'NOT_CONNECTED', message: (error as Error).message },
+        });
+      }
+
+      let prData;
+      let filesData;
+      try {
+        const [prResp, filesResp] = await Promise.all([
+          octokit.rest.pulls.get({ owner, repo, pull_number }),
+          octokit.rest.pulls.listFiles({ owner, repo, pull_number, per_page: 100 }),
+        ]);
+        prData = prResp.data;
+        filesData = filesResp.data;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return reply.status(500).send({
+          success: false,
+          error: { code: 'GITHUB_ERROR', message: `Failed to fetch PR: ${message}` },
+        });
+      }
+
+      if (filesData.length === 0) {
+        return reply.status(400).send({
+          success: false,
+          error: { code: 'NO_FILES', message: 'No files found in this PR.' },
+        });
+      }
+
+      let diffContent = filesData
+        .map((f) => `--- ${f.filename}\n+++ ${f.filename}\n${f.patch || '(binary file)'}`)
+        .join('\n\n');
+
+      let truncated = false;
+      if (diffContent.length > MAX_DIFF_CHARS) {
+        diffContent = diffContent.slice(0, MAX_DIFF_CHARS);
+        truncated = true;
+      }
+
+      const filenames = filesData.map((f) => f.filename);
+      const fileTypes = detectFileTypes(filenames);
+
+      const context = [
+        `PR #${pull_number}: ${prData.title}`,
+        prData.body ? `Description: ${prData.body}` : '',
+        `Author: ${prData.user?.login}`,
+        `Files changed: ${filesData.length}`,
+        `+${prData.additions || 0} -${prData.deletions || 0}`,
+      ]
+        .filter(Boolean)
+        .join('\n');
+
+      let rendered;
+      try {
+        rendered = registry.render('prompt_pr_assistant', {
+          title: prData.title,
+          body: prData.body || '(No description provided)',
+          author: prData.user?.login || 'unknown',
+          baseBranch: prData.base?.ref || 'main',
+          headBranch: prData.head?.ref || 'feature',
+          additions: String(prData.additions || 0),
+          deletions: String(prData.deletions || 0),
+          changedFiles: String(filesData.length),
+          diff: diffContent,
+          fileTypes,
+          truncated: truncated ? 'yes' : undefined,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return reply.status(500).send({
+          success: false,
+          error: { code: 'PROMPT_ERROR', message: `Failed to render prompt: ${message}` },
+        });
+      }
+
+      try {
+        const result = await aiService.generate(rendered.userPrompt, rendered.systemPrompt, {
+          provider,
+          model: (DEFAULT_MODELS[provider] ?? DEFAULT_MODELS.gemini) as never,
+          maxTokens: 4096,
+        });
+
+        const totalTokens = result.tokens.total || result.tokens.input + result.tokens.output;
+
+        return reply.send({
+          success: true,
+          provider: result.provider,
+          model: result.model,
+          response: result.content,
+          latencyMs: result.latencyMs,
+          truncated,
+          fileTypes,
+          pr: {
+            number: pull_number,
+            title: prData.title,
+            url: prData.html_url,
+            author: prData.user?.login,
+            filesChanged: filesData.length,
+            additions: prData.additions || 0,
+            deletions: prData.deletions || 0,
+          },
+          usage: {
+            input: result.tokens.input,
+            output: result.tokens.output,
+            total: totalTokens,
+          },
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const code_ =
+          error && typeof error === 'object' && 'code' in error
+            ? String((error as { code: unknown }).code)
+            : 'AI_ERROR';
+
+        app.log.error({ err: error, provider }, 'GitHub PR analyze failed');
+
+        return reply.status(502).send({
+          success: false,
+          error: { code: code_, message },
+        });
+      }
+    },
+  );
+}
+
+const analyzeSchema = z.object({
+  owner: z.string().min(1),
+  repo: z.string().min(1),
+  pull_number: z.number().min(1),
+  provider: z.enum(['gemini', 'openai', 'anthropic', 'openrouter']).default('gemini'),
+});
+
+function detectFileTypes(filenames: string[]): string {
+  const frontendExts = new Set(['tsx', 'jsx', 'vue', 'svelte', 'css', 'scss', 'less', 'html']);
+  const backendExts = new Set(['go', 'rs', 'java', 'py', 'rb', 'php', 'sql', 'graphql']);
+  const docsExts = new Set(['md', 'mdx', 'txt', 'rst']);
+  const configExts = new Set([
+    'yml',
+    'yaml',
+    'json',
+    'toml',
+    'ini',
+    'env',
+    'lock',
+    'gitignore',
+    'dockerignore',
+  ]);
+
+  let hasFrontend = false;
+  let hasBackend = false;
+  let hasDocs = false;
+  let hasConfig = false;
+  let hasCode = false;
+
+  for (const file of filenames) {
+    const ext = file.split('.').pop()?.toLowerCase() ?? '';
+    if (frontendExts.has(ext)) {
+      hasFrontend = true;
+      hasCode = true;
+    } else if (backendExts.has(ext)) {
+      hasBackend = true;
+      hasCode = true;
+    } else if (docsExts.has(ext)) {
+      hasDocs = true;
+    } else if (configExts.has(ext)) {
+      hasConfig = true;
+    } else {
+      hasCode = true;
+    }
+  }
+
+  if (hasDocs && !hasCode) return 'docs';
+  if (hasConfig && !hasCode && !hasDocs) return 'config';
+  if (hasFrontend && hasBackend) return 'full-stack';
+  if (hasFrontend) return 'frontend';
+  if (hasBackend) return 'backend';
+  return 'mixed';
 }
 
 function detectLanguage(filenames: string[]): string {
