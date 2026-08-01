@@ -35,7 +35,8 @@ export function extractSections(text: string): { title: string; content: string 
   for (const line of lines) {
     const h1Match = line.match(/^# (.+)$/);
     const h2Match = line.match(/^## (.+)$/);
-    const match = h1Match || h2Match;
+    const h3Match = line.match(/^### (.+)$/);
+    const match = h1Match || h2Match || h3Match;
     if (match) {
       if (currentTitle)
         sections.push({ title: currentTitle, content: currentContent.join('\n').trim() });

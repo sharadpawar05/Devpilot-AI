@@ -544,35 +544,18 @@ export function PullRequestAssistantPage() {
       if (tab === 'overview') return extractExecutiveSummary(activeResponse);
 
       const tabSectionMap: Record<string, string[]> = {
-        review: [
-          'EXECUTIVE_SUMMARY',
-          'OVERALL SCORE',
-          'STRENGTHS',
-          'ISSUES',
-          'PERFORMANCE',
-          'SECURITY',
-          'MAINTAINABILITY',
-          'RECOMMENDATIONS',
-        ],
-        description: [
-          'PR_DESCRIPTION',
-          'SUMMARY',
-          'WHY',
-          'CHANGES MADE',
-          'TESTING',
-          'RISKS',
-          'SCREENSHOTS',
-          'CHECKLIST',
-        ],
-        commit: ['COMMIT_MESSAGE'],
-        release: ['RELEASE_NOTES', 'DEVELOPER', 'CUSTOMER'],
-        'test-checklist': ['TEST_CHECKLIST', 'TESTING CHECKLIST'],
-        'reviewer-checklist': ['REVIEWER_CHECKLIST', 'REVIEW CHECKLIST'],
+        review: ['EXECUTIVE_SUMMARY', 'RISK_ASSESSMENT', 'RISK'],
+        description: ['PR_DESCRIPTION', 'PR DESCRIPTION'],
+        commit: ['COMMIT_MESSAGE', 'COMMIT MESSAGE'],
+        release: ['RELEASE_NOTES', 'RELEASE NOTES'],
+        'test-checklist': ['TEST_CHECKLIST', 'TEST CHECKLIST'],
+        'reviewer-checklist': ['REVIEWER_CHECKLIST', 'REVIEWER CHECKLIST', 'REVIEW CHECKLIST'],
       };
 
       const keywords = tabSectionMap[tab] ?? [];
+      const normalize = (s: string) => s.toUpperCase().replace(/[\s_-]+/g, '');
       const matchingSections = activeSections.filter((s) =>
-        keywords.some((kw) => s.title.toUpperCase().includes(kw)),
+        keywords.some((kw) => normalize(s.title).includes(normalize(kw))),
       );
 
       if (matchingSections.length > 0) {
