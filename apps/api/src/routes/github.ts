@@ -20,6 +20,14 @@ async function getGitHubToken(userId: string): Promise<string | null> {
   try {
     return decrypt(user.githubAccessToken);
   } catch {
+    // Token might be plaintext (stored before encryption was added)
+    // Check if it looks like a valid GitHub token (ghp_ or github_pat_)
+    if (
+      user.githubAccessToken.startsWith('ghp_') ||
+      user.githubAccessToken.startsWith('github_pat_')
+    ) {
+      return user.githubAccessToken;
+    }
     return null;
   }
 }
@@ -181,7 +189,6 @@ export async function githubRoutes(app: FastifyInstance) {
 
       // Validate state from signed cookie (CSRF protection)
       const expectedState = request.cookies?.github_oauth_state;
-      const cookieUserId = request.cookies?.github_oauth_user;
 
       // Clear the cookies
       reply.clearCookie('github_oauth_state', { path: '/' });
@@ -302,8 +309,16 @@ export async function githubRoutes(app: FastifyInstance) {
             name: user.name,
           },
         });
-      } catch {
-        await deleteGitHubToken(auth.sub);
+      } catch (error) {
+        // Only delete token if it's definitively invalid (401 Unauthorized)
+        const isAuthError =
+          error &&
+          typeof error === 'object' &&
+          'status' in error &&
+          (error as { status: number }).status === 401;
+        if (isAuthError) {
+          await deleteGitHubToken(auth.sub);
+        }
         return reply.send({ success: true, connected: false });
       }
     },
