@@ -4,11 +4,14 @@ import { getEnv } from '@/config';
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 16;
 
+let cachedKey: Buffer | null = null;
+
 function getEncryptionKey(): Buffer {
+  if (cachedKey) return cachedKey;
   const env = getEnv();
-  // Derive a 32-byte key from the JWT secret (or a dedicated key if provided)
   const secret = env.SUPABASE_JWT_SECRET || env.SUPABASE_ANON_KEY;
-  return scryptSync(secret, 'devpilot-github-token-salt', 32);
+  cachedKey = scryptSync(secret, 'devpilot-github-token-salt', 32);
+  return cachedKey;
 }
 
 export function encrypt(plaintext: string): string {

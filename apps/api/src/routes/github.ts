@@ -92,6 +92,8 @@ const DEPTH_MAX_TOKENS: Record<string, number> = {
   Deep: 4096,
 };
 
+const MAX_DIFF_CHARS = 100_000; // ~25k tokens
+
 export async function githubRoutes(app: FastifyInstance) {
   // GET /github/auth-url - Get GitHub OAuth URL
   app.get(
@@ -595,9 +597,15 @@ export async function githubRoutes(app: FastifyInstance) {
         });
       }
 
-      const diffContent = selectedFiles
+      let diffContent = selectedFiles
         .map((f) => `--- ${f.filename}\n+++ ${f.filename}\n${f.patch || '(binary file)'}`)
         .join('\n\n');
+
+      let truncated = false;
+      if (diffContent.length > MAX_DIFF_CHARS) {
+        diffContent = diffContent.slice(0, MAX_DIFF_CHARS);
+        truncated = true;
+      }
 
       const language = detectLanguage(selectedFiles.map((f) => f.filename));
 
@@ -649,6 +657,7 @@ export async function githubRoutes(app: FastifyInstance) {
           response: result.content,
           latencyMs: result.latencyMs,
           reviewDepth,
+          truncated,
           pr: {
             number: pull_number,
             title: prData.title,
