@@ -21,8 +21,9 @@ async function getGitHubToken(userId: string): Promise<string | null> {
     return decrypt(user.githubAccessToken);
   } catch {
     // Token might be plaintext (stored before encryption was added)
-    // Check if it looks like a valid GitHub token (ghp_ or github_pat_)
+    // Check if it looks like a valid GitHub token (gho_, ghp_, or github_pat_)
     if (
+      user.githubAccessToken.startsWith('gho_') ||
       user.githubAccessToken.startsWith('ghp_') ||
       user.githubAccessToken.startsWith('github_pat_')
     ) {
