@@ -1,4 +1,4 @@
-import type { RepoFileNode, RepoFileMetadata } from '../types/repository';
+import type { RepoFileNode, RepoFileMetadata } from './types';
 
 const SUPPORTED_EXTENSIONS = new Set([
   '.ts',

@@ -1,12 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { authenticate } from '@/middleware/auth';
-import { getOctokit } from '@/routes/github';
-import { aiService } from '@/lib/ai';
-import { repositoryIndexer } from '@/services/repository-indexer';
-import { repositoryStatusService } from '@/services/repository-status';
-import { buildTreeSummary, findFilesByKeywords } from '@/services/repository-parser';
-import { db } from '@/lib/db';
+import { authenticate } from '@/core/auth';
+import { getOctokit } from '@/core/github';
+import { aiService } from '@/core/ai/service';
+import { repositoryIndexer } from './indexer';
+import { repositoryStatusService } from './status';
+import { buildTreeSummary, findFilesByKeywords } from './parser';
+import { db } from '@/core/db';
 
 const MAX_FILE_SIZE = 50_000;
 const MAX_CONTEXT_FILES = 15;

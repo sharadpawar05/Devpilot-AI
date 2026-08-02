@@ -1,4 +1,4 @@
-import { db } from '../lib/db';
+import { db } from '@/core/db';
 import type {
   RepoIndexData,
   RepoIndexStatusEnum,
@@ -6,7 +6,7 @@ import type {
   RepoFileMetadata,
   RepoLanguageBreakdown,
   RepoStats,
-} from '../types/repository';
+} from './types';
 
 function castJson<T>(value: unknown): T {
   return value as T;

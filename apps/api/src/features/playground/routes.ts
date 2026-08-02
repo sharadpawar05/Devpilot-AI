@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { aiService } from '@/lib/ai';
+import { aiService } from '@/core/ai/service';
 
 const chatRequestSchema = z.object({
   provider: z.enum(['gemini', 'openai', 'anthropic', 'openrouter']).default('gemini'),

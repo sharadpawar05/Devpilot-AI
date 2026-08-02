@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { aiService } from '@/lib/ai';
+import { aiService } from '@/core/ai/service';
 import { PromptRegistry, loadMarkdownPrompts } from '@devpilot/ai-prompts';
 
 const registry = new PromptRegistry();

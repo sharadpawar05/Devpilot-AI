@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify';
-import { authenticate } from '../middleware/auth';
-import { repositoryIndexer } from '../services/repository-indexer';
-import { repositoryStatusService } from '../services/repository-status';
-import { repositoryCache } from '../services/repository-cache';
+import { authenticate } from '@/core/auth';
+import { repositoryIndexer } from './indexer';
+import { repositoryStatusService } from './status';
+import { repositoryCache } from './cache';
 
 export default async function repositoryRoutes(app: FastifyInstance) {
   app.get(

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
-import { authenticate } from '@/middleware/auth';
-import { db } from '@/lib/db';
+import { authenticate } from '@/core/auth';
+import { db } from '@/core/db';
 
 export async function dashboardRoutes(app: FastifyInstance) {
   app.get(

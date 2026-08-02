@@ -23,7 +23,6 @@ export function encrypt(plaintext: string): string {
 
   const tag = cipher.getAuthTag();
 
-  // Format: iv:tag:ciphertext (all hex)
   return `${iv.toString('hex')}:${tag.toString('hex')}:${encrypted}`;
 }
 

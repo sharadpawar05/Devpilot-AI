@@ -2,21 +2,22 @@ import type { FastifyInstance } from 'fastify';
 import { healthRoutes } from './health';
 import { versionRoutes } from './version';
 import { meRoutes } from './me';
-import { aiRoutes } from './ai';
-import { codeReviewRoutes } from './code-review';
-import { githubRoutes } from './github';
 import { dashboardRoutes } from './dashboard';
-import { repositoryChatRoutes } from './repository-chat';
-import repositoryRoutes from './repository';
+import { playgroundRoutes } from '@/features/playground';
+import { codeReviewRoutes } from '@/features/code-review';
+import { prReviewRoutes } from '@/features/pr-review';
+import { githubRoutes } from '@/core/github';
+import { repositoryChatRoutes, repositoryRoutes } from '@/features/repository-chat';
 
 export async function apiV1Routes(app: FastifyInstance) {
   await app.register(healthRoutes);
   await app.register(versionRoutes);
   await app.register(meRoutes);
-  await app.register(aiRoutes);
+  await app.register(dashboardRoutes);
+  await app.register(playgroundRoutes);
   await app.register(codeReviewRoutes);
   await app.register(githubRoutes);
-  await app.register(dashboardRoutes);
-  await app.register(repositoryChatRoutes);
+  await app.register(prReviewRoutes);
   await app.register(repositoryRoutes);
+  await app.register(repositoryChatRoutes);
 }

@@ -1,9 +1,9 @@
-import { getOctokit } from '../routes/github';
-import { repositoryCache } from './repository-cache';
-import { repositoryStatusService } from './repository-status';
-import { buildRepoTree, filterSupportedFiles, parseFileMetadata } from './repository-parser';
-import { analyzeLanguageBreakdown, analyzeStats } from './repository-analyzer';
-import type { RepoIndexData } from '../types/repository';
+import { getOctokit } from '@/core/github';
+import { repositoryCache } from './cache';
+import { repositoryStatusService } from './status';
+import { buildRepoTree, filterSupportedFiles, parseFileMetadata } from './parser';
+import { analyzeLanguageBreakdown, analyzeStats } from './analyzer';
+import type { RepoIndexData } from './types';
 
 const MAX_FILE_CONTENT_FETCH = 50;
 const MAX_FILE_CONTENT_SIZE = 50_000;

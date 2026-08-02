@@ -1,9 +1,4 @@
-import type {
-  RepoFileNode,
-  RepoFileMetadata,
-  RepoLanguageBreakdown,
-  RepoStats,
-} from '../types/repository';
+import type { RepoFileNode, RepoFileMetadata, RepoLanguageBreakdown, RepoStats } from './types';
 
 const COMPONENT_PATTERNS = [
   /^(?:export\s+)?(?:default\s+)?(?:function|class)\s+[A-Z]\w*/m,

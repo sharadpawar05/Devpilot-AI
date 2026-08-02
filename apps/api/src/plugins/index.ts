@@ -3,8 +3,8 @@ import { registerCors } from './cors';
 import { registerHelmet } from './helmet';
 import { registerSwagger } from './swagger';
 import { registerErrorHandler } from './error-handler';
-import { registerRequestLogger } from './request-logger';
-import { registerAuth } from './auth';
+import { registerRequestLogger } from '@/core/logging';
+import { registerAuth } from '@/core/auth';
 import { registerCookies } from './cookie';
 
 export async function registerPlugins(app: FastifyInstance) {

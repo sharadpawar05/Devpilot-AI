@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { authenticate, type AuthJWTPayload } from '@/middleware/auth';
+import { authenticate, type AuthJWTPayload } from './middleware';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -15,4 +15,4 @@ export async function registerAuth(app: FastifyInstance) {
   });
 }
 
-export { authenticate, type AuthJWTPayload } from '@/middleware/auth';
+export { authenticate, type AuthJWTPayload } from './middleware';

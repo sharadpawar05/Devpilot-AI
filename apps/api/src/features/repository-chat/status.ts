@@ -1,5 +1,5 @@
-import { repositoryCache } from './repository-cache';
-import type { RepoIndexStatusEnum } from '../types/repository';
+import { repositoryCache } from './cache';
+import type { RepoIndexStatusEnum } from './types';
 
 export class RepositoryStatusService {
   async getStatus(
