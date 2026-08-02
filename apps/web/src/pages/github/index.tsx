@@ -110,6 +110,17 @@ export function GitHubReviewPage() {
 
   const callbackProcessed = useRef(false);
 
+  // Clear local state when GitHub is disconnected
+  useEffect(() => {
+    if (!gh.connected) {
+      setSelectedRepo(null);
+      setSelectedPR(null);
+      setSelectedFiles(new Set());
+      setResult(null);
+      setCodeView('');
+    }
+  }, [gh.connected]);
+
   // Restore selected repo from localStorage when repositories load
   useEffect(() => {
     if (gh.selectedRepoName && gh.repositories.length > 0 && !selectedRepo) {

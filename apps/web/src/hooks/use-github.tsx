@@ -1,4 +1,12 @@
-import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+  useRef,
+  type ReactNode,
+} from 'react';
 import { useAuth } from '@/auth';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
@@ -183,6 +191,7 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const disconnectedRef = useRef(false);
 
   const [selectedRepoName, setSelectedRepoName] = useState<string | null>(() =>
     loadStoredValue<string | null>(STORAGE_KEYS.REPO, null),
@@ -237,10 +246,12 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
       const res = await apiFetch(`${API_BASE_URL}/github/status`);
       const data = await res.json();
       if (data.success && data.connected) {
-        setConnected(true);
-        setGithubUser(data.user);
-        setConnectedAt(data.connectedAt);
-        fetchRepositories();
+        if (!disconnectedRef.current) {
+          setConnected(true);
+          setGithubUser(data.user);
+          setConnectedAt(data.connectedAt);
+          fetchRepositories();
+        }
       } else {
         setConnected(false);
         setGithubUser(null);
@@ -309,6 +320,7 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
 
   const disconnect = useCallback(async () => {
     if (!token) return;
+    disconnectedRef.current = true;
     setDisconnecting(true);
     setConnected(false);
     setGithubUser(null);
@@ -331,6 +343,7 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
       /* noop */
     } finally {
       setDisconnecting(false);
+      disconnectedRef.current = false;
     }
   }, [token, apiFetch]);
 

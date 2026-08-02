@@ -1,4 +1,4 @@
-import { createBrowserRouter, type RouteObject } from 'react-router-dom';
+import { createBrowserRouter, Navigate, type RouteObject } from 'react-router-dom';
 import { ProtectedRoute, PublicRoute } from '@/auth';
 import { MarketingLayout } from '@/layouts/marketing-layout';
 import { AppLayout } from '@/layouts/app-layout';
@@ -10,13 +10,21 @@ import { PlaygroundPage } from '@/pages/playground';
 import { CodeReviewPage } from '@/pages/code-review';
 import { GitHubReviewPage } from '@/pages/github';
 import { PullRequestAssistantPage } from '@/pages/pull-request-assistant';
+import { RepositoryChatPage } from '@/pages/repository-chat';
 import { NotFoundPage } from '@/pages/not-found';
+import { useAuth } from '@/auth';
+
+function RootRedirect() {
+  const { isAuthenticated, isLoading } = useAuth();
+  if (isLoading) return null;
+  return isAuthenticated ? <Navigate to="/dashboard" replace /> : <LandingPage />;
+}
 
 const routes: RouteObject[] = [
   {
     element: <MarketingLayout />,
     children: [
-      { path: '/', element: <LandingPage /> },
+      { path: '/', element: <RootRedirect /> },
       {
         path: '/login',
         element: (
@@ -31,7 +39,9 @@ const routes: RouteObject[] = [
     path: '/dashboard',
     element: (
       <ProtectedRoute>
-        <AppLayout />
+        <GitHubProvider>
+          <AppLayout />
+        </GitHubProvider>
       </ProtectedRoute>
     ),
     children: [{ index: true, element: <DashboardPage /> }],
@@ -65,6 +75,7 @@ const routes: RouteObject[] = [
     children: [
       { path: '/github', element: <GitHubReviewPage /> },
       { path: '/pull-request-assistant', element: <PullRequestAssistantPage /> },
+      { path: '/repository-chat', element: <RepositoryChatPage /> },
     ],
   },
   { path: '*', element: <NotFoundPage /> },

@@ -7,6 +7,7 @@ import {
   Code,
   Github,
   GitPullRequest,
+  MessageSquare,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -33,6 +34,7 @@ const groups: SidebarGroup[] = [
       { label: 'Code Review', href: '/code-review', icon: Code },
       { label: 'GitHub Review', href: '/github', icon: Github },
       { label: 'Pull Request Assistant', href: '/pull-request-assistant', icon: GitPullRequest },
+      { label: 'Repository AI Chat', href: '/repository-chat', icon: MessageSquare },
     ],
   },
   {
