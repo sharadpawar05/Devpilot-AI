@@ -1,35 +1,50 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useAuth } from '@/auth';
 import { useGitHub } from '@/hooks/use-github';
 import { useRepositoryChat } from '@/hooks/use-repository-chat';
-import { RepositorySidebar } from '@/components/repository-chat/RepositorySidebar';
-import { ChatWindow } from '@/components/repository-chat/ChatWindow';
+import { RepositoryChatState, deriveChatState } from '@/components/repository-chat/state';
+import { RepositoryChatLayout } from '@/components/repository-chat/RepositoryChatLayout';
+import { DisconnectedState } from '@/components/repository-chat/DisconnectedState';
+import { RepositorySelectionState } from '@/components/repository-chat/RepositorySelectionState';
+import { RepositoryIndexingState } from '@/components/repository-chat/RepositoryIndexingState';
+import { RepositoryReadyState } from '@/components/repository-chat/RepositoryReadyState';
+import { ConversationState } from '@/components/repository-chat/ConversationState';
+import { RepositoryErrorState } from '@/components/repository-chat/RepositoryErrorState';
 
 export function RepositoryChatPage() {
   const { session } = useAuth();
   const gh = useGitHub();
-  const {
-    messages,
-    isIndexing,
-    isChatting,
-    tree,
-    indexedFiles,
-    indexedAt,
-    error,
-    indexRepository,
-    sendMessage,
-    clearMessages,
-  } = useRepositoryChat(session?.accessToken);
+  const chat = useRepositoryChat(session?.accessToken);
 
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
-  const [selectedRepoFullName, setSelectedRepoFullName] = useState<string>('');
-  const [selectedBranch, setSelectedBranch] = useState<string>('main');
+  const [selectedRepoFullName, setSelectedRepoFullName] = useState('');
+  const [selectedBranch, setSelectedBranch] = useState('main');
 
-  const isIndexed = tree.length > 0;
+  const isIndexed = chat.tree.length > 0;
 
   const repoParts = selectedRepoFullName.split('/');
   const owner = repoParts[0] || '';
   const repo = repoParts[1] || '';
+
+  const currentState = useMemo(
+    () =>
+      deriveChatState({
+        ghConnected: gh.connected,
+        selectedRepoFullName,
+        isIndexing: chat.isIndexing,
+        isTreeReady: isIndexed,
+        hasMessages: chat.messages.length > 0,
+        error: chat.error,
+      }),
+    [
+      gh.connected,
+      selectedRepoFullName,
+      chat.isIndexing,
+      isIndexed,
+      chat.messages.length,
+      chat.error,
+    ],
+  );
 
   const handleRepoSelect = useCallback((fullName: string) => {
     setSelectedRepoFullName(fullName);
@@ -42,57 +57,106 @@ export function RepositoryChatPage() {
 
   const handleIndex = useCallback(
     (o: string, r: string, branch: string) => {
-      indexRepository(o, r, branch);
+      chat.indexRepository(o, r, branch);
     },
-    [indexRepository],
+    [chat.indexRepository],
   );
 
   const handleSend = useCallback(
-    (question: string, provider: string, model?: string) => {
+    (question: string, provider: string) => {
       if (owner && repo) {
-        sendMessage(owner, repo, selectedBranch, question, provider, model);
+        chat.sendMessage(owner, repo, selectedBranch, question, provider);
       }
     },
-    [owner, repo, selectedBranch, sendMessage],
+    [owner, repo, selectedBranch, chat.sendMessage],
   );
 
   const handleFileClick = useCallback((path: string) => {
     setSelectedFile(path);
   }, []);
 
+  const handleConnect = useCallback(() => {
+    gh.connect('/repository-chat');
+  }, [gh.connect]);
+
+  const handleRetry = useCallback(() => {
+    if (owner && repo) {
+      chat.indexRepository(owner, repo, selectedBranch);
+    }
+  }, [owner, repo, selectedBranch, chat.indexRepository]);
+
+  const handleChooseAnother = useCallback(() => {
+    setSelectedRepoFullName('');
+    setSelectedBranch('main');
+  }, []);
+
+  const handleCancel = useCallback(() => {
+    setSelectedRepoFullName('');
+    setSelectedBranch('main');
+  }, []);
+
+  const sidebarProps = {
+    gh,
+    tree: chat.tree,
+    indexedFiles: chat.indexedFiles,
+    indexedAt: chat.indexedAt,
+    isIndexing: chat.isIndexing,
+    selectedRepoFullName,
+    selectedBranch,
+    onRepoSelect: handleRepoSelect,
+    onBranchSelect: handleBranchSelect,
+    onIndex: handleIndex,
+    onFileSelect: handleFileClick,
+    selectedFile,
+  };
+
+  if (currentState === RepositoryChatState.DISCONNECTED) {
+    return <DisconnectedState onConnect={handleConnect} />;
+  }
+
   return (
-    <div className="flex h-full">
-      <RepositorySidebar
-        gh={gh}
-        tree={tree}
-        indexedFiles={indexedFiles}
-        indexedAt={indexedAt}
-        isIndexing={isIndexing}
-        selectedRepoFullName={selectedRepoFullName}
-        selectedBranch={selectedBranch}
-        onRepoSelect={handleRepoSelect}
-        onBranchSelect={handleBranchSelect}
-        onIndex={handleIndex}
-        onFileSelect={handleFileClick}
-        selectedFile={selectedFile}
-      />
+    <RepositoryChatLayout {...sidebarProps}>
+      {currentState === RepositoryChatState.NO_REPOSITORY && (
+        <RepositorySelectionState
+          gh={gh}
+          selectedRepoFullName={selectedRepoFullName}
+          selectedBranch={selectedBranch}
+          onRepoSelect={handleRepoSelect}
+          onBranchSelect={handleBranchSelect}
+          onIndex={handleIndex}
+        />
+      )}
 
-      <div className="flex flex-1 flex-col">
-        {error && (
-          <div className="border-b border-destructive/50 bg-destructive/10 px-4 py-2 text-sm text-destructive">
-            {error}
-          </div>
-        )}
+      {currentState === RepositoryChatState.INDEXING && (
+        <RepositoryIndexingState repoFullName={selectedRepoFullName} onCancel={handleCancel} />
+      )}
 
-        <ChatWindow
-          messages={messages}
-          isChatting={isChatting}
-          isIndexed={isIndexed}
+      {currentState === RepositoryChatState.ERROR && (
+        <RepositoryErrorState
+          error={chat.error || 'An unknown error occurred'}
+          repoFullName={selectedRepoFullName}
+          onRetry={handleRetry}
+          onChooseAnother={handleChooseAnother}
+        />
+      )}
+
+      {currentState === RepositoryChatState.READY && (
+        <RepositoryReadyState
+          repoFullName={selectedRepoFullName}
+          isChatting={chat.isChatting}
           onSend={handleSend}
-          onClear={clearMessages}
+        />
+      )}
+
+      {currentState === RepositoryChatState.CHATTING && (
+        <ConversationState
+          messages={chat.messages}
+          isChatting={chat.isChatting}
+          onSend={handleSend}
+          onClear={chat.clearMessages}
           onFileClick={handleFileClick}
         />
-      </div>
-    </div>
+      )}
+    </RepositoryChatLayout>
   );
 }
