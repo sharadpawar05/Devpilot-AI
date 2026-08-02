@@ -42,7 +42,7 @@ export function ConversationState({
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-semibold">Chat</h3>
           <span className="text-xs text-muted-foreground">
-            {messages.length} message{messages.length !== 1 ? 's' : ''}
+            {messages?.length ?? 0} message{(messages?.length ?? 0) !== 1 ? 's' : ''}
           </span>
         </div>
         <div className="flex items-center gap-1">

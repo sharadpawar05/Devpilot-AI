@@ -9,6 +9,50 @@ function authHeaders(token: string) {
   };
 }
 
+async function pollForIndex(
+  owner: string,
+  repo: string,
+  branch: string,
+  token: string,
+  maxAttempts: number = 60,
+  intervalMs: number = 2000,
+): Promise<RepoIndexResponse | null> {
+  for (let i = 0; i < maxAttempts; i++) {
+    await new Promise((r) => setTimeout(r, intervalMs));
+    try {
+      const statusRes = await fetch(
+        `${API_BASE_URL}/repository-chat/status?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}&branch=${encodeURIComponent(branch)}`,
+        { headers: authHeaders(token), credentials: 'include' },
+      );
+      const statusData = await statusRes.json();
+      if (statusData.status === 'READY' || statusData.indexed) {
+        const treeRes = await fetch(
+          `${API_BASE_URL}/repository-chat/tree?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}&branch=${encodeURIComponent(branch)}`,
+          { headers: authHeaders(token), credentials: 'include' },
+        );
+        const treeData = await treeRes.json();
+        if (treeData.success) {
+          return {
+            success: true,
+            tree: treeData.tree,
+            keyFiles: {},
+            readme: '',
+            packageJson: null,
+            totalFiles: treeData.totalFiles,
+            indexedAt: treeData.indexedAt,
+          };
+        }
+      }
+      if (statusData.status === 'FAILED') {
+        return null;
+      }
+    } catch {
+      // Continue polling
+    }
+  }
+  return null;
+}
+
 export interface RepoFile {
   path: string;
   name: string;
@@ -74,12 +118,33 @@ export function useRepositoryChat(token: string | undefined) {
           credentials: 'include',
           body: JSON.stringify({ owner, repo, branch }),
         });
-        const data: RepoIndexResponse = await res.json();
+        const data = await res.json();
         if (data.success) {
-          setTree(data.tree);
-          setIndexedFiles(data.totalFiles);
-          setIndexedAt(data.indexedAt);
-          return data;
+          if (data.cached && data.tree) {
+            setTree(data.tree);
+            setIndexedFiles(data.totalFiles);
+            setIndexedAt(data.indexedAt);
+            setIsIndexing(false);
+            return data;
+          }
+          if (data.status === 'INDEXING') {
+            const result = await pollForIndex(owner, repo, branch, token);
+            if (result) {
+              setTree(result.tree);
+              setIndexedFiles(result.totalFiles);
+              setIndexedAt(result.indexedAt);
+              return result;
+            }
+            setError('Indexing timed out or failed. Please try again.');
+            return null;
+          }
+          if (data.tree) {
+            setTree(data.tree);
+            setIndexedFiles(data.totalFiles);
+            setIndexedAt(data.indexedAt);
+            setIsIndexing(false);
+            return data;
+          }
         }
         setError('Failed to index repository');
         return null;

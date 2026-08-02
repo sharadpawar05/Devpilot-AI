@@ -30,6 +30,7 @@ import {
   getScoreLabel,
   getScoreBg,
 } from '@/lib/markdown';
+import { getReturnUrl, clearReturnUrl } from '@/lib/oauth-redirect';
 
 const Editor = lazy(() => import('@monaco-editor/react'));
 
@@ -101,6 +102,7 @@ export function GitHubReviewPage() {
   const [copiedSection, setCopiedSection] = useState<number | null>(null);
   const [codeView, setCodeView] = useState<string>('');
   const [connecting, setConnecting] = useState(false);
+  const [returning, setReturning] = useState(false);
 
   const score = useMemo(() => (result ? extractScore(result.response) : null), [result]);
   const sections = useMemo<{ title: string; content: string }[]>(
@@ -158,10 +160,11 @@ export function GitHubReviewPage() {
       callbackProcessed.current = true;
       gh.handleCallback(code, state).then((success) => {
         if (success) {
-          const returnUrl = localStorage.getItem('github_oauth_return');
-          localStorage.removeItem('github_oauth_return');
+          const returnUrl = getReturnUrl();
+          clearReturnUrl();
           if (returnUrl && returnUrl !== '/github') {
-            navigate(returnUrl, { replace: true });
+            setReturning(true);
+            setTimeout(() => navigate(returnUrl, { replace: true }), 300);
           } else {
             window.history.replaceState({}, '', '/github');
           }
@@ -306,6 +309,19 @@ export function GitHubReviewPage() {
   }, []);
 
   const canReview = selectedRepo && selectedPR && !gh.loading;
+
+  if (returning) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="mx-auto mb-3 h-6 w-6 animate-spin text-primary" />
+          <p className="text-sm font-medium text-muted-foreground">
+            Returning to your previous page...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full">

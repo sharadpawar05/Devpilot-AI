@@ -68,7 +68,7 @@ export function RepositorySelectionState({
             <ChevronDown className="pointer-events-none absolute right-3 top-[38px] h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           </div>
 
-          {selectedRepoFullName && gh.branches.length > 0 && (
+          {selectedRepoFullName && (gh.branches?.length ?? 0) > 0 && (
             <div className="relative">
               <label className="mb-1.5 block text-sm font-medium">Branch</label>
               <select
@@ -96,7 +96,7 @@ export function RepositorySelectionState({
           </Button>
         </div>
 
-        {gh.repositories.length > 0 && (
+        {(gh.repositories?.length ?? 0) > 0 && (
           <div className="mt-8 border-t border-input pt-6">
             <p className="mb-3 text-xs font-medium text-muted-foreground">Recent repositories</p>
             <div className="space-y-1.5">

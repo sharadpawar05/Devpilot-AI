@@ -20,7 +20,7 @@ export function RepositoryChatPage() {
   const [selectedRepoFullName, setSelectedRepoFullName] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('main');
 
-  const isIndexed = chat.tree.length > 0;
+  const isIndexed = (chat.tree?.length ?? 0) > 0;
 
   const repoParts = selectedRepoFullName.split('/');
   const owner = repoParts[0] || '';
@@ -33,7 +33,7 @@ export function RepositoryChatPage() {
         selectedRepoFullName,
         isIndexing: chat.isIndexing,
         isTreeReady: isIndexed,
-        hasMessages: chat.messages.length > 0,
+        hasMessages: (chat.messages?.length ?? 0) > 0,
         error: chat.error,
       }),
     [
@@ -41,7 +41,7 @@ export function RepositoryChatPage() {
       selectedRepoFullName,
       chat.isIndexing,
       isIndexed,
-      chat.messages.length,
+      chat.messages?.length ?? 0,
       chat.error,
     ],
   );
@@ -75,8 +75,9 @@ export function RepositoryChatPage() {
     setSelectedFile(path);
   }, []);
 
-  const handleConnect = useCallback(() => {
-    gh.connect('/repository-chat');
+  const handleConnect = useCallback(async () => {
+    const url = await gh.connect('/repository-chat');
+    if (url) window.location.href = url;
   }, [gh.connect]);
 
   const handleRetry = useCallback(() => {

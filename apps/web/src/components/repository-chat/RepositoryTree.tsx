@@ -106,7 +106,7 @@ export function RepositoryTree({ tree, onFileSelect, selectedFile }: RepositoryT
         />
       </div>
       <div className="max-h-[400px] overflow-y-auto">
-        {filteredTree.length === 0 ? (
+        {(filteredTree?.length ?? 0) === 0 ? (
           <p className="px-2 py-4 text-center text-xs text-muted-foreground">
             {search ? 'No files match your search' : 'No files found'}
           </p>

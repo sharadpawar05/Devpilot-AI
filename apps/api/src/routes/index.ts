@@ -7,6 +7,7 @@ import { codeReviewRoutes } from './code-review';
 import { githubRoutes } from './github';
 import { dashboardRoutes } from './dashboard';
 import { repositoryChatRoutes } from './repository-chat';
+import repositoryRoutes from './repository';
 
 export async function apiV1Routes(app: FastifyInstance) {
   await app.register(healthRoutes);
@@ -17,4 +18,5 @@ export async function apiV1Routes(app: FastifyInstance) {
   await app.register(githubRoutes);
   await app.register(dashboardRoutes);
   await app.register(repositoryChatRoutes);
+  await app.register(repositoryRoutes);
 }
