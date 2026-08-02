@@ -1,7 +1,10 @@
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/auth';
 
 export function LandingPage() {
+  const { isAuthenticated } = useAuth();
+
   return (
     <div className="flex flex-col items-center justify-center gap-6 px-4 py-24 text-center">
       <h1 className="text-4xl font-bold tracking-tight sm:text-6xl">DevPilot</h1>
@@ -10,12 +13,20 @@ export function LandingPage() {
         management.
       </p>
       <div className="flex gap-4">
-        <Button asChild size="lg">
-          <Link to="/dashboard">Get Started</Link>
-        </Button>
-        <Button asChild variant="outline" size="lg">
-          <Link to="/login">Sign In</Link>
-        </Button>
+        {isAuthenticated ? (
+          <Button asChild size="lg">
+            <Link to="/dashboard">Go to Dashboard</Link>
+          </Button>
+        ) : (
+          <>
+            <Button asChild size="lg">
+              <Link to="/dashboard">Get Started</Link>
+            </Button>
+            <Button asChild variant="outline" size="lg">
+              <Link to="/login">Sign In</Link>
+            </Button>
+          </>
+        )}
       </div>
     </div>
   );
