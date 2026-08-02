@@ -1,0 +1,62 @@
+import { Search, Bell, Menu, Moon, Sun } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { useTheme } from '@/lib/theme';
+import { useSidebar } from './sidebar-provider';
+import { UserMenu } from './user-menu';
+
+export function TopNavigation() {
+  const { theme, setTheme } = useTheme();
+  const { isMobile, setMobileOpen } = useSidebar();
+
+  return (
+    <header className="flex h-14 shrink-0 items-center gap-4 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60 lg:px-6">
+      {isMobile && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="shrink-0"
+          onClick={() => setMobileOpen(true)}
+          aria-label="Open menu"
+        >
+          <Menu className="h-5 w-5" />
+        </Button>
+      )}
+
+      <div className="flex-1">
+        <button className="flex h-9 w-full max-w-md items-center gap-2 rounded-lg border bg-muted/50 px-3 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground">
+          <Search className="h-4 w-4 shrink-0" />
+          <span className="hidden sm:inline-block">Search...</span>
+          <kbd className="pointer-events-none ml-auto hidden select-none rounded border bg-muted px-1.5 text-[10px] font-medium text-muted-foreground sm:inline-block">
+            ⌘K
+          </kbd>
+        </button>
+      </div>
+
+      <div className="flex items-center gap-1">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="shrink-0"
+          disabled
+          aria-label="Notifications"
+        >
+          <Bell className="h-4 w-4" />
+        </Button>
+
+        <Button
+          variant="ghost"
+          size="icon"
+          className="shrink-0"
+          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+          aria-label="Toggle theme"
+        >
+          <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+          <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+          <span className="sr-only">Toggle theme</span>
+        </Button>
+
+        <UserMenu />
+      </div>
+    </header>
+  );
+}

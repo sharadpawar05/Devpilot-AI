@@ -36,35 +36,6 @@ const routes: RouteObject[] = [
     ],
   },
   {
-    path: '/dashboard',
-    element: (
-      <ProtectedRoute>
-        <GitHubProvider>
-          <AppLayout />
-        </GitHubProvider>
-      </ProtectedRoute>
-    ),
-    children: [{ index: true, element: <DashboardPage /> }],
-  },
-  {
-    path: '/playground',
-    element: (
-      <ProtectedRoute>
-        <AppLayout />
-      </ProtectedRoute>
-    ),
-    children: [{ index: true, element: <PlaygroundPage /> }],
-  },
-  {
-    path: '/code-review',
-    element: (
-      <ProtectedRoute>
-        <AppLayout />
-      </ProtectedRoute>
-    ),
-    children: [{ index: true, element: <CodeReviewPage /> }],
-  },
-  {
     element: (
       <ProtectedRoute>
         <GitHubProvider>
@@ -73,6 +44,9 @@ const routes: RouteObject[] = [
       </ProtectedRoute>
     ),
     children: [
+      { path: '/dashboard', element: <DashboardPage /> },
+      { path: '/playground', element: <PlaygroundPage /> },
+      { path: '/code-review', element: <CodeReviewPage /> },
       { path: '/github', element: <GitHubReviewPage /> },
       { path: '/pull-request-assistant', element: <PullRequestAssistantPage /> },
       { path: '/repository-chat', element: <RepositoryChatPage /> },
