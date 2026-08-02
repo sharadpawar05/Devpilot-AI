@@ -2,12 +2,14 @@ import { createBrowserRouter, type RouteObject } from 'react-router-dom';
 import { ProtectedRoute, PublicRoute } from '@/auth';
 import { MarketingLayout } from '@/layouts/marketing-layout';
 import { AppLayout } from '@/layouts/app-layout';
+import { GitHubProvider } from '@/hooks/use-github';
 import { LandingPage } from '@/pages/landing';
 import { LoginPage } from '@/pages/login';
 import { DashboardPage } from '@/pages/dashboard';
 import { PlaygroundPage } from '@/pages/playground';
 import { CodeReviewPage } from '@/pages/code-review';
 import { GitHubReviewPage } from '@/pages/github';
+import { PullRequestAssistantPage } from '@/pages/pull-request-assistant';
 import { NotFoundPage } from '@/pages/not-found';
 
 const routes: RouteObject[] = [
@@ -53,13 +55,17 @@ const routes: RouteObject[] = [
     children: [{ index: true, element: <CodeReviewPage /> }],
   },
   {
-    path: '/github',
     element: (
       <ProtectedRoute>
-        <AppLayout />
+        <GitHubProvider>
+          <AppLayout />
+        </GitHubProvider>
       </ProtectedRoute>
     ),
-    children: [{ index: true, element: <GitHubReviewPage /> }],
+    children: [
+      { path: '/github', element: <GitHubReviewPage /> },
+      { path: '/pull-request-assistant', element: <PullRequestAssistantPage /> },
+    ],
   },
   { path: '*', element: <NotFoundPage /> },
 ];

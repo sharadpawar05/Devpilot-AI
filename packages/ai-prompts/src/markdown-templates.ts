@@ -547,6 +547,141 @@ How well the architecture scales with:
 ## Recommended Changes
 Prioritized architectural improvements with implementation guidance.`;
 
+const PR_ASSISTANT = `---
+id: prompt_pr_assistant
+name: Pull Request Assistant
+category: github
+description: Comprehensive PR analysis generating executive summary, risk assessment, commit message, PR description, release notes, test checklist, and reviewer checklist
+tags: [github, pr, assistant, summary, risk, commit, release, checklist]
+version: 1
+author: devpilot
+temperature: 0.3
+maxTokens: 4096
+variables:
+  - name: title
+    description: PR title
+    required: true
+    type: string
+  - name: body
+    description: PR description/body
+    required: false
+    type: string
+  - name: author
+    description: PR author login
+    required: true
+    type: string
+  - name: baseBranch
+    description: Target/base branch name
+    required: true
+    type: string
+  - name: headBranch
+    description: Source/head branch name
+    required: true
+    type: string
+  - name: additions
+    description: Number of lines added
+    required: true
+    type: string
+  - name: deletions
+    description: Number of lines removed
+    required: true
+    type: string
+  - name: changedFiles
+    description: Number of files changed
+    required: true
+    type: string
+  - name: diff
+    description: The PR diff content
+    required: true
+    type: string
+  - name: fileTypes
+    description: Detected file types (frontend, backend, mixed, docs, config)
+    required: true
+    type: string
+  - name: truncated
+    description: Whether the diff was truncated
+    required: false
+    type: string
+---
+
+You are an expert technical writer and code reviewer. Analyze this pull request and generate a comprehensive, actionable report.
+
+## Context
+- PR: **{{title}}**
+- Author: {{author}}
+- Branch: \`\${{headBranch}}\` → \`\${{baseBranch}}\`
+- Changes: +{{additions}} -{{deletions}} across {{changedFiles}} file(s)
+- Detected focus: {{fileTypes}}{{#if truncated}}
+- Note: Diff was truncated to fit token limits{{/if}}
+
+## PR Description
+{{body}}
+
+## Diff
+\`\`\`diff
+{{diff}}
+\`\`\`
+
+---
+
+Generate the following sections with EXACTLY these headers. Each section must be separated by a blank line.
+
+## EXECUTIVE_SUMMARY
+A concise 2-4 sentence summary of what this PR does, its overall quality, and key observations. Include whether the changes are well-scoped.
+
+## RISK_ASSESSMENT
+Risk level: **Low** | **Medium** | **High**
+
+List specific risks with severity:
+- **Critical**: Security vulnerabilities, data loss risks, breaking changes without migration
+- **High**: Potential regressions, performance issues, missing error handling
+- **Medium**: Code quality concerns, incomplete implementations
+- **Low**: Minor style issues, missing docs
+
+For each risk explain the impact and mitigation.
+
+## COMMIT_MESSAGE
+Generate an optimal conventional commit message:
+- Format: \`type(scope): description\`
+- Use the actual changed files to determine scope
+- Keep description under 72 characters
+- Include a body with key changes if the PR is complex
+- Use: feat, fix, refactor, perf, test, docs, chore, ci as appropriate
+
+## PR_DESCRIPTION
+A complete GitHub-ready PR description including:
+- **Summary** (1-2 sentences)
+- **Changes** (bullet list of key changes)
+- **Testing** (how to verify the changes)
+- **Breaking Changes** (if any)
+- **Related Issues** (suggest closes # if pattern detected)
+
+## RELEASE_NOTES
+User-facing release notes in plain language:
+- Group by feature/fix/change type
+- Focus on what changed for the end user
+- Avoid internal implementation details
+- Use clear, non-technical language where possible
+
+## TEST_CHECKLIST
+Specific, actionable test cases for this PR:
+- Unit tests that should exist
+- Integration tests to verify
+- Edge cases to check
+- Manual testing steps
+- Performance considerations
+Format as a checkbox list with clear pass/fail criteria.
+
+## REVIEWER_CHECKLIST
+Key things a code reviewer should verify:
+- Security concerns to verify
+- Performance implications
+- Error handling completeness
+- Code style and conventions
+- Documentation needs
+- Potential regressions
+Format as a checkbox list with clear pass/fail criteria.`;
+
 const markdownSources: Record<string, string> = {
   'code-review': CODE_REVIEW,
   'debug-code': DEBUG_CODE,
@@ -556,6 +691,7 @@ const markdownSources: Record<string, string> = {
   'security-review': SECURITY_REVIEW,
   'performance-review': PERFORMANCE_REVIEW,
   'architecture-review': ARCHITECTURE_REVIEW,
+  'pr-assistant': PR_ASSISTANT,
 };
 
 export function loadMarkdownPrompts(): LoadedPrompt[] {

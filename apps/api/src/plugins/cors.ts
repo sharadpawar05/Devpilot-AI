@@ -9,6 +9,9 @@ export async function registerCors(app: FastifyInstance) {
     origin: env.CORS_ORIGIN === '*' ? true : env.CORS_ORIGIN.split(','),
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
+    exposedHeaders: ['Set-Cookie'],
     credentials: true,
+    preflightContinue: false,
+    optionsSuccessStatus: 204,
   });
 }
