@@ -80,7 +80,7 @@ export function RepositoryChatLayout({
               <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             </div>
 
-            {selectedRepoFullName && gh.branches.length > 0 && (
+            {selectedRepoFullName && (gh.branches?.length ?? 0) > 0 && (
               <div className="relative">
                 <select
                   value={selectedBranch}
@@ -110,7 +110,7 @@ export function RepositoryChatLayout({
                     <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                     Indexing...
                   </>
-                ) : tree.length > 0 ? (
+                ) : (tree?.length ?? 0) > 0 ? (
                   <>
                     <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
                     Refresh Index
@@ -144,7 +144,7 @@ export function RepositoryChatLayout({
         )}
 
         <div className="flex-1 overflow-y-auto p-2">
-          {tree.length > 0 ? (
+          {(tree?.length ?? 0) > 0 ? (
             <RepositoryTree tree={tree} onFileSelect={onFileSelect} selectedFile={selectedFile} />
           ) : (
             <div className="flex flex-col items-center justify-center py-12 text-center">

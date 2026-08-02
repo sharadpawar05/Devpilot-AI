@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useAuth } from '@/auth';
+import { saveReturnUrl } from '@/lib/oauth-redirect';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
 
@@ -270,10 +271,7 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
     async (returnTo?: string): Promise<string | null> => {
       if (!token) return null;
       try {
-        // Store return URL in localStorage before redirecting
-        if (returnTo) {
-          localStorage.setItem('github_oauth_return', returnTo);
-        }
+        saveReturnUrl(returnTo);
         const res = await apiFetch(`${API_BASE_URL}/github/auth-url`);
         const data = await res.json();
         if (data.success && data.url) {
