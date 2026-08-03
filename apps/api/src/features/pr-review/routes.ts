@@ -29,7 +29,7 @@ const analyzeSchema = z.object({
 });
 
 const DEFAULT_MODELS: Record<string, string> = {
-  gemini: 'gemini-flash-latest',
+  gemini: 'gemini-3.5-flash',
   openai: 'gpt-4o',
   anthropic: 'claude-3.5-sonnet',
   openrouter: 'gpt-4',

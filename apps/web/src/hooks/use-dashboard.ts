@@ -13,7 +13,13 @@ export interface DashboardActivity {
   id: string;
   action: string;
   resourceType: string;
-  metadata: Record<string, unknown> | null;
+  label?: string;
+  provider?: string;
+  model?: string;
+  tokens?: number;
+  latencyMs?: number;
+  createdAt?: string;
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface DashboardData {

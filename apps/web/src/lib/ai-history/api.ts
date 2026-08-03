@@ -260,7 +260,7 @@ export const aiHistoryApi = {
         workflowType: 'playground',
         title: data.title,
         provider: 'gemini',
-        model: 'gemini-2.0-flash',
+        model: 'gemini-3.5-flash',
         totalLatency: 0,
         totalTokens: 0,
         pinned: data.pinned,

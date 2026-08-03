@@ -43,7 +43,7 @@ registerContextBuilder(WorkflowType.CODE_REVIEW, (ctx) => {
     code,
     reviewType,
     reviewDepth,
-    context: contextStr,
+    ...(contextStr ? { context: contextStr } : {}),
     isQuick: reviewDepth === 'Quick' ? 'yes' : undefined,
     isStandard: reviewDepth === 'Standard' ? 'yes' : undefined,
     isDeep: reviewDepth === 'Deep' ? 'yes' : undefined,

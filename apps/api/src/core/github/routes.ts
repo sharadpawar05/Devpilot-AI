@@ -404,6 +404,7 @@ export async function githubRoutes(app: FastifyInstance) {
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
+        console.error(`[GitHub] branches error for ${owner}/${repo}:`, message);
         return reply.status(500).send({
           success: false,
           error: { code: 'GITHUB_ERROR', message },

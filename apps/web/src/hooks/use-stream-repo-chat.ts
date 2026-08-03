@@ -56,13 +56,13 @@ export function useStreamRepoChat() {
             branch: params.branch,
             conversationHistory: params.conversationHistory || [],
           },
-          onComplete: async (metadata) => {
+          onComplete: async (metadata, content) => {
             const assistantMsg: StreamChatMessage = {
               id: generateId(),
               role: 'assistant',
-              content: stream.content,
+              content,
               provider: metadata?.provider || params.provider || 'gemini',
-              model: metadata?.model || params.model || 'gemini-2.0-flash',
+              model: metadata?.model || params.model || 'gemini-3.5-flash',
               latencyMs: metadata?.latencyMs || 0,
               usage: metadata?.tokens,
               timestamp: new Date(),

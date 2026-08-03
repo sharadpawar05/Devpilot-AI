@@ -48,7 +48,7 @@ export function useStreamPR() {
             reviewType: params.reviewType,
             reviewDepth: params.reviewDepth,
           },
-          onComplete: async (metadata) => {
+          onComplete: async (metadata, content) => {
             if (token) {
               try {
                 await aiHistoryApi.createSession(token, {
@@ -56,7 +56,7 @@ export function useStreamPR() {
                   repository: `${params.owner}/${params.repo}`,
                   title: `PR #${params.pull_number} Review`,
                   provider: (metadata?.provider || params.provider || 'gemini') as never,
-                  model: (metadata?.model || 'gemini-2.0-flash') as never,
+                  model: (metadata?.model || 'gemini-3.5-flash') as never,
                   messages: [
                     {
                       id: generateId(),
@@ -69,7 +69,7 @@ export function useStreamPR() {
                     {
                       id: generateId(),
                       role: 'assistant',
-                      content: stream.content,
+                      content,
                       latency: metadata?.latencyMs || 0,
                       tokens: metadata?.tokens?.total || 0,
                       timestamp: new Date().toISOString(),
@@ -83,9 +83,9 @@ export function useStreamPR() {
 
             resolve({
               success: true,
-              response: stream.content,
+              response: content,
               provider: metadata?.provider || params.provider || 'gemini',
-              model: metadata?.model || 'gemini-2.0-flash',
+              model: metadata?.model || 'gemini-3.5-flash',
               latencyMs: metadata?.latencyMs || 0,
               usage: metadata?.tokens || { input: 0, output: 0, total: 0 },
             });
@@ -120,7 +120,7 @@ export function useStreamPR() {
             repo: params.repo,
             pull_number: params.pull_number,
           },
-          onComplete: async (metadata) => {
+          onComplete: async (metadata, content) => {
             if (token) {
               try {
                 await aiHistoryApi.createSession(token, {
@@ -128,7 +128,7 @@ export function useStreamPR() {
                   repository: `${params.owner}/${params.repo}`,
                   title: `PR #${params.pull_number} Analysis`,
                   provider: (metadata?.provider || params.provider || 'gemini') as never,
-                  model: (metadata?.model || 'gemini-2.0-flash') as never,
+                  model: (metadata?.model || 'gemini-3.5-flash') as never,
                   messages: [
                     {
                       id: generateId(),
@@ -141,7 +141,7 @@ export function useStreamPR() {
                     {
                       id: generateId(),
                       role: 'assistant',
-                      content: stream.content,
+                      content,
                       latency: metadata?.latencyMs || 0,
                       tokens: metadata?.tokens?.total || 0,
                       timestamp: new Date().toISOString(),
@@ -155,9 +155,9 @@ export function useStreamPR() {
 
             resolve({
               success: true,
-              response: stream.content,
+              response: content,
               provider: metadata?.provider || params.provider || 'gemini',
-              model: metadata?.model || 'gemini-2.0-flash',
+              model: metadata?.model || 'gemini-3.5-flash',
               latencyMs: metadata?.latencyMs || 0,
               truncated: false,
               fileTypes: '',

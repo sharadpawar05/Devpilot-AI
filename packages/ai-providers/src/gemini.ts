@@ -11,21 +11,19 @@ import type {
 } from './types';
 
 const GEMINI_COST_TABLE: Record<string, { input: number; output: number }> = {
+  'gemini-3.6-flash': { input: 0.000075, output: 0.0003 },
+  'gemini-3.5-flash': { input: 0.000075, output: 0.0003 },
+  'gemini-3.1-flash-lite': { input: 0.0000375, output: 0.00015 },
   'gemini-2.5-flash': { input: 0.00015, output: 0.0006 },
   'gemini-2.5-pro': { input: 0.00125, output: 0.01 },
-  'gemini-2.0-flash': { input: 0.000075, output: 0.0003 },
-  'gemini-flash-latest': { input: 0.000075, output: 0.0003 },
-  'gemini-3.5-flash': { input: 0.000075, output: 0.0003 },
-  'gemini-3.6-flash': { input: 0.000075, output: 0.0003 },
 };
 
 const GEMINI_MODELS: AIModel[] = [
+  'gemini-3.6-flash',
+  'gemini-3.5-flash',
+  'gemini-3.1-flash-lite',
   'gemini-2.5-flash',
   'gemini-2.5-pro',
-  'gemini-2.0-flash',
-  'gemini-flash-latest',
-  'gemini-3.5-flash',
-  'gemini-3.6-flash',
 ];
 
 export class GeminiProvider implements AIProvider {
@@ -85,7 +83,7 @@ export class GeminiProvider implements AIProvider {
     const outputTokens = usageMetadata?.candidatesTokenCount ?? 0;
     const totalTokens = usageMetadata?.totalTokenCount ?? inputTokens + outputTokens;
 
-    const costInfo = GEMINI_COST_TABLE[model] ?? GEMINI_COST_TABLE['gemini-2.0-flash'];
+    const costInfo = GEMINI_COST_TABLE[model] ?? GEMINI_COST_TABLE['gemini-3.5-flash'];
     const inputCost = (inputTokens / 1000) * costInfo.input;
     const outputCost = (outputTokens / 1000) * costInfo.output;
 

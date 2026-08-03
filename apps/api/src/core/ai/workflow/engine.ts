@@ -8,7 +8,7 @@ import type {
   ContextBuilderFn,
   ResponseFormatterFn,
 } from './types';
-import type { AIProviderName, AIStreamChunk } from '@devpilot/ai-providers';
+import type { AIProviderName, AIModel, AIStreamChunk } from '@devpilot/ai-providers';
 import { buildContext, registerContextBuilder } from './context-builder';
 import { buildPrompt } from './prompt-builder';
 import { executeRequest } from './request-executor';
@@ -150,6 +150,14 @@ export class AIWorkflowEngine {
 
     historyService.log(response, request.metadata);
     usageMetrics.record(response);
+
+    yield {
+      type: 'metadata',
+      provider: request.provider,
+      model: request.model as AIModel | undefined,
+      tokens: response.tokenUsage,
+      latencyMs,
+    };
   }
 
   getHistory(options?: {

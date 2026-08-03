@@ -34,7 +34,7 @@ export function usePersistedState() {
     load<Record<string, string>>('formValues', {}),
   );
   const [provider, setProvider] = useState(() => load<string>('provider', 'gemini'));
-  const [model, setModel] = useState(() => load<string>('model', 'gemini-flash-latest'));
+  const [model, setModel] = useState(() => load<string>('model', 'gemini-3.5-flash'));
   const [temperature, setTemperature] = useState(() => load<number>('temperature', 0.7));
   const [maxTokens, setMaxTokens] = useState(() => load<number>('maxTokens', 2048));
 

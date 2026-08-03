@@ -35,7 +35,7 @@ export interface StreamOptions {
   metadata?: Record<string, unknown>;
   onStart?: () => void;
   onToken?: (token: string) => void;
-  onComplete?: (metadata: StreamState['metadata'], content: string) => void;
+  onComplete?: (metadata: StreamState['metadata'], content: string) => Promise<void> | void;
   onError?: (error: { code: string; message: string }) => void;
 }
 
@@ -53,11 +53,13 @@ export function useStreamSession() {
   const contentBufferRef = useRef('');
   const batchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const optionsRef = useRef<StreamOptions | null>(null);
+  const totalContentRef = useRef('');
 
   const flushBatch = useCallback(() => {
     if (contentBufferRef.current) {
       const content = contentBufferRef.current;
       contentBufferRef.current = '';
+      totalContentRef.current += content;
       setState((prev) => ({ ...prev, content: prev.content + content }));
     }
     batchTimerRef.current = null;
@@ -68,6 +70,7 @@ export function useStreamSession() {
       abortControllerRef.current?.abort();
 
       contentBufferRef.current = '';
+      totalContentRef.current = '';
       if (batchTimerRef.current) {
         clearTimeout(batchTimerRef.current);
         batchTimerRef.current = null;
@@ -144,20 +147,26 @@ export function useStreamSession() {
                       batchTimerRef.current = setTimeout(flushBatch, BATCH_INTERVAL);
                     }
                   } else if (chunk.type === 'metadata') {
-                    const finalContent = contentBufferRef.current;
-                    flushBatch();
+                    const remainingBuffer = contentBufferRef.current;
+                    contentBufferRef.current = '';
+                    if (batchTimerRef.current) {
+                      clearTimeout(batchTimerRef.current);
+                      batchTimerRef.current = null;
+                    }
                     const metadata = {
                       provider: chunk.provider || '',
                       model: chunk.model || '',
                       latencyMs: chunk.latencyMs || 0,
                       tokens: chunk.tokens || { input: 0, output: 0, total: 0 },
                     };
+                    const fullContent = totalContentRef.current + remainingBuffer;
                     setState((prev) => ({
                       ...prev,
-                      content: prev.content + finalContent,
+                      content: fullContent,
                       metadata,
                     }));
-                    options.onComplete?.(metadata, finalContent);
+                    await options.onComplete?.(metadata, fullContent);
+                    setState((prev) => ({ ...prev, isStreaming: false }));
                   } else if (chunk.type === 'error') {
                     const finalContent = contentBufferRef.current;
                     flushBatch();
@@ -211,6 +220,7 @@ export function useStreamSession() {
       batchTimerRef.current = null;
     }
     contentBufferRef.current = '';
+    totalContentRef.current = '';
     setState({
       content: '',
       isStreaming: false,

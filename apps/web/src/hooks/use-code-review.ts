@@ -70,7 +70,7 @@ export function useCodeReview() {
         workflowType: 'code-review',
         title: generateCodeReviewTitle(params.language, params.reviewType),
         provider: (params.provider || 'gemini') as AIProviderName,
-        model: (params.model || 'gemini-2.0-flash') as AIModel,
+        model: (params.model || 'gemini-3.5-flash') as AIModel,
         messages: [
           {
             id: generateId(),
@@ -105,18 +105,19 @@ export function useCodeReview() {
             prompt: request.code,
             context: {
               language: request.language,
+              code: request.code,
               reviewType: request.reviewType,
               reviewDepth: request.reviewDepth,
-              context: request.context,
+              ...(request.context ? { context: request.context } : {}),
             },
             temperature: request.temperature,
             maxTokens: request.maxTokens,
-            onComplete: async (metadata) => {
+            onComplete: async (metadata, content) => {
               const response: CodeReviewResponse = {
                 success: true,
                 provider: metadata?.provider || request.provider || 'gemini',
-                model: metadata?.model || request.model || 'gemini-2.0-flash',
-                response: stream.content,
+                model: metadata?.model || request.model || 'gemini-3.5-flash',
+                response: content,
                 latencyMs: metadata?.latencyMs || 0,
                 reviewDepth: request.reviewDepth,
                 usage: metadata?.tokens || { input: 0, output: 0, total: 0 },
@@ -130,7 +131,7 @@ export function useCodeReview() {
                   code: request.code,
                   provider: response.provider,
                   model: response.model,
-                  response: stream.content,
+                  response: content,
                   latencyMs: response.latencyMs,
                   tokens: response.usage.total,
                 });

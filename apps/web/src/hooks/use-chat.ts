@@ -1,9 +1,8 @@
 import { useCallback } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import { useAuth } from '@/auth';
 import type { AIHistorySession, AIHistoryMessage } from '@devpilot/types';
 import { aiHistoryApi } from '@/lib/ai-history';
-import { generateId } from '@/lib/id';
-import { useStreamSession } from './use-stream';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
 
@@ -14,7 +13,6 @@ export interface ChatRequest {
   temperature?: number;
   maxTokens?: number;
   sessionId?: string;
-  stream?: boolean;
 }
 
 export interface ChatResponse {
@@ -38,6 +36,10 @@ export interface ChatError {
   };
 }
 
+function generateId(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
 function generateTitle(prompt: string): string {
   const cleaned = prompt.replace(/\n/g, ' ').trim();
   if (cleaned.length <= 60) return cleaned;
@@ -47,7 +49,6 @@ function generateTitle(prompt: string): string {
 export function useChat() {
   const { session } = useAuth();
   const token = session?.accessToken;
-  const stream = useStreamSession();
 
   const createSession = useCallback(
     async (params: {
@@ -123,59 +124,8 @@ export function useChat() {
     [token],
   );
 
-  const mutateAsync = useCallback(
-    async (request: ChatRequest) => {
-      if (request.stream) {
-        return new Promise<ChatResponse>((resolve, reject) => {
-          stream.startStream({
-            workflowType: 'PLAYGROUND',
-            provider: request.provider,
-            model: request.model,
-            prompt: request.prompt,
-            context: {},
-            temperature: request.temperature,
-            maxTokens: request.maxTokens,
-            onComplete: async (metadata, content) => {
-              const response: ChatResponse = {
-                success: true,
-                provider: metadata?.provider || request.provider,
-                model: metadata?.model || request.model,
-                response: content,
-                latencyMs: metadata?.latencyMs || 0,
-                usage: metadata?.tokens || { input: 0, output: 0, total: 0 },
-              };
-
-              try {
-                if (request.sessionId) {
-                  await appendToSession(request.sessionId, {
-                    prompt: request.prompt,
-                    response: content,
-                    latencyMs: response.latencyMs,
-                    tokens: response.usage.total,
-                  });
-                } else {
-                  await createSession({
-                    provider: request.provider,
-                    model: request.model,
-                    prompt: request.prompt,
-                    response: content,
-                    latencyMs: response.latencyMs,
-                    tokens: response.usage.total,
-                  });
-                }
-              } catch {
-                // History save failed but response is still valid
-              }
-
-              resolve(response);
-            },
-            onError: (error) => {
-              reject({ success: false, error } as ChatError);
-            },
-          });
-        });
-      }
-
+  return useMutation<ChatResponse, ChatError, ChatRequest>({
+    mutationFn: async (request) => {
       let res: Response;
       try {
         res = await fetch(`${API_BASE_URL}/ai/chat`, {
@@ -221,27 +171,7 @@ export function useChat() {
 
       return response;
     },
-    [stream, createSession, appendToSession],
-  );
-
-  const mutate = useCallback(
-    (
-      request: ChatRequest,
-      options?: { onSuccess?: (data: ChatResponse) => void; onError?: (error: ChatError) => void },
-    ) => {
-      mutateAsync(request).then(options?.onSuccess).catch(options?.onError);
-    },
-    [mutateAsync],
-  );
-
-  return {
-    ...stream,
-    mutate,
-    mutateAsync,
-    isPending: stream.isStreaming,
-    isError: stream.error !== null,
-    error: stream.error ? { success: false as const, error: stream.error } : null,
-  };
+  });
 }
 
 export function useChatHistory() {

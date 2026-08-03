@@ -12,7 +12,9 @@ export type WorkflowType =
 export type AIProviderName = 'gemini' | 'openai' | 'anthropic' | 'openrouter';
 
 export type AIModel =
-  | 'gemini-2.0-flash'
+  | 'gemini-3.5-flash'
+  | 'gemini-3.6-flash'
+  | 'gemini-3.1-flash-lite'
   | 'gemini-2.5-pro'
   | 'gpt-4o'
   | 'gpt-4o-mini'
