@@ -226,7 +226,7 @@ export function useRepositoryChat(token: string | undefined) {
 
           if (token) {
             await aiHistoryApi.createSession(token, {
-              workflowType: 'repo-chat',
+              workflowType: 'repository-chat',
               repository: `${owner}/${repo}`,
               title,
               provider: (data.provider || provider) as never,

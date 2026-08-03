@@ -80,10 +80,13 @@ export function HistoryPage() {
       const routes: Record<string, string> = {
         playground: '/playground',
         'code-review': '/code-review',
-        'pr-assistant': '/pull-request-assistant',
-        'repo-chat': '/repository-chat',
-        docs: '/playground',
-        'test-gen': '/playground',
+        'pr-review': '/pull-request-assistant',
+        'pr-analysis': '/pull-request-assistant',
+        'repository-chat': '/repository-chat',
+        documentation: '/playground',
+        'test-generation': '/playground',
+        'security-review': '/playground',
+        'architecture-review': '/playground',
       };
       const baseRoute = routes[sessionMeta.workflowType] || '/playground';
       navigate(`${baseRoute}?continue=${sessionMeta.id}`);
@@ -124,10 +127,13 @@ export function HistoryPage() {
             const routes: Record<string, string> = {
               playground: '/playground',
               'code-review': '/code-review',
-              'pr-assistant': '/pull-request-assistant',
-              'repo-chat': '/repository-chat',
-              docs: '/playground',
-              'test-gen': '/playground',
+              'pr-review': '/pull-request-assistant',
+              'pr-analysis': '/pull-request-assistant',
+              'repository-chat': '/repository-chat',
+              documentation: '/playground',
+              'test-generation': '/playground',
+              'security-review': '/playground',
+              'architecture-review': '/playground',
             };
             const baseRoute = routes[session.workflowType] || '/playground';
             navigate(`${baseRoute}?continue=${session.id}`);

@@ -14,10 +14,13 @@ interface FilterPanelProps {
 const WORKFLOW_TYPES: WorkflowType[] = [
   'playground',
   'code-review',
-  'pr-assistant',
-  'repo-chat',
-  'docs',
-  'test-gen',
+  'pr-review',
+  'pr-analysis',
+  'repository-chat',
+  'documentation',
+  'test-generation',
+  'security-review',
+  'architecture-review',
 ];
 
 const PROVIDERS: AIProviderName[] = ['gemini', 'openai', 'anthropic', 'openrouter'];

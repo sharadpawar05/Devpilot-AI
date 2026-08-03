@@ -50,7 +50,7 @@ export function DashboardPage() {
         const totalTokens = sessions.reduce((sum, s) => sum + s.totalTokens, 0);
         const totalLatency = sessions.reduce((sum, s) => sum + s.totalLatency, 0);
         const reviewSessions = sessions.filter(
-          (s) => s.workflowType === 'code-review' || s.workflowType === 'pr-assistant',
+          (s) => s.workflowType === 'code-review' || s.workflowType === 'pr-review',
         );
 
         const today = new Date();

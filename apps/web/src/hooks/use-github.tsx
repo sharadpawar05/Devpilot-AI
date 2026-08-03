@@ -438,7 +438,7 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
           const response = data as GitHubReviewResponse;
           if (token) {
             await aiHistoryApi.createSession(token, {
-              workflowType: 'pr-assistant',
+              workflowType: 'pr-review',
               repository: `${params.owner}/${params.repo}`,
               title: `PR #${params.pull_number} Review`,
               provider: response.provider as never,
@@ -498,7 +498,7 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
           const response = data as GitHubAnalyzeResponse;
           if (token) {
             await aiHistoryApi.createSession(token, {
-              workflowType: 'pr-assistant',
+              workflowType: 'pr-review',
               repository: `${params.owner}/${params.repo}`,
               title: `PR #${params.pull_number} Analysis`,
               provider: response.provider as never,

@@ -7,10 +7,13 @@ const createSessionSchema = z.object({
   workflowType: z.enum([
     'playground',
     'code-review',
-    'pr-assistant',
-    'repo-chat',
-    'docs',
-    'test-gen',
+    'pr-review',
+    'pr-analysis',
+    'repository-chat',
+    'documentation',
+    'test-generation',
+    'security-review',
+    'architecture-review',
   ]),
   repository: z.string().optional(),
   title: z.string().min(1),
@@ -50,19 +53,25 @@ const listQuerySchema = z.object({
 const workflowTypeMap: Record<string, string> = {
   playground: 'PLAYGROUND',
   'code-review': 'CODE_REVIEW',
-  'pr-assistant': 'PR_ASSISTANT',
-  'repo-chat': 'REPO_CHAT',
-  docs: 'DOCS',
-  'test-gen': 'TEST_GEN',
+  'pr-review': 'PR_REVIEW',
+  'pr-analysis': 'PR_ANALYSIS',
+  'repository-chat': 'REPOSITORY_CHAT',
+  documentation: 'DOCUMENTATION',
+  'test-generation': 'TEST_GENERATION',
+  'security-review': 'SECURITY_REVIEW',
+  'architecture-review': 'ARCHITECTURE_REVIEW',
 };
 
 const workflowTypeReverseMap: Record<string, string> = {
   PLAYGROUND: 'playground',
   CODE_REVIEW: 'code-review',
-  PR_ASSISTANT: 'pr-assistant',
-  REPO_CHAT: 'repo-chat',
-  DOCS: 'docs',
-  TEST_GEN: 'test-gen',
+  PR_REVIEW: 'pr-review',
+  PR_ANALYSIS: 'pr-analysis',
+  REPOSITORY_CHAT: 'repository-chat',
+  DOCUMENTATION: 'documentation',
+  TEST_GENERATION: 'test-generation',
+  SECURITY_REVIEW: 'security-review',
+  ARCHITECTURE_REVIEW: 'architecture-review',
 };
 
 export async function aiHistoryRoutes(app: FastifyInstance) {

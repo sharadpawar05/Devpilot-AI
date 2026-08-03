@@ -17,10 +17,13 @@ import { useRecentHistory } from '@/hooks/use-history';
 const workflowIcons: Record<WorkflowType, typeof MessageSquare> = {
   playground: MessageSquare,
   'code-review': FileCode,
-  'pr-assistant': GitPullRequest,
-  'repo-chat': Folder,
-  docs: BookOpen,
-  'test-gen': FlaskConical,
+  'pr-review': GitPullRequest,
+  'pr-analysis': GitPullRequest,
+  'repository-chat': Folder,
+  documentation: BookOpen,
+  'test-generation': FlaskConical,
+  'security-review': Folder,
+  'architecture-review': Folder,
 };
 
 export function DashboardHistoryWidget() {

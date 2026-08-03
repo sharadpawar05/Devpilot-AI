@@ -1,5 +1,13 @@
 export type WorkflowType =
-  'playground' | 'code-review' | 'pr-assistant' | 'repo-chat' | 'docs' | 'test-gen';
+  | 'playground'
+  | 'code-review'
+  | 'pr-review'
+  | 'pr-analysis'
+  | 'repository-chat'
+  | 'documentation'
+  | 'test-generation'
+  | 'security-review'
+  | 'architecture-review';
 
 export type AIProviderName = 'gemini' | 'openai' | 'anthropic' | 'openrouter';
 
@@ -83,17 +91,23 @@ export interface AIHistoryListResult {
 export const WORKFLOW_TYPE_LABELS: Record<WorkflowType, string> = {
   playground: 'Playground',
   'code-review': 'Code Review',
-  'pr-assistant': 'PR Assistant',
-  'repo-chat': 'Repository Chat',
-  docs: 'Documentation',
-  'test-gen': 'Test Generation',
+  'pr-review': 'PR Review',
+  'pr-analysis': 'PR Analysis',
+  'repository-chat': 'Repository Chat',
+  documentation: 'Documentation',
+  'test-generation': 'Test Generation',
+  'security-review': 'Security Review',
+  'architecture-review': 'Architecture Review',
 };
 
 export const WORKFLOW_TYPE_ICONS: Record<WorkflowType, string> = {
   playground: 'MessageSquare',
   'code-review': 'FileCode',
-  'pr-assistant': 'GitPullRequest',
-  'repo-chat': 'Repository',
-  docs: 'BookOpen',
-  'test-gen': 'FlaskConical',
+  'pr-review': 'GitPullRequest',
+  'pr-analysis': 'GitPullRequest',
+  'repository-chat': 'Repository',
+  documentation: 'BookOpen',
+  'test-generation': 'FlaskConical',
+  'security-review': 'Shield',
+  'architecture-review': 'Layout',
 };

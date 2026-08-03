@@ -66,10 +66,13 @@ enum RepoIndexStatus {
 enum WorkflowType {
   PLAYGROUND
   CODE_REVIEW
-  PR_ASSISTANT
-  REPO_CHAT
-  DOCS
-  TEST_GEN
+  PR_REVIEW
+  PR_ANALYSIS
+  REPOSITORY_CHAT
+  DOCUMENTATION
+  TEST_GENERATION
+  SECURITY_REVIEW
+  ARCHITECTURE_REVIEW
 }
 
 // ─── Models ───────────────────────────────────────────────────────────────────
