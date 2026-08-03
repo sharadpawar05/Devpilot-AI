@@ -138,12 +138,12 @@ export function useChat() {
             context: {},
             temperature: request.temperature,
             maxTokens: request.maxTokens,
-            onComplete: async (metadata) => {
+            onComplete: async (metadata, content) => {
               const response: ChatResponse = {
                 success: true,
                 provider: metadata?.provider || request.provider,
                 model: metadata?.model || request.model,
-                response: stream.content,
+                response: content,
                 latencyMs: metadata?.latencyMs || 0,
                 usage: metadata?.tokens || { input: 0, output: 0, total: 0 },
               };
@@ -152,7 +152,7 @@ export function useChat() {
                 if (request.sessionId) {
                   await appendToSession(request.sessionId, {
                     prompt: request.prompt,
-                    response: stream.content,
+                    response: content,
                     latencyMs: response.latencyMs,
                     tokens: response.usage.total,
                   });
@@ -161,7 +161,7 @@ export function useChat() {
                     provider: request.provider,
                     model: request.model,
                     prompt: request.prompt,
-                    response: stream.content,
+                    response: content,
                     latencyMs: response.latencyMs,
                     tokens: response.usage.total,
                   });

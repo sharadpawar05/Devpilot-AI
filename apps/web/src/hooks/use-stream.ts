@@ -35,7 +35,7 @@ export interface StreamOptions {
   metadata?: Record<string, unknown>;
   onStart?: () => void;
   onToken?: (token: string) => void;
-  onComplete?: (metadata: StreamState['metadata']) => void;
+  onComplete?: (metadata: StreamState['metadata'], content: string) => void;
   onError?: (error: { code: string; message: string }) => void;
 }
 
@@ -144,6 +144,7 @@ export function useStreamSession() {
                       batchTimerRef.current = setTimeout(flushBatch, BATCH_INTERVAL);
                     }
                   } else if (chunk.type === 'metadata') {
+                    const finalContent = contentBufferRef.current;
                     flushBatch();
                     const metadata = {
                       provider: chunk.provider || '',
@@ -151,12 +152,22 @@ export function useStreamSession() {
                       latencyMs: chunk.latencyMs || 0,
                       tokens: chunk.tokens || { input: 0, output: 0, total: 0 },
                     };
-                    setState((prev) => ({ ...prev, metadata }));
-                    options.onComplete?.(metadata);
+                    setState((prev) => ({
+                      ...prev,
+                      content: prev.content + finalContent,
+                      metadata,
+                    }));
+                    options.onComplete?.(metadata, finalContent);
                   } else if (chunk.type === 'error') {
+                    const finalContent = contentBufferRef.current;
                     flushBatch();
                     const error = chunk.error || { code: 'UNKNOWN', message: 'Unknown error' };
-                    setState((prev) => ({ ...prev, error, isStreaming: false }));
+                    setState((prev) => ({
+                      ...prev,
+                      content: prev.content + finalContent,
+                      error,
+                      isStreaming: false,
+                    }));
                     options.onError?.(error);
                   } else if (chunk.type === 'done') {
                     flushBatch();
