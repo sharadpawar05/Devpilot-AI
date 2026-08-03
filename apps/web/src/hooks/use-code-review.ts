@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { useAuth } from '@/auth';
 import type { AIProviderName, AIModel } from '@devpilot/types';
 import { aiHistoryApi } from '@/lib/ai-history';
+import { generateId } from '@/lib/id';
 import { useStreamSession } from './use-stream';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
@@ -39,10 +40,6 @@ export interface CodeReviewError {
     code: string;
     message: string;
   };
-}
-
-function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
 function generateCodeReviewTitle(language: string, reviewType: string): string {

@@ -4,6 +4,7 @@ import type {
   AIHistoryFilters,
   AIHistoryListResult,
 } from '@devpilot/types';
+import { generateId } from '@/lib/id';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
 
@@ -307,7 +308,7 @@ export const aiHistoryApi = {
     if (!session) return null;
 
     session.messages.push({
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      id: generateId(),
       role: message.role as 'user' | 'assistant',
       content: message.content,
       latency: message.latency,

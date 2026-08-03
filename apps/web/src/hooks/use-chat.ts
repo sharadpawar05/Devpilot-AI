@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { useAuth } from '@/auth';
 import type { AIHistorySession, AIHistoryMessage } from '@devpilot/types';
 import { aiHistoryApi } from '@/lib/ai-history';
+import { generateId } from '@/lib/id';
 import { useStreamSession } from './use-stream';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
@@ -35,10 +36,6 @@ export interface ChatError {
     code: string;
     message: string;
   };
-}
-
-function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
 function generateTitle(prompt: string): string {

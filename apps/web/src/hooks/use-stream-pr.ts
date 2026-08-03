@@ -2,10 +2,7 @@ import { useCallback } from 'react';
 import { useAuth } from '@/auth';
 import { useStreamSession } from './use-stream';
 import { aiHistoryApi } from '@/lib/ai-history';
-
-function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-}
+import { generateId } from '@/lib/id';
 
 export interface StreamPRReviewParams {
   owner: string;
