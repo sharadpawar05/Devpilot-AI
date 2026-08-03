@@ -123,10 +123,8 @@ export function DashboardPage() {
 
       {!isLoading && isNewUser && <EmptyState />}
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          {isLoading ? <GitHubStatusCardSkeleton /> : <GitHubStatusCard gh={gh} />}
-        </div>
+      <div className="grid gap-6 lg:grid-cols-2">
+        {isLoading ? <GitHubStatusCardSkeleton /> : <GitHubStatusCard gh={gh} />}
         {isLoading ? <UsageStatisticsSkeleton /> : <UsageStatistics stats={stats} />}
       </div>
 

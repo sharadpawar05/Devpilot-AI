@@ -28,35 +28,32 @@ export function GitHubStatusCard({ gh }: GitHubStatusCardProps) {
       </div>
 
       {gh.connected && gh.githubUser ? (
-        <div className="space-y-4">
+        <div className="space-y-3">
           <div className="flex items-center gap-3">
             <img
               src={gh.githubUser.avatar_url}
               alt={gh.githubUser.login}
-              className="h-10 w-10 rounded-full"
+              className="h-8 w-8 rounded-full"
             />
-            <div>
-              <p className="text-sm font-medium">{gh.githubUser.name || gh.githubUser.login}</p>
-              <p className="text-xs text-muted-foreground">@{gh.githubUser.login}</p>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium">
+                {gh.githubUser.name || gh.githubUser.login}
+              </p>
+              <p className="truncate text-xs text-muted-foreground">@{gh.githubUser.login}</p>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-lg bg-muted/50 p-3 text-center">
-              <Folder className="mx-auto mb-1 h-4 w-4 text-muted-foreground" />
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-lg bg-muted/50 p-2 text-center">
+              <Folder className="mx-auto mb-0.5 h-3.5 w-3.5 text-muted-foreground" />
               <p className="text-lg font-bold">{gh.repositories.length}</p>
               <p className="text-xs text-muted-foreground">Repos</p>
             </div>
-            <div className="rounded-lg bg-muted/50 p-3 text-center">
-              <Github className="mx-auto mb-1 h-4 w-4 text-muted-foreground" />
+            <div className="rounded-lg bg-muted/50 p-2 text-center">
+              <Github className="mx-auto mb-0.5 h-3.5 w-3.5 text-muted-foreground" />
               <p className="text-lg font-bold">{gh.pulls.length}</p>
               <p className="text-xs text-muted-foreground">Open PRs</p>
             </div>
           </div>
-          {gh.connectedAt && (
-            <p className="text-xs text-muted-foreground">
-              Connected since {new Date(gh.connectedAt).toLocaleDateString()}
-            </p>
-          )}
           <Button
             variant="outline"
             size="sm"
@@ -64,7 +61,7 @@ export function GitHubStatusCard({ gh }: GitHubStatusCardProps) {
             onClick={() => navigate('/github')}
           >
             <Link className="mr-1.5 h-3.5 w-3.5" />
-            Manage Connection
+            Manage
           </Button>
         </div>
       ) : (
