@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
+import { useAuth } from '@/auth';
 import type { AIHistorySessionMetadata } from '@devpilot/types';
-import { aiHistoryStorage } from '@/lib/ai-history';
+import { aiHistoryApi } from '@/lib/ai-history';
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = useState(value);
@@ -22,6 +23,8 @@ interface UseHistorySearchReturn {
 }
 
 export function useHistorySearch(debounceMs: number = 300): UseHistorySearchReturn {
+  const { session } = useAuth();
+  const token = session?.accessToken;
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<AIHistorySessionMetadata[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -30,7 +33,7 @@ export function useHistorySearch(debounceMs: number = 300): UseHistorySearchRetu
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    if (!debouncedQuery.trim()) {
+    if (!debouncedQuery.trim() || !token) {
       setResults([]);
       setIsSearching(false);
       return;
@@ -43,9 +46,13 @@ export function useHistorySearch(debounceMs: number = 300): UseHistorySearchRetu
     const search = async () => {
       setIsSearching(true);
       try {
-        const matches = await aiHistoryStorage.searchSessions(debouncedQuery, 50);
+        const result = await aiHistoryApi.listSessions(
+          token,
+          { search: debouncedQuery },
+          { page: 1, pageSize: 50 },
+        );
         if (!controller.signal.aborted) {
-          setResults(matches);
+          setResults(result.sessions);
         }
       } catch {
         if (!controller.signal.aborted) {
@@ -61,15 +68,16 @@ export function useHistorySearch(debounceMs: number = 300): UseHistorySearchRetu
     search();
 
     return () => controller.abort();
-  }, [debouncedQuery]);
+  }, [debouncedQuery, token]);
 
   useEffect(() => {
+    if (!token) return;
     const loadSuggestions = async () => {
-      const repos = await aiHistoryStorage.getUniqueRepositories();
+      const repos = await aiHistoryApi.getUniqueRepositories(token);
       setSuggestions(repos);
     };
     loadSuggestions();
-  }, []);
+  }, [token]);
 
   return {
     query,
@@ -81,13 +89,15 @@ export function useHistorySearch(debounceMs: number = 300): UseHistorySearchRetu
 }
 
 export function useSessionSearch() {
+  const { session } = useAuth();
+  const token = session?.accessToken;
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<AIHistorySessionMetadata[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const debouncedQuery = useDebounce(query, 200);
 
   useEffect(() => {
-    if (!debouncedQuery.trim()) {
+    if (!debouncedQuery.trim() || !token) {
       setResults([]);
       return;
     }
@@ -95,8 +105,12 @@ export function useSessionSearch() {
     const search = async () => {
       setIsLoading(true);
       try {
-        const matches = await aiHistoryStorage.searchSessions(debouncedQuery, 20);
-        setResults(matches);
+        const result = await aiHistoryApi.listSessions(
+          token,
+          { search: debouncedQuery },
+          { page: 1, pageSize: 20 },
+        );
+        setResults(result.sessions);
       } catch {
         setResults([]);
       } finally {
@@ -105,7 +119,7 @@ export function useSessionSearch() {
     };
 
     search();
-  }, [debouncedQuery]);
+  }, [debouncedQuery, token]);
 
   return { query, setQuery, results, isLoading };
 }

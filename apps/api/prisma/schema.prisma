@@ -63,6 +63,15 @@ enum RepoIndexStatus {
   OUTDATED
 }
 
+enum WorkflowType {
+  PLAYGROUND
+  CODE_REVIEW
+  PR_ASSISTANT
+  REPO_CHAT
+  DOCS
+  TEST_GEN
+}
+
 // ─── Models ───────────────────────────────────────────────────────────────────
 
 model Organization {
@@ -104,6 +113,7 @@ model User {
   aiReports      AIReport[]
   auditLogs      AuditLog[]
   repositoryIndexes RepositoryIndex[]
+  aiHistorySessions AIHistorySession[]
 
   @@index([supabaseUserId])
   @@index([email])
@@ -208,4 +218,45 @@ model RepositoryIndex {
   @@index([userId, owner, repo])
   @@index([status])
   @@map("repository_indexes")
+}
+
+model AIHistorySession {
+  id             String       @id @default(uuid()) @db.Uuid
+  userId         String       @db.Uuid
+  workflowType   WorkflowType
+  repository     String?
+  title          String
+  provider       String
+  model          String
+  totalLatency   Int          @default(0)
+  totalTokens    Int          @default(0)
+  pinned         Boolean      @default(false)
+  archived       Boolean      @default(false)
+  favorite       Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages AIHistoryMessage[]
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, workflowType])
+  @@index([userId, pinned])
+  @@index([userId, favorite])
+  @@map("ai_history_sessions")
+}
+
+model AIHistoryMessage {
+  id        String   @id @default(uuid()) @db.Uuid
+  sessionId String   @db.Uuid
+  role      String
+  content   String
+  latency   Int      @default(0)
+  tokens    Int      @default(0)
+  createdAt DateTime @default(now())
+
+  session AIHistorySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+  @@map("ai_history_messages")
 }

@@ -1,7 +1,8 @@
 import { useCallback } from 'react';
 import { useMutation } from '@tanstack/react-query';
+import { useAuth } from '@/auth';
 import type { AIProviderName, AIModel } from '@devpilot/types';
-import { aiHistoryStorage } from '@/lib/ai-history';
+import { aiHistoryApi } from '@/lib/ai-history';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
 
@@ -48,6 +49,9 @@ function generateCodeReviewTitle(language: string, reviewType: string): string {
 }
 
 export function useCodeReview() {
+  const { session } = useAuth();
+  const token = session?.accessToken;
+
   const saveToHistory = useCallback(
     async (params: {
       language: string;
@@ -60,9 +64,10 @@ export function useCodeReview() {
       latencyMs: number;
       tokens: number;
     }) => {
+      if (!token) return;
       const userMessage = `Review ${params.language} code (${params.reviewType}, ${params.reviewDepth}):\n\n${params.code}`;
 
-      return aiHistoryStorage.createSession({
+      await aiHistoryApi.createSession(token, {
         workflowType: 'code-review',
         title: generateCodeReviewTitle(params.language, params.reviewType),
         provider: (params.provider || 'gemini') as AIProviderName,
@@ -87,7 +92,7 @@ export function useCodeReview() {
         ],
       });
     },
-    [],
+    [token],
   );
 
   return useMutation<CodeReviewResponse, CodeReviewError, CodeReviewRequest>({

@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { useAuth } from '@/auth';
 import type {
   AIHistorySession,
   AIHistorySessionMetadata,
@@ -9,13 +10,12 @@ import type {
   AIProviderName,
   AIModel,
 } from '@devpilot/types';
-import { aiHistoryStorage } from '@/lib/ai-history';
+import { aiHistoryApi } from '@/lib/ai-history';
 
 const DEFAULT_PAGE_SIZE = 20;
 
 interface UseHistoryOptions {
   pageSize?: number;
-  autoRefresh?: boolean;
 }
 
 interface UseHistoryReturn {
@@ -49,6 +49,8 @@ export function useHistory(
   filters: AIHistoryFilters = {},
   options: UseHistoryOptions = {},
 ): UseHistoryReturn {
+  const { session } = useAuth();
+  const token = session?.accessToken;
   const { pageSize = DEFAULT_PAGE_SIZE } = options;
   const [sessions, setSessions] = useState<AIHistorySessionMetadata[]>([]);
   const [pagination, setPagination] = useState<AIHistoryListResult['pagination'] | null>(null);
@@ -60,10 +62,11 @@ export function useHistory(
 
   const fetchSessions = useCallback(
     async (page: number, append: boolean = false) => {
+      if (!token) return;
       try {
         setIsLoading(true);
         setError(null);
-        const result = await aiHistoryStorage.listSessions(filtersRef.current, {
+        const result = await aiHistoryApi.listSessions(token, filtersRef.current, {
           page,
           pageSize,
         });
@@ -75,7 +78,7 @@ export function useHistory(
         setIsLoading(false);
       }
     },
-    [pageSize],
+    [token, pageSize],
   );
 
   useEffect(() => {
@@ -84,10 +87,22 @@ export function useHistory(
   }, [fetchSessions, JSON.stringify(filters)]);
 
   const loadMore = useCallback(async () => {
-    if (!pagination?.hasMore || isLoading) return;
+    if (!pagination?.hasMore || isLoading || !token) return;
     currentPageRef.current += 1;
-    await fetchSessions(currentPageRef.current, true);
-  }, [pagination?.hasMore, isLoading, fetchSessions]);
+    try {
+      setIsLoading(true);
+      const result = await aiHistoryApi.listSessions(token, filtersRef.current, {
+        page: currentPageRef.current,
+        pageSize,
+      });
+      setSessions((prev) => [...prev, ...result.sessions]);
+      setPagination(result.pagination);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load more');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [pagination?.hasMore, isLoading, token, pageSize]);
 
   const refresh = useCallback(async () => {
     currentPageRef.current = 1;
@@ -103,11 +118,12 @@ export function useHistory(
       model: AIModel;
       messages: AIHistoryMessage[];
     }) => {
-      const session = await aiHistoryStorage.createSession(params);
+      if (!token) throw new Error('Not authenticated');
+      const session = await aiHistoryApi.createSession(token, params);
       await refresh();
       return session;
     },
-    [refresh],
+    [token, refresh],
   );
 
   const updateSession = useCallback(
@@ -115,33 +131,40 @@ export function useHistory(
       id: string,
       updates: Partial<Pick<AIHistorySession, 'title' | 'pinned' | 'archived' | 'favorite'>>,
     ) => {
-      const updated = await aiHistoryStorage.updateSession(id, updates);
+      if (!token) return null;
+      const updated = await aiHistoryApi.updateSession(token, id, updates);
       await refresh();
       return updated;
     },
-    [refresh],
+    [token, refresh],
   );
 
   const deleteSession = useCallback(
     async (id: string) => {
-      const result = await aiHistoryStorage.deleteSession(id);
+      if (!token) return false;
+      const result = await aiHistoryApi.deleteSession(token, id);
       await refresh();
       return result;
     },
-    [refresh],
+    [token, refresh],
   );
 
-  const getSession = useCallback(async (id: string) => {
-    return aiHistoryStorage.getSession(id);
-  }, []);
+  const getSession = useCallback(
+    async (id: string) => {
+      if (!token) return null;
+      return aiHistoryApi.getSession(token, id);
+    },
+    [token],
+  );
 
   const addMessage = useCallback(
     async (sessionId: string, message: AIHistoryMessage) => {
-      const updated = await aiHistoryStorage.addMessage(sessionId, message);
+      if (!token) return null;
+      const updated = await aiHistoryApi.addMessage(token, sessionId, message);
       await refresh();
       return updated;
     },
-    [refresh],
+    [token, refresh],
   );
 
   const togglePin = useCallback(
@@ -193,15 +216,24 @@ export function useHistory(
 }
 
 export function useRecentHistory(limit: number = 5) {
+  const { session } = useAuth();
+  const token = session?.accessToken;
   const [sessions, setSessions] = useState<AIHistorySessionMetadata[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const refresh = useCallback(async () => {
+    if (!token) {
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
-    const recent = await aiHistoryStorage.getRecentActivity(limit);
-    setSessions(recent);
-    setIsLoading(false);
-  }, [limit]);
+    try {
+      const result = await aiHistoryApi.listSessions(token, {}, { page: 1, pageSize: limit });
+      setSessions(result.sessions);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [token, limit]);
 
   useEffect(() => {
     refresh();
@@ -211,6 +243,8 @@ export function useRecentHistory(limit: number = 5) {
 }
 
 export function useCreateSession() {
+  const { session } = useAuth();
+  const token = session?.accessToken;
   const [isCreating, setIsCreating] = useState(false);
 
   const create = useCallback(
@@ -222,14 +256,15 @@ export function useCreateSession() {
       model: AIModel;
       messages: AIHistoryMessage[];
     }) => {
+      if (!token) throw new Error('Not authenticated');
       setIsCreating(true);
       try {
-        return await aiHistoryStorage.createSession(params);
+        return await aiHistoryApi.createSession(token, params);
       } finally {
         setIsCreating(false);
       }
     },
-    [],
+    [token],
   );
 
   return { createSession: create, isCreating };

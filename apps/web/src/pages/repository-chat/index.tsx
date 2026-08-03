@@ -4,7 +4,7 @@ import { Loader2 } from 'lucide-react';
 import { useAuth } from '@/auth';
 import { useGitHub } from '@/hooks/use-github';
 import { useRepositoryChat } from '@/hooks/use-repository-chat';
-import { aiHistoryStorage } from '@/lib/ai-history';
+import { aiHistoryApi } from '@/lib/ai-history';
 import { RepositoryChatState, deriveChatState } from '@/components/repository-chat/state';
 import { RepositoryChatLayout } from '@/components/repository-chat/RepositoryChatLayout';
 import { DisconnectedState } from '@/components/repository-chat/DisconnectedState';
@@ -35,12 +35,13 @@ export function RepositoryChatPage() {
   }, [searchParams]);
 
   async function loadSession(sessionId: string) {
+    if (!session?.accessToken) return;
     setIsLoadingSession(true);
     try {
-      const session = await aiHistoryStorage.getSession(sessionId);
-      if (session && session.repository) {
-        setSelectedRepoFullName(session.repository);
-        chat.loadFromHistory(session.messages);
+      const historySession = await aiHistoryApi.getSession(session.accessToken, sessionId);
+      if (historySession && historySession.repository) {
+        setSelectedRepoFullName(historySession.repository);
+        chat.loadFromHistory(historySession.messages);
       }
     } finally {
       setIsLoadingSession(false);

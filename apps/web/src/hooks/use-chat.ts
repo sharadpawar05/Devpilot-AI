@@ -1,7 +1,8 @@
 import { useCallback } from 'react';
 import { useMutation } from '@tanstack/react-query';
+import { useAuth } from '@/auth';
 import type { AIHistorySession, AIHistoryMessage } from '@devpilot/types';
-import { aiHistoryStorage } from '@/lib/ai-history';
+import { aiHistoryApi } from '@/lib/ai-history';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
 
@@ -46,6 +47,9 @@ function generateTitle(prompt: string): string {
 }
 
 export function useChat() {
+  const { session } = useAuth();
+  const token = session?.accessToken;
+
   const createSession = useCallback(
     async (params: {
       provider: string;
@@ -55,7 +59,8 @@ export function useChat() {
       latencyMs: number;
       tokens: number;
     }): Promise<AIHistorySession> => {
-      return aiHistoryStorage.createSession({
+      if (!token) throw new Error('Not authenticated');
+      return aiHistoryApi.createSession(token, {
         workflowType: 'playground',
         title: generateTitle(params.prompt),
         provider: params.provider as AIHistorySession['provider'],
@@ -80,7 +85,7 @@ export function useChat() {
         ],
       });
     },
-    [],
+    [token],
   );
 
   const appendToSession = useCallback(
@@ -93,6 +98,8 @@ export function useChat() {
         tokens: number;
       },
     ): Promise<AIHistorySession | null> => {
+      if (!token) return null;
+
       const userMessage: AIHistoryMessage = {
         id: generateId(),
         role: 'user',
@@ -111,10 +118,10 @@ export function useChat() {
         timestamp: new Date().toISOString(),
       };
 
-      await aiHistoryStorage.addMessage(sessionId, userMessage);
-      return aiHistoryStorage.addMessage(sessionId, assistantMessage);
+      await aiHistoryApi.addMessage(token, sessionId, userMessage);
+      return aiHistoryApi.addMessage(token, sessionId, assistantMessage);
     },
-    [],
+    [token],
   );
 
   return useMutation<ChatResponse, ChatError, ChatRequest>({
@@ -168,9 +175,16 @@ export function useChat() {
 }
 
 export function useChatHistory() {
-  const getSession = useCallback(async (id: string) => {
-    return aiHistoryStorage.getSession(id);
-  }, []);
+  const { session } = useAuth();
+  const token = session?.accessToken;
+
+  const getSession = useCallback(
+    async (id: string) => {
+      if (!token) return null;
+      return aiHistoryApi.getSession(token, id);
+    },
+    [token],
+  );
 
   return { getSession };
 }

@@ -2,16 +2,19 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { History, Loader2 } from 'lucide-react';
 import type { AIHistorySessionMetadata, AIHistorySession, AIHistoryFilters } from '@devpilot/types';
+import { useAuth } from '@/auth';
 import { useHistory } from '@/hooks/use-history';
 import { useHistorySearch } from '@/hooks/use-history-search';
 import { HistoryCard } from '@/components/history/HistoryCard';
 import { SearchBar } from '@/components/history/SearchBar';
 import { FilterPanel } from '@/components/history/FilterPanel';
 import { ConversationView } from '@/components/history/ConversationView';
-import { aiHistoryStorage } from '@/lib/ai-history';
+import { aiHistoryApi } from '@/lib/ai-history';
 
 export function HistoryPage() {
   const navigate = useNavigate();
+  const { session } = useAuth();
+  const token = session?.accessToken;
   const [filters, setFilters] = useState<AIHistoryFilters>({});
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [selectedSession, setSelectedSession] = useState<AIHistorySession | null>(null);
@@ -35,11 +38,12 @@ export function HistoryPage() {
 
   useEffect(() => {
     const loadRepos = async () => {
-      const repos = await aiHistoryStorage.getUniqueRepositories();
+      if (!token) return;
+      const repos = await aiHistoryApi.getUniqueRepositories(token);
       setRepositories(repos);
     };
     loadRepos();
-  }, [sessions]);
+  }, [sessions, token]);
 
   useEffect(() => {
     if (observerRef.current) observerRef.current.disconnect();

@@ -8,6 +8,7 @@ import { codeReviewRoutes } from '@/features/code-review';
 import { prReviewRoutes } from '@/features/pr-review';
 import { githubRoutes } from '@/core/github';
 import { repositoryChatRoutes, repositoryRoutes } from '@/features/repository-chat';
+import { aiHistoryRoutes } from '@/features/ai-history';
 
 export async function apiV1Routes(app: FastifyInstance) {
   await app.register(healthRoutes);
@@ -20,4 +21,5 @@ export async function apiV1Routes(app: FastifyInstance) {
   await app.register(prReviewRoutes);
   await app.register(repositoryRoutes);
   await app.register(repositoryChatRoutes);
+  await app.register(aiHistoryRoutes);
 }
