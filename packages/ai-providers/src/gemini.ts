@@ -4,6 +4,7 @@ import type {
   AIProviderConfig,
   AIRequest,
   AIResponse,
+  AIStreamChunk,
   ProviderCapabilities,
   AIProviderName,
   AIModel,
@@ -99,6 +100,60 @@ export class GeminiProvider implements AIProvider {
         totalCost: inputCost + outputCost,
         currency: 'USD',
       },
+      latencyMs,
+    };
+  }
+
+  async *generateStream(request: AIRequest): AsyncIterable<AIStreamChunk> {
+    if (!this.client || !this.config) {
+      throw new Error('GeminiProvider not initialized. Call initialize() first.');
+    }
+
+    const model = request.model ?? this.config.defaultModel;
+    const startTime = Date.now();
+
+    const genModel = this.client.getGenerativeModel({
+      model,
+      systemInstruction: request.systemPrompt,
+    });
+
+    const generationConfig: Record<string, unknown> = {};
+
+    if (request.temperature !== undefined) {
+      generationConfig.temperature = request.temperature;
+    }
+    if (request.maxTokens !== undefined) {
+      generationConfig.maxOutputTokens = request.maxTokens;
+    }
+
+    const timeout = request.timeout ?? this.config.timeout ?? 60000;
+
+    const result = await Promise.race([
+      genModel.generateContentStream({
+        contents: [{ role: 'user', parts: [{ text: request.prompt }] }],
+        generationConfig,
+      }),
+      this.createTimeoutPromise<never>(timeout, model),
+    ]);
+
+    const stream = result.stream;
+    let totalText = '';
+
+    for await (const chunk of stream) {
+      const text = chunk.text();
+      if (text) {
+        totalText += text;
+        yield { type: 'token', content: text };
+      }
+    }
+
+    const latencyMs = Date.now() - startTime;
+
+    yield {
+      type: 'metadata',
+      provider: 'gemini',
+      model,
+      tokens: { input: 0, output: totalText.length, total: totalText.length },
       latencyMs,
     };
   }

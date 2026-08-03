@@ -8,7 +8,7 @@ import type {
   ContextBuilderFn,
   ResponseFormatterFn,
 } from './types';
-import type { AIProviderName } from '@devpilot/ai-providers';
+import type { AIProviderName, AIStreamChunk } from '@devpilot/ai-providers';
 import { buildContext, registerContextBuilder } from './context-builder';
 import { buildPrompt } from './prompt-builder';
 import { executeRequest } from './request-executor';
@@ -18,6 +18,7 @@ import { historyService } from './history-service';
 import { usageMetrics } from './usage-metrics';
 import { executeWithRetry } from './retry-handler';
 import { getWorkflowConfig } from './workflows';
+import { aiService } from '@/core/ai/service';
 
 export class AIWorkflowEngine {
   private configs: Map<WorkflowType, WorkflowConfig>;
@@ -101,6 +102,54 @@ export class AIWorkflowEngine {
     usageMetrics.record(response);
 
     return response;
+  }
+
+  async *executeStream(request: WorkflowRequest): AsyncIterable<AIStreamChunk> {
+    const config = this.getConfig(request.workflowType);
+
+    const effectiveMaxTokens = request.maxTokens || config?.defaultMaxTokens || 2048;
+    const effectiveTemperature = request.temperature || config?.defaultTemperature || 0.3;
+
+    const enrichedContext = await buildContext(request.workflowType, request.context);
+
+    const { systemPrompt, userPrompt } = buildPrompt(
+      request.workflowType,
+      enrichedContext,
+      request.prompt,
+    );
+
+    let accumulatedContent = '';
+    const startTime = Date.now();
+
+    for await (const chunk of aiService.generateStream(userPrompt, systemPrompt, {
+      provider: request.provider,
+      model: request.model as never,
+      temperature: effectiveTemperature,
+      maxTokens: effectiveMaxTokens,
+    })) {
+      if (chunk.type === 'token' && chunk.content) {
+        accumulatedContent += chunk.content;
+      }
+      yield chunk;
+    }
+
+    const latencyMs = Date.now() - startTime;
+    const formatted = formatResponse(request.workflowType, accumulatedContent, enrichedContext);
+
+    const response: WorkflowResponse = {
+      success: true,
+      workflowType: request.workflowType,
+      provider: request.provider,
+      model: request.model as never,
+      latencyMs,
+      tokenUsage: { input: 0, output: accumulatedContent.length, total: accumulatedContent.length },
+      formattedResponse: formatted,
+      rawResponse: accumulatedContent,
+      timestamp: new Date().toISOString(),
+    };
+
+    historyService.log(response, request.metadata);
+    usageMetrics.record(response);
   }
 
   getHistory(options?: {

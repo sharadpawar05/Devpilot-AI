@@ -3,6 +3,7 @@ import type {
   AIModel,
   AIRequest,
   AIResponse,
+  AIStreamChunk,
   AIProviderConfig,
   RetryPolicy,
 } from '@devpilot/ai-providers';
@@ -53,6 +54,26 @@ export class AIService {
     };
 
     return this.gateway.generate(request);
+  }
+
+  async *generateStream(
+    prompt: string,
+    systemPrompt: string | undefined,
+    options: GenerateOptions = {},
+  ): AsyncIterable<AIStreamChunk> {
+    const request: AIRequest = {
+      prompt,
+      systemPrompt,
+      model: options.model,
+      provider: options.provider,
+      temperature: options.temperature,
+      maxTokens: options.maxTokens,
+      timeout: options.timeout,
+      responseFormat: options.responseFormat,
+      retryPolicy: options.retryPolicy,
+    };
+
+    yield* this.gateway.generateStream(request);
   }
 
   async generateText(

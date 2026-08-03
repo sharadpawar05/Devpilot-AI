@@ -80,6 +80,7 @@ export type AIErrorCode =
   | 'TIMEOUT'
   | 'PROVIDER_UNAVAILABLE'
   | 'NOT_IMPLEMENTED'
+  | 'STREAM_ERROR'
   | 'UNKNOWN_ERROR';
 
 export interface AIError {
@@ -106,11 +107,22 @@ export const DEFAULT_RETRY_POLICY: RetryPolicy = {
   jitter: true,
 };
 
+export interface AIStreamChunk {
+  type: 'token' | 'metadata' | 'error';
+  content?: string;
+  provider?: AIProviderName;
+  model?: AIModel;
+  tokens?: TokenUsage;
+  latencyMs?: number;
+  error?: AIError;
+}
+
 export interface AIProvider {
   readonly name: AIProviderName;
 
   initialize(config: AIProviderConfig): void;
   generate(request: AIRequest): Promise<AIResponse>;
+  generateStream?(request: AIRequest): AsyncIterable<AIStreamChunk>;
   getCapabilities(): ProviderCapabilities;
   isAvailable(): boolean;
   healthCheck(): Promise<boolean>;

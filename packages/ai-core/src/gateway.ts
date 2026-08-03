@@ -4,6 +4,7 @@ import type {
   AIProviderConfig,
   AIRequest,
   AIResponse,
+  AIStreamChunk,
 } from '@devpilot/ai-providers';
 import { DEFAULT_RETRY_POLICY } from '@devpilot/ai-providers';
 import type { RetryPolicy } from '@devpilot/ai-providers';
@@ -117,6 +118,56 @@ export class GatewayService {
       }
 
       throw aiError;
+    }
+  }
+
+  async *generateStream(request: AIRequest): AsyncIterable<AIStreamChunk> {
+    const providerName = request.provider ?? this.config.defaultProvider;
+    const provider = this.factory.getProvider(providerName);
+
+    if (!provider) {
+      throw new AIGatewayError(createProviderNotInitializedError(providerName));
+    }
+
+    if (!provider.isAvailable()) {
+      throw new AIGatewayError(createProviderNotInitializedError(providerName));
+    }
+
+    if (!provider.generateStream) {
+      const response = await provider.generate(request);
+      const tokens = response.content.split(' ');
+      for (let i = 0; i < tokens.length; i++) {
+        yield { type: 'token', content: (i === 0 ? '' : ' ') + tokens[i] };
+        if (i % 10 === 0) {
+          await new Promise((resolve) => setTimeout(resolve, 20));
+        }
+      }
+      yield {
+        type: 'metadata',
+        provider: response.provider,
+        model: response.model,
+        tokens: response.tokens,
+        latencyMs: response.latencyMs,
+      };
+      return;
+    }
+
+    try {
+      const stream = provider.generateStream(request);
+
+      for await (const chunk of stream) {
+        yield chunk;
+      }
+    } catch (error) {
+      yield {
+        type: 'error',
+        error: {
+          code: 'STREAM_ERROR',
+          message: error instanceof Error ? error.message : String(error),
+          provider: providerName,
+          retryable: false,
+        },
+      };
     }
   }
 
