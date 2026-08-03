@@ -4,16 +4,13 @@ import type {
   AIHistoryFilters,
   AIHistoryListResult,
 } from '@devpilot/types';
+import { generateId } from '@/lib/id';
 
 const METADATA_KEY = 'devpilot_ai_history_metadata';
 const DB_NAME = 'devpilot_ai_history';
 const DB_VERSION = 1;
 const STORE_NAME = 'sessions';
 const MAX_METADATA_ENTRIES = 500;
-
-function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-}
 
 function getMetadataIndex(): AIHistorySessionMetadata[] {
   try {

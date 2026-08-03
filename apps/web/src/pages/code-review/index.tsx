@@ -14,10 +14,12 @@ import {
   RotateCcw,
   Layers,
   BarChart3,
+  Radio,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useCodeReview, type CodeReviewResponse } from '@/hooks/use-code-review';
 import { useTheme } from '@/hooks/use-theme';
+import { StreamingResponse } from '@/components/ai/streaming-response';
 import { LANGUAGES, REVIEW_TYPES, REVIEW_DEPTHS, MONACO_LANG_MAP } from './form-config';
 
 const Editor = lazy(() => import('@monaco-editor/react'));
@@ -282,6 +284,7 @@ export function CodeReviewPage() {
   const [result, setResult] = useState<CodeReviewResponse | null>(null);
   const [copied, setCopied] = useState(false);
   const [copiedSection, setCopiedSection] = useState<number | null>(null);
+  const [useStreaming, setUseStreaming] = useState(true);
 
   const review = useCodeReview();
 
@@ -332,16 +335,34 @@ export function CodeReviewPage() {
     e.preventDefault();
     if (!code.trim() || review.isPending) return;
 
+    setResult(null);
     review.mutate(
-      { language, reviewType, reviewDepth, code, context: context || undefined, provider },
+      {
+        language,
+        reviewType,
+        reviewDepth,
+        code,
+        context: context || undefined,
+        provider,
+        stream: useStreaming,
+      },
       { onSuccess: (data) => setResult(data) },
     );
   }
 
   function handleRetry() {
     if (!code.trim() || review.isPending) return;
+    setResult(null);
     review.mutate(
-      { language, reviewType, reviewDepth, code, context: context || undefined, provider },
+      {
+        language,
+        reviewType,
+        reviewDepth,
+        code,
+        context: context || undefined,
+        provider,
+        stream: useStreaming,
+      },
       { onSuccess: (data) => setResult(data) },
     );
   }
@@ -560,6 +581,32 @@ export function CodeReviewPage() {
               </div>
             </div>
 
+            {/* Streaming Toggle */}
+            <div className="flex items-center justify-between rounded-md border border-input p-3">
+              <div className="flex items-center gap-2">
+                <Radio className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium">Stream Response</p>
+                  <p className="text-xs text-muted-foreground">Show tokens as they are generated</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={useStreaming}
+                onClick={() => setUseStreaming(!useStreaming)}
+                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+                  useStreaming ? 'bg-primary' : 'bg-input'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform ${
+                    useStreaming ? 'translate-x-4' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
             {/* Actions */}
             <div className="flex gap-3">
               <Button type="submit" disabled={!isValid || review.isPending} className="flex-1">
@@ -615,7 +662,7 @@ export function CodeReviewPage() {
           )}
 
           {/* Response */}
-          {result && (
+          {result && !review.isPending && (
             <div className="space-y-4">
               {/* Metrics Dashboard */}
               <MetricsCards result={result} score={score} reviewDepth={reviewDepth} />
@@ -681,8 +728,32 @@ export function CodeReviewPage() {
             </div>
           )}
 
-          {/* Loading */}
-          {review.isPending && <LoadingProgress />}
+          {/* Streaming content */}
+          {review.isPending && useStreaming && review.content && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Streaming response...</span>
+              </div>
+              <div className="rounded-md border border-input bg-muted/20">
+                <div className="flex items-center justify-between border-b border-input px-4 py-2">
+                  <span className="text-sm font-medium">Review Report</span>
+                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
+                    Live
+                  </span>
+                </div>
+                <StreamingResponse
+                  content={review.content}
+                  isStreaming={review.isPending}
+                  className="p-4 min-h-[200px] max-h-[600px] text-sm leading-relaxed"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Loading (non-streaming) */}
+          {review.isPending && (!useStreaming || !review.content) && <LoadingProgress />}
 
           {/* Empty state */}
           {!result && !review.isError && !review.isPending && (

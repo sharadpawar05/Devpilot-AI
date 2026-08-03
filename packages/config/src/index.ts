@@ -14,7 +14,7 @@ const envSchema = z.object({
   OPENAI_API_KEY: z.string().default(''),
   ANTHROPIC_API_KEY: z.string().default(''),
   OPENROUTER_API_KEY: z.string().default(''),
-  AI_DEFAULT_MODEL: z.string().default('gemini-flash-latest'),
+  AI_DEFAULT_MODEL: z.string().default('gemini-3.5-flash'),
   AI_MAX_TOKENS: z.coerce.number().default(4096),
 });
 

@@ -19,12 +19,19 @@ export function renderMarkdown(text: string): string {
   html = html.replace(/^---$/gm, '<hr class="my-4 border-input" />');
   html = html.replace(/^- (.+)$/gm, '<li class="ml-4 list-disc">$1</li>');
   html = html.replace(
-    /(<li[^>]*>.*<\/li>\n?)+/g,
+    /(<li[^>]*class="[^"]*list-disc[^"]*"[^>]*>.*<\/li>\n?)+/g,
     (match) => `<ul class="my-2 space-y-1">${match}</ul>`,
   );
   html = html.replace(/^\d+\. (.+)$/gm, '<li class="ml-4 list-decimal">$1</li>');
+  html = html.replace(
+    /(<li[^>]*class="[^"]*list-decimal[^"]*"[^>]*>.*<\/li>\n?)+/g,
+    (match) => `<ol class="my-2 space-y-1 list-decimal">${match}</ol>`,
+  );
   html = html.replace(/^(?!<[a-z/])((?!^\s*$).+)$/gm, '<p class="mb-2">$1</p>');
-  return DOMPurify.sanitize(html);
+  return DOMPurify.sanitize(html, {
+    ADD_TAGS: ['button'],
+    ADD_ATTR: ['class', 'id', 'data-copy-target'],
+  });
 }
 
 export function extractSections(text: string): { title: string; content: string }[] {

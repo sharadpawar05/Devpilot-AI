@@ -5,6 +5,7 @@ export type {
   CostBreakdown,
   AIRequest,
   AIResponse,
+  AIStreamChunk,
   AIProviderConfig,
   ProviderCapabilities,
   AIErrorCode,

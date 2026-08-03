@@ -28,19 +28,32 @@ export async function dashboardRoutes(app: FastifyInstance) {
 
       const githubConnected = !!user?.githubAccessToken;
 
-      const recentActivity = await db.auditLog
-        .findMany({
-          where: { organizationId: undefined },
-          orderBy: { id: 'desc' },
-          take: 10,
-          select: {
-            id: true,
-            action: true,
-            resourceType: true,
-            metadata: true,
-          },
-        })
-        .catch(() => []);
+      const dbUser = user
+        ? await db.user.findUnique({
+            where: { supabaseUserId: auth.sub },
+            select: { id: true },
+          })
+        : null;
+
+      const recentActivity = dbUser
+        ? await db.aIHistorySession
+            .findMany({
+              where: { userId: dbUser.id },
+              orderBy: { createdAt: 'desc' },
+              take: 10,
+              select: {
+                id: true,
+                workflowType: true,
+                title: true,
+                provider: true,
+                model: true,
+                totalTokens: true,
+                totalLatency: true,
+                createdAt: true,
+              },
+            })
+            .catch(() => [])
+        : [];
 
       return reply.send({
         success: true,
@@ -50,11 +63,16 @@ export async function dashboardRoutes(app: FastifyInstance) {
           avatar: user?.githubAvatar ?? null,
           connectedAt: user?.githubConnectedAt?.toISOString() ?? null,
         },
-        activity: recentActivity.map((a) => ({
-          id: a.id,
-          action: a.action,
-          resourceType: a.resourceType,
-          metadata: a.metadata,
+        activity: recentActivity.map((s) => ({
+          id: s.id,
+          action: s.workflowType.toLowerCase(),
+          resourceType: 'ai_session',
+          label: s.title,
+          provider: s.provider,
+          model: s.model,
+          tokens: s.totalTokens,
+          latencyMs: s.totalLatency,
+          createdAt: s.createdAt.toISOString(),
         })),
       });
     },
