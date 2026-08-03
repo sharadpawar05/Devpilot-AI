@@ -1,0 +1,1 @@
+export { aiHistoryRoutes } from './routes';

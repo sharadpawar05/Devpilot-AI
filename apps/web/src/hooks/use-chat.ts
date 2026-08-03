@@ -1,4 +1,8 @@
+import { useCallback } from 'react';
 import { useMutation } from '@tanstack/react-query';
+import { useAuth } from '@/auth';
+import type { AIHistorySession, AIHistoryMessage } from '@devpilot/types';
+import { aiHistoryApi } from '@/lib/ai-history';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
 
@@ -8,6 +12,7 @@ export interface ChatRequest {
   prompt: string;
   temperature?: number;
   maxTokens?: number;
+  sessionId?: string;
 }
 
 export interface ChatResponse {
@@ -31,7 +36,94 @@ export interface ChatError {
   };
 }
 
+function generateId(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function generateTitle(prompt: string): string {
+  const cleaned = prompt.replace(/\n/g, ' ').trim();
+  if (cleaned.length <= 60) return cleaned;
+  return cleaned.slice(0, 57) + '...';
+}
+
 export function useChat() {
+  const { session } = useAuth();
+  const token = session?.accessToken;
+
+  const createSession = useCallback(
+    async (params: {
+      provider: string;
+      model: string;
+      prompt: string;
+      response: string;
+      latencyMs: number;
+      tokens: number;
+    }): Promise<AIHistorySession> => {
+      if (!token) throw new Error('Not authenticated');
+      return aiHistoryApi.createSession(token, {
+        workflowType: 'playground',
+        title: generateTitle(params.prompt),
+        provider: params.provider as AIHistorySession['provider'],
+        model: params.model as AIHistorySession['model'],
+        messages: [
+          {
+            id: generateId(),
+            role: 'user',
+            content: params.prompt,
+            latency: 0,
+            tokens: 0,
+            timestamp: new Date().toISOString(),
+          },
+          {
+            id: generateId(),
+            role: 'assistant',
+            content: params.response,
+            latency: params.latencyMs,
+            tokens: params.tokens,
+            timestamp: new Date().toISOString(),
+          },
+        ],
+      });
+    },
+    [token],
+  );
+
+  const appendToSession = useCallback(
+    async (
+      sessionId: string,
+      params: {
+        prompt: string;
+        response: string;
+        latencyMs: number;
+        tokens: number;
+      },
+    ): Promise<AIHistorySession | null> => {
+      if (!token) return null;
+
+      const userMessage: AIHistoryMessage = {
+        id: generateId(),
+        role: 'user',
+        content: params.prompt,
+        latency: 0,
+        tokens: 0,
+        timestamp: new Date().toISOString(),
+      };
+
+      const assistantMessage: AIHistoryMessage = {
+        id: generateId(),
+        role: 'assistant',
+        content: params.response,
+        latency: params.latencyMs,
+        tokens: params.tokens,
+        timestamp: new Date().toISOString(),
+      };
+
+      await aiHistoryApi.addMessage(token, sessionId, userMessage);
+      return aiHistoryApi.addMessage(token, sessionId, assistantMessage);
+    },
+    [token],
+  );
+
   return useMutation<ChatResponse, ChatError, ChatRequest>({
     mutationFn: async (request) => {
       let res: Response;
@@ -57,7 +149,42 @@ export function useChat() {
         throw data as ChatError;
       }
 
-      return data as ChatResponse;
+      const response = data as ChatResponse;
+
+      if (request.sessionId) {
+        await appendToSession(request.sessionId, {
+          prompt: request.prompt,
+          response: response.response,
+          latencyMs: response.latencyMs,
+          tokens: response.usage.total,
+        });
+      } else {
+        await createSession({
+          provider: request.provider,
+          model: request.model,
+          prompt: request.prompt,
+          response: response.response,
+          latencyMs: response.latencyMs,
+          tokens: response.usage.total,
+        });
+      }
+
+      return response;
     },
   });
+}
+
+export function useChatHistory() {
+  const { session } = useAuth();
+  const token = session?.accessToken;
+
+  const getSession = useCallback(
+    async (id: string) => {
+      if (!token) return null;
+      return aiHistoryApi.getSession(token, id);
+    },
+    [token],
+  );
+
+  return { getSession };
 }

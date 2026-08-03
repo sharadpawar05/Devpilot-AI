@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { checkDatabaseConnection } from '@/lib/db';
+import { checkDatabaseConnection } from '@/core/db';
 
 export async function healthRoutes(app: FastifyInstance) {
   app.get('/health', {

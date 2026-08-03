@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { aiHistoryApi } from '@/lib/ai-history';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
 
@@ -214,6 +215,33 @@ export function useRepositoryChat(token: string | undefined) {
             timestamp: new Date(),
           };
           setMessages((prev) => [...prev, assistantMsg]);
+
+          const allMessages = [...messages, userMsg, assistantMsg];
+          const userMessages = allMessages.filter((m) => m.role === 'user');
+          const title =
+            userMessages.length > 0
+              ? userMessages[userMessages.length - 1].content.slice(0, 60) +
+                (userMessages[userMessages.length - 1].content.length > 60 ? '...' : '')
+              : 'Repository Chat';
+
+          if (token) {
+            await aiHistoryApi.createSession(token, {
+              workflowType: 'repository-chat',
+              repository: `${owner}/${repo}`,
+              title,
+              provider: (data.provider || provider) as never,
+              model: (data.model || model || 'gemini') as never,
+              messages: allMessages.map((m) => ({
+                id: m.id,
+                role: m.role,
+                content: m.content,
+                latency: m.latencyMs || 0,
+                tokens: m.usage?.total || 0,
+                timestamp: m.timestamp.toISOString(),
+              })),
+            });
+          }
+
           return assistantMsg;
         }
         setError(data.success === false ? 'Failed to get response' : 'Unknown error');
@@ -231,6 +259,19 @@ export function useRepositoryChat(token: string | undefined) {
   const clearMessages = useCallback(() => {
     setMessages([]);
   }, []);
+
+  const loadFromHistory = useCallback(
+    (historyMessages: Array<{ role: string; content: string; timestamp: string }>) => {
+      const loadedMessages: ChatMessage[] = historyMessages.map((m) => ({
+        id: crypto.randomUUID(),
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+        timestamp: new Date(m.timestamp),
+      }));
+      setMessages(loadedMessages);
+    },
+    [],
+  );
 
   const checkStatus = useCallback(
     async (owner: string, repo: string, branch: string) => {
@@ -263,5 +304,6 @@ export function useRepositoryChat(token: string | undefined) {
     sendMessage,
     clearMessages,
     checkStatus,
+    loadFromHistory,
   };
 }

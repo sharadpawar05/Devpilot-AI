@@ -42,7 +42,7 @@ const NAV_ITEMS = [
   },
   {
     label: 'Activity',
-    items: [{ label: 'History', href: '/activity/history', icon: History, disabled: true }],
+    items: [{ label: 'History', href: '/history', icon: History }],
   },
   {
     label: 'Settings',

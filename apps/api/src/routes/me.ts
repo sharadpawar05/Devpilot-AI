@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { authenticate } from '@/middleware/auth';
+import { authenticate } from '@/core/auth';
 
 export async function meRoutes(app: FastifyInstance) {
   app.get(

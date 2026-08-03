@@ -11,6 +11,7 @@ import { CodeReviewPage } from '@/pages/code-review';
 import { GitHubReviewPage } from '@/pages/github';
 import { PullRequestAssistantPage } from '@/pages/pull-request-assistant';
 import { RepositoryChatPage } from '@/pages/repository-chat';
+import { HistoryPage } from '@/pages/history';
 import { NotFoundPage } from '@/pages/not-found';
 import { useAuth } from '@/auth';
 
@@ -50,6 +51,7 @@ const routes: RouteObject[] = [
       { path: '/github', element: <GitHubReviewPage /> },
       { path: '/pull-request-assistant', element: <PullRequestAssistantPage /> },
       { path: '/repository-chat', element: <RepositoryChatPage /> },
+      { path: '/history', element: <HistoryPage /> },
     ],
   },
   { path: '*', element: <NotFoundPage /> },
