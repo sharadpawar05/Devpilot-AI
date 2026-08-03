@@ -15,7 +15,6 @@ export type AIModel =
   | 'gemini-3.5-flash'
   | 'gemini-3.6-flash'
   | 'gemini-3.1-flash-lite'
-  | 'gemini-2.5-pro'
   | 'gpt-4o'
   | 'gpt-4o-mini'
   | 'claude-sonnet-4-20250514'

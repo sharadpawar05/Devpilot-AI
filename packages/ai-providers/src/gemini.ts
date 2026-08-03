@@ -14,17 +14,9 @@ const GEMINI_COST_TABLE: Record<string, { input: number; output: number }> = {
   'gemini-3.6-flash': { input: 0.000075, output: 0.0003 },
   'gemini-3.5-flash': { input: 0.000075, output: 0.0003 },
   'gemini-3.1-flash-lite': { input: 0.0000375, output: 0.00015 },
-  'gemini-2.5-flash': { input: 0.00015, output: 0.0006 },
-  'gemini-2.5-pro': { input: 0.00125, output: 0.01 },
 };
 
-const GEMINI_MODELS: AIModel[] = [
-  'gemini-3.6-flash',
-  'gemini-3.5-flash',
-  'gemini-3.1-flash-lite',
-  'gemini-2.5-flash',
-  'gemini-2.5-pro',
-];
+const GEMINI_MODELS: AIModel[] = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'];
 
 export class GeminiProvider implements AIProvider {
   readonly name: AIProviderName = 'gemini';
