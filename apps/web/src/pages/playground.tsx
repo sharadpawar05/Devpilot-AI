@@ -200,249 +200,232 @@ export function PlaygroundPage() {
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <label htmlFor="prompt" className="text-sm font-medium">
-                Prompt
+        <div className="space-y-4">
+          {/* Compact Settings Row */}
+          <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-muted/30 p-3">
+            <div className="min-w-[140px]">
+              <label className="text-xs font-medium text-muted-foreground">Provider</label>
+              <select
+                value={provider}
+                onChange={(e) => handleProviderChange(e.target.value)}
+                className="mt-1 w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
+              >
+                {PROVIDERS.map((p) => (
+                  <option key={p.value} value={p.value}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="min-w-[160px]">
+              <label className="text-xs font-medium text-muted-foreground">Model</label>
+              <select
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                className="mt-1 w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
+              >
+                {availableModels.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="min-w-[120px]">
+              <label className="text-xs font-medium text-muted-foreground">
+                Temperature: {temperature}
               </label>
-              <textarea
-                id="prompt"
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                placeholder="Enter your prompt here..."
-                rows={6}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none"
+              <input
+                type="range"
+                min="0"
+                max="2"
+                step="0.1"
+                value={temperature}
+                onChange={(e) => setTemperature(Number(e.target.value))}
+                className="mt-1 w-full accent-primary"
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label htmlFor="provider" className="text-sm font-medium">
-                  Provider
-                </label>
-                <select
-                  id="provider"
-                  value={provider}
-                  onChange={(e) => handleProviderChange(e.target.value)}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                >
-                  {PROVIDERS.map((p) => (
-                    <option key={p.value} value={p.value}>
-                      {p.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <label htmlFor="model" className="text-sm font-medium">
-                  Model
-                </label>
-                <select
-                  id="model"
-                  value={model}
-                  onChange={(e) => setModel(e.target.value)}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                >
-                  {availableModels.map((m) => (
-                    <option key={m.value} value={m.value}>
-                      {m.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <div className="min-w-[100px]">
+              <label className="text-xs font-medium text-muted-foreground">Max Tokens</label>
+              <input
+                type="number"
+                min="1"
+                max="100000"
+                value={maxTokens}
+                onChange={(e) => setMaxTokens(Number(e.target.value))}
+                className="mt-1 w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
+              />
             </div>
+          </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label htmlFor="temperature" className="text-sm font-medium">
-                    Temperature
-                  </label>
-                  <span className="text-xs text-muted-foreground">{temperature}</span>
-                </div>
-                <input
-                  id="temperature"
-                  type="range"
-                  min="0"
-                  max="2"
-                  step="0.1"
-                  value={temperature}
-                  onChange={(e) => setTemperature(Number(e.target.value))}
-                  className="w-full accent-primary"
-                />
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>Precise</span>
-                  <span>Creative</span>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label htmlFor="maxTokens" className="text-sm font-medium">
-                  Max Tokens
-                </label>
-                <input
-                  id="maxTokens"
-                  type="number"
-                  min="1"
-                  max="100000"
-                  value={maxTokens}
-                  onChange={(e) => setMaxTokens(Number(e.target.value))}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                />
-              </div>
+          {/* Prompt Input */}
+          <form onSubmit={handleSubmit} className="flex gap-2">
+            <textarea
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              placeholder="Enter your prompt here..."
+              rows={3}
+              className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSubmit(e);
+                }
+              }}
+            />
+            <div className="flex flex-col gap-2">
+              {chat.isStreaming ? (
+                <Button type="button" onClick={handleStop} variant="destructive" className="h-auto">
+                  <StopCircle className="h-4 w-4" />
+                </Button>
+              ) : (
+                <Button
+                  type="submit"
+                  disabled={!prompt.trim() || chat.isPending}
+                  className="h-auto"
+                >
+                  {chat.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                </Button>
+              )}
             </div>
-
-            {chat.isStreaming ? (
-              <Button type="button" onClick={handleStop} variant="destructive" className="w-full">
-                <StopCircle className="mr-2 h-4 w-4" />
-                Stop Generation
-              </Button>
-            ) : (
-              <Button type="submit" disabled={!prompt.trim() || chat.isPending} className="w-full">
-                {chat.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <Send className="mr-2 h-4 w-4" />
-                    {currentSession ? 'Continue conversation' : 'Send'}
-                  </>
-                )}
-              </Button>
-            )}
           </form>
 
-          <div className="space-y-4">
-            {chat.isError && (
-              <div className="rounded-md border border-destructive/50 bg-destructive/10 p-4">
-                <div className="flex items-start gap-3">
-                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
-                  <div>
-                    <p className="text-sm font-medium text-destructive">Error</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {chat.error?.error?.message ?? 'An unexpected error occurred'}
-                    </p>
-                  </div>
+          {/* Error Display */}
+          {chat.isError && (
+            <div className="rounded-md border border-destructive/50 bg-destructive/10 p-4">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+                <div>
+                  <p className="text-sm font-medium text-destructive">Error</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {chat.error?.error?.message ?? 'An unexpected error occurred'}
+                  </p>
                 </div>
               </div>
-            )}
+            </div>
+          )}
 
-            {currentSession && currentSession.messages.length > 0 && (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                  <History className="h-4 w-4" />
-                  Conversation History
-                </div>
-                <div className="max-h-64 space-y-2 overflow-y-auto rounded-md border border-input p-3">
-                  {currentSession.messages.map((message) => (
-                    <div key={message.id} className="flex items-start gap-2">
-                      <div
-                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
-                          message.role === 'user'
-                            ? 'bg-primary text-primary-foreground'
-                            : 'bg-muted text-muted-foreground'
-                        }`}
-                      >
-                        {message.role === 'user' ? (
-                          <User className="h-3 w-3" />
-                        ) : (
-                          <Bot className="h-3 w-3" />
-                        )}
-                      </div>
-                      <p className="flex-1 text-xs text-muted-foreground line-clamp-2">
-                        {message.content.slice(0, 100)}
-                        {message.content.length > 100 ? '...' : ''}
-                      </p>
+          {/* Conversation History (when continuing a session) */}
+          {currentSession && currentSession.messages.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                <History className="h-4 w-4" />
+                Previous Messages ({currentSession.messages.length})
+              </div>
+              <div className="max-h-48 space-y-2 overflow-y-auto rounded-md border border-input bg-muted/20 p-3">
+                {currentSession.messages.slice(-6).map((message) => (
+                  <div key={message.id} className="flex items-start gap-2">
+                    <div
+                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
+                        message.role === 'user'
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-muted text-muted-foreground'
+                      }`}
+                    >
+                      {message.role === 'user' ? (
+                        <User className="h-3 w-3" />
+                      ) : (
+                        <Bot className="h-3 w-3" />
+                      )}
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {(chat.isStreaming || chat.content) && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <StreamStatus
-                    isStreaming={chat.isStreaming}
-                    error={chat.error?.error || null}
-                    metadata={chat.metadata}
-                  />
-                  <StreamControls
-                    isStreaming={chat.isStreaming}
-                    hasContent={!!chat.content}
-                    hasError={!!chat.error}
-                    onStop={handleStop}
-                    onRetry={handleRetry}
-                    onCopy={handleCopy}
-                    onRegenerate={handleRegenerate}
-                  />
-                </div>
-
-                <div className="rounded-md border bg-muted/30 p-4">
-                  <label className="text-xs font-medium text-muted-foreground">Response</label>
-                  <StreamingResponse
-                    content={chat.content}
-                    isStreaming={chat.isStreaming}
-                    className="mt-2 max-h-96"
-                  />
-                </div>
-              </div>
-            )}
-
-            {result && !chat.isStreaming && (
-              <div className="space-y-4">
-                <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                  <Zap className="h-4 w-4" />
-                  <span className="font-medium">{result.provider}</span>
-                  <span>/</span>
-                  <span>{result.model}</span>
-                  <span>/</span>
-                  <span>{result.latencyMs}ms</span>
-                </div>
-
-                <div className="rounded-md border bg-muted/30 p-4">
-                  <label className="text-xs font-medium text-muted-foreground">Response</label>
-                  <div
-                    className="mt-2 prose prose-sm max-w-none"
-                    dangerouslySetInnerHTML={{
-                      __html: renderMarkdown(result.response),
-                    }}
-                  />
-                </div>
-
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="rounded-md border p-3 text-center">
-                    <p className="text-xs text-muted-foreground">Input Tokens</p>
-                    <p className="mt-1 text-lg font-semibold">
-                      {result.usage.input.toLocaleString()}
+                    <p className="flex-1 text-xs text-muted-foreground line-clamp-2">
+                      {message.content.slice(0, 120)}
+                      {message.content.length > 120 ? '...' : ''}
                     </p>
                   </div>
-                  <div className="rounded-md border p-3 text-center">
-                    <p className="text-xs text-muted-foreground">Output Tokens</p>
-                    <p className="mt-1 text-lg font-semibold">
-                      {result.usage.output.toLocaleString()}
-                    </p>
-                  </div>
-                  <div className="rounded-md border p-3 text-center">
-                    <p className="text-xs text-muted-foreground">Total Tokens</p>
-                    <p className="mt-1 text-lg font-semibold">
-                      {result.usage.total.toLocaleString()}
-                    </p>
-                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Response Area - Full Width */}
+          {(chat.isStreaming || chat.content) && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <StreamStatus
+                  isStreaming={chat.isStreaming}
+                  error={chat.error?.error || null}
+                  metadata={chat.metadata}
+                />
+                <StreamControls
+                  isStreaming={chat.isStreaming}
+                  hasContent={!!chat.content}
+                  hasError={!!chat.error}
+                  onStop={handleStop}
+                  onRetry={handleRetry}
+                  onCopy={handleCopy}
+                  onRegenerate={handleRegenerate}
+                />
+              </div>
+
+              <div className="min-h-[300px] max-h-[600px] rounded-md border bg-muted/30 p-4 overflow-hidden">
+                <StreamingResponse
+                  content={chat.content}
+                  isStreaming={chat.isStreaming}
+                  className="h-full"
+                  autoScroll={true}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Completed Response (non-streaming fallback) */}
+          {result && !chat.isStreaming && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                <Zap className="h-4 w-4" />
+                <span className="font-medium">{result.provider}</span>
+                <span>/</span>
+                <span>{result.model}</span>
+                <span>/</span>
+                <span>{result.latencyMs}ms</span>
+              </div>
+
+              <div className="min-h-[300px] max-h-[600px] rounded-md border bg-muted/30 p-4 overflow-y-auto">
+                <div
+                  className="prose prose-sm max-w-none"
+                  dangerouslySetInnerHTML={{
+                    __html: renderMarkdown(result.response),
+                  }}
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div className="rounded-md border p-3 text-center">
+                  <p className="text-xs text-muted-foreground">Input Tokens</p>
+                  <p className="mt-1 text-lg font-semibold">
+                    {result.usage.input.toLocaleString()}
+                  </p>
+                </div>
+                <div className="rounded-md border p-3 text-center">
+                  <p className="text-xs text-muted-foreground">Output Tokens</p>
+                  <p className="mt-1 text-lg font-semibold">
+                    {result.usage.output.toLocaleString()}
+                  </p>
+                </div>
+                <div className="rounded-md border p-3 text-center">
+                  <p className="text-xs text-muted-foreground">Total Tokens</p>
+                  <p className="mt-1 text-lg font-semibold">
+                    {result.usage.total.toLocaleString()}
+                  </p>
                 </div>
               </div>
-            )}
+            </div>
+          )}
 
-            {!chat.content && !result && !currentSession && !chat.isError && !chat.isPending && (
-              <div className="flex h-64 items-center justify-center rounded-md border border-dashed text-muted-foreground">
-                <p className="text-sm">Send a prompt to see the response</p>
-              </div>
-            )}
-          </div>
+          {/* Empty State */}
+          {!chat.content && !result && !currentSession && !chat.isError && !chat.isPending && (
+            <div className="flex h-64 items-center justify-center rounded-md border border-dashed text-muted-foreground">
+              <p className="text-sm">Send a prompt to see the response</p>
+            </div>
+          )}
         </div>
       )}
     </div>
