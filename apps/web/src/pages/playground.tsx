@@ -1,8 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Send, Loader2, AlertCircle, Zap, History, ArrowLeft, User, Bot } from 'lucide-react';
+import {
+  Send,
+  Loader2,
+  AlertCircle,
+  Zap,
+  History,
+  ArrowLeft,
+  User,
+  Bot,
+  StopCircle,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useChat, useChatHistory, type ChatResponse } from '@/hooks/use-chat';
+import { StreamingResponse } from '@/components/ai';
+import { StreamStatus, StreamControls } from '@/components/ai';
 import { renderMarkdown } from '@/lib/markdown';
 import type { AIHistorySession } from '@devpilot/types';
 
@@ -93,30 +105,58 @@ export function PlaygroundPage() {
     setPrompt('');
   }
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!prompt.trim() || chat.isPending) return;
+  const handleSubmit = useCallback(
+    (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!prompt.trim() || chat.isPending) return;
 
-    chat.mutate(
-      {
-        provider,
-        model,
-        prompt: prompt.trim(),
-        temperature,
-        maxTokens,
-        sessionId: currentSession?.id,
-      },
-      {
-        onSuccess: (data) => {
+      const currentPrompt = prompt.trim();
+      setPrompt('');
+
+      chat
+        .mutateAsync({
+          provider,
+          model,
+          prompt: currentPrompt,
+          temperature,
+          maxTokens,
+          sessionId: currentSession?.id,
+          stream: true,
+        })
+        .then((data) => {
           setResult(data);
-          setPrompt('');
           if (!currentSession) {
             loadRecentSession();
           }
-        },
-      },
-    );
-  }
+        })
+        .catch(() => {
+          // Error is handled by the hook
+        });
+    },
+    [prompt, chat, provider, model, temperature, maxTokens, currentSession],
+  );
+
+  const handleStop = useCallback(() => {
+    chat.stopStream();
+  }, [chat]);
+
+  const handleRetry = useCallback(() => {
+    if (result) {
+      setResult(null);
+      chat.reset();
+    }
+  }, [result, chat]);
+
+  const handleCopy = useCallback(async () => {
+    if (chat.content || result?.response) {
+      await navigator.clipboard.writeText(chat.content || result?.response || '');
+    }
+  }, [chat.content, result]);
+
+  const handleRegenerate = useCallback(() => {
+    setResult(null);
+    chat.reset();
+  }, [chat]);
 
   async function loadRecentSession() {
     const sessions = await import('@/lib/ai-history').then((m) =>
@@ -254,19 +294,26 @@ export function PlaygroundPage() {
               </div>
             </div>
 
-            <Button type="submit" disabled={!prompt.trim() || chat.isPending} className="w-full">
-              {chat.isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Send className="mr-2 h-4 w-4" />
-                  {currentSession ? 'Continue conversation' : 'Send'}
-                </>
-              )}
-            </Button>
+            {chat.isStreaming ? (
+              <Button type="button" onClick={handleStop} variant="destructive" className="w-full">
+                <StopCircle className="mr-2 h-4 w-4" />
+                Stop Generation
+              </Button>
+            ) : (
+              <Button type="submit" disabled={!prompt.trim() || chat.isPending} className="w-full">
+                {chat.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Send className="mr-2 h-4 w-4" />
+                    {currentSession ? 'Continue conversation' : 'Send'}
+                  </>
+                )}
+              </Button>
+            )}
           </form>
 
           <div className="space-y-4">
@@ -316,7 +363,37 @@ export function PlaygroundPage() {
               </div>
             )}
 
-            {result && (
+            {(chat.isStreaming || chat.content) && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <StreamStatus
+                    isStreaming={chat.isStreaming}
+                    error={chat.error?.error || null}
+                    metadata={chat.metadata}
+                  />
+                  <StreamControls
+                    isStreaming={chat.isStreaming}
+                    hasContent={!!chat.content}
+                    hasError={!!chat.error}
+                    onStop={handleStop}
+                    onRetry={handleRetry}
+                    onCopy={handleCopy}
+                    onRegenerate={handleRegenerate}
+                  />
+                </div>
+
+                <div className="rounded-md border bg-muted/30 p-4">
+                  <label className="text-xs font-medium text-muted-foreground">Response</label>
+                  <StreamingResponse
+                    content={chat.content}
+                    isStreaming={chat.isStreaming}
+                    className="mt-2 max-h-96"
+                  />
+                </div>
+              </div>
+            )}
+
+            {result && !chat.isStreaming && (
               <div className="space-y-4">
                 <div className="flex items-center gap-3 text-sm text-muted-foreground">
                   <Zap className="h-4 w-4" />
@@ -360,7 +437,7 @@ export function PlaygroundPage() {
               </div>
             )}
 
-            {!result && !currentSession && !chat.isError && !chat.isPending && (
+            {!chat.content && !result && !currentSession && !chat.isError && !chat.isPending && (
               <div className="flex h-64 items-center justify-center rounded-md border border-dashed text-muted-foreground">
                 <p className="text-sm">Send a prompt to see the response</p>
               </div>
