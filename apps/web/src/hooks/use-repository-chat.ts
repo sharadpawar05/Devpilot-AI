@@ -258,6 +258,19 @@ export function useRepositoryChat(token: string | undefined) {
     setMessages([]);
   }, []);
 
+  const loadFromHistory = useCallback(
+    (historyMessages: Array<{ role: string; content: string; timestamp: string }>) => {
+      const loadedMessages: ChatMessage[] = historyMessages.map((m) => ({
+        id: crypto.randomUUID(),
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+        timestamp: new Date(m.timestamp),
+      }));
+      setMessages(loadedMessages);
+    },
+    [],
+  );
+
   const checkStatus = useCallback(
     async (owner: string, repo: string, branch: string) => {
       if (!token) return null;
@@ -289,5 +302,6 @@ export function useRepositoryChat(token: string | undefined) {
     sendMessage,
     clearMessages,
     checkStatus,
+    loadFromHistory,
   };
 }

@@ -1,7 +1,10 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
 import { useAuth } from '@/auth';
 import { useGitHub } from '@/hooks/use-github';
 import { useRepositoryChat } from '@/hooks/use-repository-chat';
+import { aiHistoryStorage } from '@/lib/ai-history';
 import { RepositoryChatState, deriveChatState } from '@/components/repository-chat/state';
 import { RepositoryChatLayout } from '@/components/repository-chat/RepositoryChatLayout';
 import { DisconnectedState } from '@/components/repository-chat/DisconnectedState';
@@ -15,12 +18,34 @@ export function RepositoryChatPage() {
   const { session } = useAuth();
   const gh = useGitHub();
   const chat = useRepositoryChat(session?.accessToken);
+  const [searchParams] = useSearchParams();
 
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [selectedRepoFullName, setSelectedRepoFullName] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('main');
+  const [isLoadingSession, setIsLoadingSession] = useState(false);
 
   const isIndexed = (chat.tree?.length ?? 0) > 0;
+
+  useEffect(() => {
+    const sessionId = searchParams.get('continue');
+    if (sessionId) {
+      loadSession(sessionId);
+    }
+  }, [searchParams]);
+
+  async function loadSession(sessionId: string) {
+    setIsLoadingSession(true);
+    try {
+      const session = await aiHistoryStorage.getSession(sessionId);
+      if (session && session.repository) {
+        setSelectedRepoFullName(session.repository);
+        chat.loadFromHistory(session.messages);
+      }
+    } finally {
+      setIsLoadingSession(false);
+    }
+  }
 
   const repoParts = selectedRepoFullName.split('/');
   const owner = repoParts[0] || '';
@@ -110,6 +135,14 @@ export function RepositoryChatPage() {
     onFileSelect: handleFileClick,
     selectedFile,
   };
+
+  if (isLoadingSession) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   if (currentState === RepositoryChatState.DISCONNECTED) {
     return <DisconnectedState onConnect={handleConnect} />;
