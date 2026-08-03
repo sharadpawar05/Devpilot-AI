@@ -73,7 +73,16 @@ export function HistoryPage() {
 
   const handleContinueSession = useCallback(
     (sessionMeta: AIHistorySessionMetadata) => {
-      navigate(`/playground?continue=${sessionMeta.id}`);
+      const routes: Record<string, string> = {
+        playground: '/playground',
+        'code-review': '/code-review',
+        'pr-assistant': '/pull-request-assistant',
+        'repo-chat': '/repository-chat',
+        docs: '/playground',
+        'test-gen': '/playground',
+      };
+      const baseRoute = routes[sessionMeta.workflowType] || '/playground';
+      navigate(`${baseRoute}?continue=${sessionMeta.id}`);
     },
     [navigate],
   );
@@ -107,7 +116,18 @@ export function HistoryPage() {
             setSelectedSession(null);
             setSelectedSessionId(null);
           }}
-          onContinue={(session) => navigate(`/playground?continue=${session.id}`)}
+          onContinue={(session) => {
+            const routes: Record<string, string> = {
+              playground: '/playground',
+              'code-review': '/code-review',
+              'pr-assistant': '/pull-request-assistant',
+              'repo-chat': '/repository-chat',
+              docs: '/playground',
+              'test-gen': '/playground',
+            };
+            const baseRoute = routes[session.workflowType] || '/playground';
+            navigate(`${baseRoute}?continue=${session.id}`);
+          }}
         />
       </div>
     );
