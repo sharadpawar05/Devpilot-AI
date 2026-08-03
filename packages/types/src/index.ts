@@ -47,3 +47,17 @@ export {
   type OAuthConfig,
   type AuthState,
 } from './auth';
+
+export {
+  type WorkflowType,
+  type AIProviderName,
+  type AIModel,
+  type AIHistoryMessage,
+  type AIHistorySession,
+  type AIHistorySessionMetadata,
+  type AIHistoryFilters,
+  type AIHistoryPagination,
+  type AIHistoryListResult,
+  WORKFLOW_TYPE_LABELS,
+  WORKFLOW_TYPE_ICONS,
+} from './ai-history';

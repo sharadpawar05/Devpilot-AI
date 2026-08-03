@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { useAuth } from '@/auth';
 import { saveReturnUrl } from '@/lib/oauth-redirect';
+import { aiHistoryStorage } from '@/lib/ai-history';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
 
@@ -176,6 +177,10 @@ function storeValue(key: string, value: unknown): void {
   } catch {
     /* noop */
   }
+}
+
+function generateId(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
 export function GitHubProvider({ children }: { children: ReactNode }) {
@@ -430,8 +435,34 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
         });
         const data = await res.json();
         if (data.success) {
+          const response = data as GitHubReviewResponse;
+          await aiHistoryStorage.createSession({
+            workflowType: 'pr-assistant',
+            repository: `${params.owner}/${params.repo}`,
+            title: `PR #${params.pull_number} Review`,
+            provider: response.provider as never,
+            model: response.model as never,
+            messages: [
+              {
+                id: generateId(),
+                role: 'user',
+                content: `Review PR #${params.pull_number} in ${params.owner}/${params.repo}`,
+                latency: 0,
+                tokens: 0,
+                timestamp: new Date().toISOString(),
+              },
+              {
+                id: generateId(),
+                role: 'assistant',
+                content: response.response,
+                latency: response.latencyMs,
+                tokens: response.usage.total,
+                timestamp: new Date().toISOString(),
+              },
+            ],
+          });
           setLoading(false);
-          return data as GitHubReviewResponse;
+          return response;
         }
         setError(data.error?.message ?? 'Review failed');
         setLoading(false);
@@ -462,8 +493,34 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
         });
         const data = await res.json();
         if (data.success) {
+          const response = data as GitHubAnalyzeResponse;
+          await aiHistoryStorage.createSession({
+            workflowType: 'pr-assistant',
+            repository: `${params.owner}/${params.repo}`,
+            title: `PR #${params.pull_number} Analysis`,
+            provider: response.provider as never,
+            model: response.model as never,
+            messages: [
+              {
+                id: generateId(),
+                role: 'user',
+                content: `Analyze PR #${params.pull_number} in ${params.owner}/${params.repo}`,
+                latency: 0,
+                tokens: 0,
+                timestamp: new Date().toISOString(),
+              },
+              {
+                id: generateId(),
+                role: 'assistant',
+                content: response.response,
+                latency: response.latencyMs,
+                tokens: response.usage.total,
+                timestamp: new Date().toISOString(),
+              },
+            ],
+          });
           setLoading(false);
-          return data as GitHubAnalyzeResponse;
+          return response;
         }
         setError(data.error?.message ?? 'Analysis failed');
         setLoading(false);

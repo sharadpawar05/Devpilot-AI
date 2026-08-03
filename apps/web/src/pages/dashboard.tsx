@@ -10,7 +10,10 @@ import { RecentPullRequests } from '@/components/dashboard/RecentPullRequests';
 import { RecentReviews } from '@/components/dashboard/RecentReviews';
 import { UsageStatistics } from '@/components/dashboard/UsageStatistics';
 import { ActivityTimeline } from '@/components/dashboard/ActivityTimeline';
-import { RecentProjects } from '@/components/dashboard/RecentProjects';
+import {
+  DashboardHistoryWidget,
+  DashboardHistorySkeleton,
+} from '@/components/dashboard/DashboardHistoryWidget';
 import { EmptyState } from '@/components/dashboard/EmptyState';
 import {
   WelcomeCardSkeleton,
@@ -83,7 +86,7 @@ export function DashboardPage() {
 
       {isLoading ? <QuickActionsSkeleton /> : <QuickActions />}
 
-      {isNewUser && <EmptyState />}
+      {!isLoading && isNewUser && <EmptyState />}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
@@ -107,7 +110,7 @@ export function DashboardPage() {
         ) : (
           <ActivityTimeline activities={dashboardData?.activity ?? []} />
         )}
-        <RecentProjects projects={[]} />
+        {isLoading ? <DashboardHistorySkeleton /> : <DashboardHistoryWidget />}
       </div>
     </div>
   );
