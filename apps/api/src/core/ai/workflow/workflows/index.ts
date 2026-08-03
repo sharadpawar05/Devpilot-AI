@@ -70,9 +70,18 @@ export const architectureReviewConfig: WorkflowConfig = {
   contextBuilder: (ctx) => ctx,
 };
 
+export const codeFixConfig: WorkflowConfig = {
+  workflowType: WorkflowType.CODE_FIX,
+  promptTemplateId: 'prompt_fix_code',
+  defaultMaxTokens: 4096,
+  defaultTemperature: 0.1,
+  contextBuilder: (ctx) => ctx,
+};
+
 export const workflowConfigs: Record<WorkflowType, WorkflowConfig> = {
   [WorkflowType.PLAYGROUND]: playgroundConfig,
   [WorkflowType.CODE_REVIEW]: codeReviewConfig,
+  [WorkflowType.CODE_FIX]: codeFixConfig,
   [WorkflowType.PR_REVIEW]: prReviewConfig,
   [WorkflowType.PR_ANALYSIS]: prAnalysisConfig,
   [WorkflowType.REPOSITORY_CHAT]: repositoryChatConfig,

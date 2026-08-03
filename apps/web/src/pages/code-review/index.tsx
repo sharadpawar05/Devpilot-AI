@@ -15,9 +15,12 @@ import {
   Layers,
   BarChart3,
   Radio,
+  Wrench,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useCodeReview, type CodeReviewResponse } from '@/hooks/use-code-review';
+import { useFixMode } from '@/hooks/use-fix-mode';
+import { FixPanel } from '@/components/ai/fix-mode';
 import { useTheme } from '@/hooks/use-theme';
 import { StreamingResponse } from '@/components/ai/streaming-response';
 import { LANGUAGES, REVIEW_TYPES, REVIEW_DEPTHS, MONACO_LANG_MAP } from './form-config';
@@ -285,8 +288,10 @@ export function CodeReviewPage() {
   const [copied, setCopied] = useState(false);
   const [copiedSection, setCopiedSection] = useState<number | null>(null);
   const [useStreaming, setUseStreaming] = useState(true);
+  const [showFixMode, setShowFixMode] = useState(false);
 
   const review = useCodeReview();
+  const fixMode = useFixMode();
 
   const score = useMemo(() => (result ? extractScore(result.response) : null), [result]);
 
@@ -674,6 +679,30 @@ export function CodeReviewPage() {
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
+                      onClick={() => {
+                        const next = !showFixMode;
+                        setShowFixMode(next);
+                        if (next && !fixMode.result && code.trim()) {
+                          fixMode.generateFixes({
+                            code,
+                            language,
+                            reviewContext: result?.response,
+                            provider,
+                          });
+                        }
+                      }}
+                      className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
+                        showFixMode
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : 'border-input bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                      }`}
+                      aria-label="Toggle fix mode"
+                    >
+                      <Wrench className="h-3.5 w-3.5" />
+                      Fix Issues
+                    </button>
+                    <button
+                      type="button"
                       onClick={handleCopyReport}
                       className="flex items-center gap-1.5 rounded-md border border-input bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
                       aria-label="Copy entire report"
@@ -723,6 +752,38 @@ export function CodeReviewPage() {
                       </div>
                     </div>
                   ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Fix Mode Panel */}
+          {result && !review.isPending && showFixMode && (
+            <div className="space-y-4">
+              <div className="rounded-md border border-input bg-muted/20">
+                <div className="flex items-center justify-between border-b border-input px-4 py-2">
+                  <span className="flex items-center gap-2 text-sm font-medium">
+                    <Wrench className="h-4 w-4" />
+                    AI Fix Mode
+                  </span>
+                </div>
+                <div className="p-4">
+                  <FixPanel
+                    result={fixMode.result}
+                    isLoading={fixMode.isLoading}
+                    error={fixMode.error}
+                    provider={fixMode.provider}
+                    model={fixMode.model}
+                    latencyMs={fixMode.latencyMs}
+                    onRegenerate={() =>
+                      fixMode.generateFixes({
+                        code,
+                        language,
+                        reviewContext: result.response,
+                        provider,
+                      })
+                    }
+                  />
                 </div>
               </div>
             </div>

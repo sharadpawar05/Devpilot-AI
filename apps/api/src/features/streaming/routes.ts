@@ -7,6 +7,7 @@ const streamRequestSchema = z.object({
   workflowType: z.enum([
     'PLAYGROUND',
     'CODE_REVIEW',
+    'CODE_FIX',
     'PR_REVIEW',
     'PR_ANALYSIS',
     'REPOSITORY_CHAT',

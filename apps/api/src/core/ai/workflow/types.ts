@@ -3,6 +3,7 @@ import type { AIProviderName, AIModel, TokenUsage } from '@devpilot/ai-providers
 export enum WorkflowType {
   PLAYGROUND = 'PLAYGROUND',
   CODE_REVIEW = 'CODE_REVIEW',
+  CODE_FIX = 'CODE_FIX',
   PR_REVIEW = 'PR_REVIEW',
   PR_ANALYSIS = 'PR_ANALYSIS',
   REPOSITORY_CHAT = 'REPOSITORY_CHAT',

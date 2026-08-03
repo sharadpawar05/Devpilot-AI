@@ -682,6 +682,77 @@ Key things a code reviewer should verify:
 - Potential regressions
 Format as a checkbox list with clear pass/fail criteria.`;
 
+const CODE_FIX = `---
+id: prompt_fix_code
+name: Code Fix Generator
+category: code_review
+description: Generate structured code fixes with diffs, explanations, and confidence scores for issues found in code reviews
+tags: [fix, diff, code-review, remediation]
+version: 1
+author: devpilot
+temperature: 0.1
+maxTokens: 4096
+variables:
+  - name: language
+    description: Programming language of the code
+    required: true
+    type: string
+  - name: code
+    description: The source code to generate fixes for
+    required: true
+    type: string
+  - name: reviewContext
+    description: Optional review results or issues to fix
+    required: false
+    type: string
+systemPrompt: |
+  You are an expert code fixer. You analyze code issues and generate precise, production-ready fixes.
+  You MUST respond with valid JSON only. No markdown, no explanations outside the JSON.
+  Each fix must include the original code, the fixed code, a unified diff, and an explanation.
+  Confidence scores should reflect how certain you are that the fix is correct and complete.
+  Prioritize fixes by severity: error > warning > info.
+createdAt: "2026-08-01"
+updatedAt: "2026-08-01"
+---
+
+Analyze the following {{language}} code and generate fixes for any issues found.
+
+\`\`\`{{language}}
+{{code}}
+\`\`\`
+
+{{#if reviewContext}}
+Review context (issues to fix):
+{{reviewContext}}
+{{/if}}
+
+Respond with a JSON object in this exact format. Do NOT include any text outside the JSON:
+
+{
+  "summary": "Brief summary of issues found and fixes generated",
+  "fixes": [
+    {
+      "severity": "error",
+      "location": "functionName or line reference",
+      "description": "Brief description of the issue",
+      "explanation": "Detailed explanation of why this is a problem and how the fix works",
+      "confidence": 0.95,
+      "originalCode": "the original problematic code snippet",
+      "fixedCode": "the corrected code snippet",
+      "diff": "--- a/file\\n+++ b/file\\n@@ -line,count +line,count @@\\n context line\\n-removed line\\n+added line\\n context line"
+    }
+  ]
+}
+
+Rules:
+- severity must be one of: "error", "warning", "info"
+- confidence must be between 0.0 and 1.0
+- originalCode and fixedCode must be the exact code snippets (not full files)
+- diff must be in unified diff format
+- If no issues found, return {"summary": "No issues found", "fixes": []}
+- Generate at most 10 fixes, prioritized by severity
+- Each fix must be self-contained and independently applicable`;
+
 const markdownSources: Record<string, string> = {
   'code-review': CODE_REVIEW,
   'debug-code': DEBUG_CODE,
@@ -692,6 +763,7 @@ const markdownSources: Record<string, string> = {
   'performance-review': PERFORMANCE_REVIEW,
   'architecture-review': ARCHITECTURE_REVIEW,
   'pr-assistant': PR_ASSISTANT,
+  'fix-code': CODE_FIX,
 };
 
 export function loadMarkdownPrompts(): LoadedPrompt[] {

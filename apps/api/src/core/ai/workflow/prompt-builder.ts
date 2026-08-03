@@ -14,6 +14,7 @@ function getRegistry(): PromptRegistry {
 const workflowPromptMap: Record<WorkflowType, string | null> = {
   [WorkflowType.PLAYGROUND]: null,
   [WorkflowType.CODE_REVIEW]: 'prompt_code_review',
+  [WorkflowType.CODE_FIX]: 'prompt_fix_code',
   [WorkflowType.PR_REVIEW]: 'prompt_code_review',
   [WorkflowType.PR_ANALYSIS]: 'prompt_pr_assistant',
   [WorkflowType.REPOSITORY_CHAT]: null, // Uses custom prompts
