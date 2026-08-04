@@ -32,7 +32,6 @@ import {
   FileTree,
   ContributorList,
   FullPageSkeleton,
-  LoadingProgress,
   GenerationModal,
 } from '@/components/repo-overview';
 import type { RepoOverviewData, HealthActionType } from '@/lib/repo-overview';
@@ -134,7 +133,6 @@ export default function RepositoryOverviewPage() {
     return localStorage.getItem('repo-overview-selected-branch') || 'main';
   });
   const [overviewData, setOverviewData] = useState<RepoOverviewData | null>(null);
-  const [loadingSteps, setLoadingSteps] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
@@ -164,21 +162,15 @@ export default function RepositoryOverviewPage() {
     setError(null);
     setOverviewData(null);
     setSummary(null);
-    setLoadingSteps(['Connecting to GitHub...']);
 
     try {
-      setLoadingSteps((prev) => [...prev, 'Fetching repository metadata...']);
       const result = await repoOverviewApi.getOverview(owner, repo, token);
 
       if (!result.success || !result.data) {
         throw new Error(result.error || 'Failed to fetch repository overview');
       }
 
-      setLoadingSteps((prev) => [...prev, 'Loading file structure...']);
       setOverviewData(result.data);
-
-      setLoadingSteps((prev) => [...prev, 'Ready']);
-      setTimeout(() => setLoadingSteps([]), 500);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'An unexpected error occurred';
       setError(message);
@@ -273,6 +265,15 @@ export default function RepositoryOverviewPage() {
     );
   }
 
+  // Loading state - show full skeleton
+  if (isLoading && !metadata) {
+    return (
+      <div className="mx-auto max-w-[1400px] px-6 py-6">
+        <FullPageSkeleton />
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-[1400px] px-6 py-6 space-y-6">
       {/* Header with Repo Selector */}
@@ -295,11 +296,6 @@ export default function RepositoryOverviewPage() {
         </Button>
       </div>
 
-      {/* Loading State */}
-      {isLoading && !metadata && loadingSteps.length > 0 && (
-        <LoadingProgress steps={loadingSteps} />
-      )}
-
       {/* Error State */}
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-6 dark:border-red-900 dark:bg-red-950/30">
@@ -320,9 +316,7 @@ export default function RepositoryOverviewPage() {
       )}
 
       {/* Repository Header */}
-      {isLoading && !metadata ? (
-        <FullPageSkeleton />
-      ) : metadata ? (
+      {metadata && (
         <div className="rounded-lg border bg-card p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="space-y-2">
@@ -383,7 +377,7 @@ export default function RepositoryOverviewPage() {
             </span>
           </div>
         </div>
-      ) : null}
+      )}
 
       {/* Metrics Grid */}
       {metadata && (
