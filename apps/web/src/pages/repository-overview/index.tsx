@@ -35,6 +35,7 @@ import {
   GenerationModal,
   TechnologyStackCard,
 } from '@/components/repo-overview';
+import { RepositoryIntelligencePanel } from '@/components/repo-intelligence';
 import type { RepoOverviewData, HealthActionType, TechnologyStack } from '@/lib/repo-overview';
 
 function formatSize(kb: number): string {
@@ -508,6 +509,11 @@ export default function RepositoryOverviewPage() {
           stack={techStack || {}}
           className={isAnalyzing ? 'animate-pulse' : ''}
         />
+      )}
+
+      {/* Repository Intelligence */}
+      {owner && repo && (
+        <RepositoryIntelligencePanel owner={owner} repo={repo} branch={selectedBranch} />
       )}
 
       {/* Content Grid: Structure + Languages + Health */}
