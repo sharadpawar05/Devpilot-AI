@@ -16,7 +16,29 @@ async function authFetch(
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
-  return fetch(url, { ...options, headers, credentials: 'include' });
+  const res = await fetch(url, { ...options, headers, credentials: 'include' });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    let message = `Request failed (${res.status})`;
+    try {
+      const json = JSON.parse(text);
+      message = json.error?.message || json.message || message;
+    } catch {
+      message = text || message;
+    }
+    throw new Error(message);
+  }
+  return res;
+}
+
+async function safeJson(res: Response): Promise<Record<string, unknown>> {
+  const text = await res.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error('Invalid JSON response from server');
+  }
 }
 
 export const repoOverviewApi = {
@@ -26,11 +48,18 @@ export const repoOverviewApi = {
     token?: string,
   ): Promise<{ success: boolean; data?: RepoOverviewData; error?: string }> {
     const params = new URLSearchParams({ owner, repo });
-    const res = await authFetch(`${API_BASE}/repo-overview/overview?${params}`, token);
-    const json = await res.json();
-    if (!json.success)
-      return { success: false, error: json.error?.message || 'Failed to fetch overview' };
-    return { success: true, data: json.data };
+    try {
+      const res = await authFetch(`${API_BASE}/repo-overview/overview?${params}`, token);
+      const json = await safeJson(res);
+      if (!json.success)
+        return {
+          success: false,
+          error: (json.error as { message?: string })?.message || 'Failed to fetch overview',
+        };
+      return { success: true, data: json.data as RepoOverviewData };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Network error' };
+    }
   },
 
   async getTree(
@@ -39,11 +68,18 @@ export const repoOverviewApi = {
     token?: string,
   ): Promise<{ success: boolean; tree?: RepoFileNode[]; error?: string }> {
     const params = new URLSearchParams({ owner, repo });
-    const res = await authFetch(`${API_BASE}/repo-overview/tree?${params}`, token);
-    const json = await res.json();
-    if (!json.success)
-      return { success: false, error: json.error?.message || 'Failed to fetch tree' };
-    return { success: true, tree: json.tree };
+    try {
+      const res = await authFetch(`${API_BASE}/repo-overview/tree?${params}`, token);
+      const json = await safeJson(res);
+      if (!json.success)
+        return {
+          success: false,
+          error: (json.error as { message?: string })?.message || 'Failed to fetch tree',
+        };
+      return { success: true, tree: json.tree as RepoFileNode[] };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Network error' };
+    }
   },
 
   async getFileContent(
@@ -53,11 +89,18 @@ export const repoOverviewApi = {
     token?: string,
   ): Promise<{ success: boolean; content?: string; name?: string; error?: string }> {
     const params = new URLSearchParams({ owner, repo, path });
-    const res = await authFetch(`${API_BASE}/repo-overview/file-content?${params}`, token);
-    const json = await res.json();
-    if (!json.success)
-      return { success: false, error: json.error?.message || 'Failed to fetch file' };
-    return { success: true, content: json.content, name: json.name };
+    try {
+      const res = await authFetch(`${API_BASE}/repo-overview/file-content?${params}`, token);
+      const json = await safeJson(res);
+      if (!json.success)
+        return {
+          success: false,
+          error: (json.error as { message?: string })?.message || 'Failed to fetch file',
+        };
+      return { success: true, content: json.content as string, name: json.name as string };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Network error' };
+    }
   },
 
   async generateSummary(
@@ -65,14 +108,21 @@ export const repoOverviewApi = {
     repo: string,
     token?: string,
   ): Promise<{ success: boolean; summary?: string; error?: string }> {
-    const res = await authFetch(`${API_BASE}/repo-overview/summary`, token, {
-      method: 'POST',
-      body: JSON.stringify({ owner, repo }),
-    });
-    const json = await res.json();
-    if (!json.success)
-      return { success: false, error: json.error?.message || 'Failed to generate summary' };
-    return { success: true, summary: json.summary };
+    try {
+      const res = await authFetch(`${API_BASE}/repo-overview/summary`, token, {
+        method: 'POST',
+        body: JSON.stringify({ owner, repo }),
+      });
+      const json = await safeJson(res);
+      if (!json.success)
+        return {
+          success: false,
+          error: (json.error as { message?: string })?.message || 'Failed to generate summary',
+        };
+      return { success: true, summary: json.summary as string };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Network error' };
+    }
   },
 
   async getContributors(
@@ -81,11 +131,18 @@ export const repoOverviewApi = {
     token?: string,
   ): Promise<{ success: boolean; contributors?: RepoContributor[]; error?: string }> {
     const params = new URLSearchParams({ owner, repo });
-    const res = await authFetch(`${API_BASE}/repo-overview/contributors?${params}`, token);
-    const json = await res.json();
-    if (!json.success)
-      return { success: false, error: json.error?.message || 'Failed to fetch contributors' };
-    return { success: true, contributors: json.contributors };
+    try {
+      const res = await authFetch(`${API_BASE}/repo-overview/contributors?${params}`, token);
+      const json = await safeJson(res);
+      if (!json.success)
+        return {
+          success: false,
+          error: (json.error as { message?: string })?.message || 'Failed to fetch contributors',
+        };
+      return { success: true, contributors: json.contributors as RepoContributor[] };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Network error' };
+    }
   },
 
   async generate(
@@ -94,16 +151,29 @@ export const repoOverviewApi = {
     actionType: HealthActionType,
     token?: string,
   ): Promise<{ success: boolean; data?: GenerationResult; error?: GenerationError }> {
-    const res = await authFetch(`${API_BASE}/repo-overview/generate`, token, {
-      method: 'POST',
-      body: JSON.stringify({ owner, repo, actionType }),
-    });
-    const json = await res.json();
-    if (!json.success)
+    try {
+      const res = await authFetch(`${API_BASE}/repo-overview/generate`, token, {
+        method: 'POST',
+        body: JSON.stringify({ owner, repo, actionType }),
+      });
+      const json = await safeJson(res);
+      if (!json.success)
+        return {
+          success: false,
+          error: (json.error as GenerationError) || {
+            code: 'UNKNOWN',
+            message: 'Generation failed',
+          },
+        };
+      return { success: true, data: json.data as GenerationResult };
+    } catch (error) {
       return {
         success: false,
-        error: json.error || { code: 'UNKNOWN', message: 'Generation failed' },
+        error: {
+          code: 'NETWORK_ERROR',
+          message: error instanceof Error ? error.message : 'Network error',
+        },
       };
-    return { success: true, data: json.data };
+    }
   },
 };
