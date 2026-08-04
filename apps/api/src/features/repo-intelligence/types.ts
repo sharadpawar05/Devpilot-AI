@@ -1,74 +1,11 @@
+// ─── Project Classification ──────────────────────────────────────────────────
+
 export type ProjectType =
   'web-app' | 'api' | 'library' | 'cli' | 'mobile' | 'monorepo' | 'static-site' | 'unknown';
 
-export type Language =
-  | 'typescript'
-  | 'javascript'
-  | 'python'
-  | 'go'
-  | 'rust'
-  | 'java'
-  | 'csharp'
-  | 'ruby'
-  | 'php'
-  | 'swift'
-  | 'kotlin'
-  | 'css'
-  | 'html'
-  | 'json'
-  | 'yaml'
-  | 'markdown'
-  | 'shell'
-  | 'other';
-
 export type PackageManager = 'npm' | 'yarn' | 'pnpm' | 'bun' | 'unknown';
 
-export type BuildTool =
-  'vite' | 'webpack' | 'rollup' | 'esbuild' | 'turbo' | 'nx' | 'tsc' | 'swc' | 'parcel' | 'unknown';
-
-export type TestingFramework =
-  'jest' | 'vitest' | 'mocha' | 'cypress' | 'playwright' | 'testing-library' | 'ava' | 'unknown';
-
-export type LintingTool = 'eslint' | 'biome' | 'oxlint' | 'unknown';
-
-export type FormattingTool = 'prettier' | 'biome' | 'dprint' | 'unknown';
-
-export type Framework =
-  | 'react'
-  | 'next'
-  | 'vue'
-  | 'nuxt'
-  | 'angular'
-  | 'svelte'
-  | 'sveltekit'
-  | 'express'
-  | 'fastify'
-  | 'nestjs'
-  | 'koa'
-  | 'hono'
-  | 'remix'
-  | 'astro'
-  | 'unknown';
-
-export type Database =
-  'postgresql' | 'mysql' | 'mongodb' | 'sqlite' | 'redis' | 'supabase' | 'firebase' | 'unknown';
-
-export type ORM = 'prisma' | 'drizzle' | 'mongoose' | 'typeorm' | 'sequelize' | 'knex' | 'unknown';
-
-export type StylingTool =
-  | 'tailwind'
-  | 'css-modules'
-  | 'styled-components'
-  | 'emotion'
-  | 'sass'
-  | 'bootstrap'
-  | 'material-ui'
-  | 'chakra-ui'
-  | 'shadcn'
-  | 'unknown';
-
-export type StateManagement =
-  'redux' | 'zustand' | 'jotai' | 'recoil' | 'mobx' | 'pinia' | 'vuex' | 'context-api' | 'unknown';
+// ─── Technology Detection ────────────────────────────────────────────────────
 
 export interface DetectedTechnology {
   name: string;
@@ -88,6 +25,216 @@ export interface FolderNode {
   type: 'file' | 'directory';
   children?: FolderNode[];
 }
+
+// ─── Repository Metadata ─────────────────────────────────────────────────────
+
+export interface RepositoryOwner {
+  login: string;
+  avatar_url: string;
+  id?: number;
+}
+
+export interface RepositoryLicense {
+  spdx_id: string;
+  name: string;
+}
+
+export interface RepositoryMetadata {
+  id: number;
+  name: string;
+  full_name: string;
+  description: string | null;
+  html_url: string;
+  default_branch: string;
+  visibility: 'public' | 'private';
+  size: number;
+  stargazers_count: number;
+  forks_count: number;
+  open_issues_count: number;
+  watchers_count: number;
+  language: string | null;
+  license: RepositoryLicense | null;
+  topics: string[];
+  created_at: string;
+  updated_at: string;
+  pushed_at: string;
+  owner: RepositoryOwner;
+}
+
+// ─── Repository Statistics ───────────────────────────────────────────────────
+
+export interface RepositoryStatistics {
+  totalFiles: number;
+  totalDirectories: number;
+  totalBranches: number;
+  totalCommits: number;
+  totalPullRequests: number;
+  totalIssues: number;
+  totalReleases: number;
+  totalContributors: number;
+  languageBreakdown: Record<string, number>;
+}
+
+// ─── File Tree ───────────────────────────────────────────────────────────────
+
+export interface FileTreeNode {
+  path: string;
+  name: string;
+  type: 'file' | 'dir';
+  size?: number;
+  children?: FileTreeNode[];
+}
+
+// ─── Contributors ────────────────────────────────────────────────────────────
+
+export interface Contributor {
+  login: string;
+  avatar_url: string;
+  contributions: number;
+  html_url: string;
+}
+
+// ─── Branches ────────────────────────────────────────────────────────────────
+
+export interface Branch {
+  name: string;
+  is_default: boolean;
+  commit_sha?: string;
+}
+
+// ─── Pull Requests ───────────────────────────────────────────────────────────
+
+export interface PullRequest {
+  number: number;
+  title: string;
+  body: string | null;
+  state: string;
+  user: string | null;
+  created_at: string;
+  updated_at: string;
+  html_url: string;
+  additions: number;
+  deletions: number;
+  changed_files: number;
+  base_branch?: string;
+  head_branch?: string;
+  merged?: boolean;
+}
+
+export interface PullRequestFile {
+  filename: string;
+  status: string;
+  additions: number;
+  deletions: number;
+  changes: number;
+  patch?: string;
+}
+
+// ─── Commits ─────────────────────────────────────────────────────────────────
+
+export interface Commit {
+  sha: string;
+  message: string;
+  author: string | null;
+  author_date: string;
+  html_url: string;
+  additions?: number;
+  deletions?: number;
+}
+
+// ─── Releases ────────────────────────────────────────────────────────────────
+
+export interface Release {
+  id: number;
+  tag_name: string;
+  name: string | null;
+  body: string | null;
+  draft: boolean;
+  prerelease: boolean;
+  created_at: string;
+  published_at: string | null;
+  author: string | null;
+  html_url: string;
+}
+
+// ─── Issues ──────────────────────────────────────────────────────────────────
+
+export interface Issue {
+  number: number;
+  title: string;
+  body: string | null;
+  state: string;
+  user: string | null;
+  created_at: string;
+  updated_at: string;
+  html_url: string;
+  labels: string[];
+  assignees: string[];
+}
+
+// ─── Recent Activity ─────────────────────────────────────────────────────────
+
+export interface ActivityEvent {
+  id: string;
+  type: string;
+  actor: string;
+  created_at: string;
+  repo: string;
+  payload: Record<string, unknown>;
+}
+
+// ─── Commit Activity ─────────────────────────────────────────────────────────
+
+export interface CommitActivity {
+  week: string;
+  total: number;
+  days: number[];
+}
+
+// ─── Repository Health ───────────────────────────────────────────────────────
+
+export type HealthSeverity = 'critical' | 'high' | 'medium' | 'low';
+
+export type HealthActionType =
+  | 'none'
+  | 'generate-readme'
+  | 'generate-license'
+  | 'generate-gitignore'
+  | 'generate-package-json'
+  | 'generate-ci'
+  | 'generate-tests'
+  | 'generate-docs'
+  | 'generate-dockerfile'
+  | 'generate-env-example';
+
+export interface HealthCheckDetail {
+  name: string;
+  passed: boolean;
+  severity: HealthSeverity;
+  failedDescription: string;
+  whyItMatters: string;
+  recommendation: string;
+  estimatedEffort: string;
+  actionLabel: string;
+  actionType: HealthActionType;
+  scorePenalty: number;
+}
+
+export interface ScoreBreakdownItem {
+  name: string;
+  penalty: number;
+}
+
+export interface RepositoryHealth {
+  score: number;
+  passedCount: number;
+  failedCount: number;
+  criticalCount: number;
+  details: HealthCheckDetail[];
+  scoreBreakdown: ScoreBreakdownItem[];
+}
+
+// ─── Repository Intelligence (Technology Analysis) ───────────────────────────
 
 export interface RepositoryIntelligence {
   repositoryId: string;
@@ -110,6 +257,34 @@ export interface RepositoryIntelligence {
   folderTreeSummary: FolderNode[];
   repositorySummary: string;
   generatedAt: string;
+}
+
+// ─── File Content ────────────────────────────────────────────────────────────
+
+export interface FileContent {
+  name: string;
+  path: string;
+  content: string;
+  size: number;
+}
+
+// ─── Aggregated Overview ─────────────────────────────────────────────────────
+
+export interface RepositoryOverview {
+  metadata: RepositoryMetadata;
+  statistics: RepositoryStatistics;
+  health: RepositoryHealth;
+  languages: Record<string, number>;
+  contributors: Contributor[];
+  tree: FileTreeNode[];
+}
+
+// ─── API Response Types ──────────────────────────────────────────────────────
+
+export interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: { message: string; code?: string };
 }
 
 export interface IntelligenceRequest {

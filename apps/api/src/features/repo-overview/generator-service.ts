@@ -1,4 +1,4 @@
-import { getOctokit } from '@/core/github';
+import { repositoryIntelligenceService } from '@/features/repo-intelligence';
 import { aiService } from '@/core/ai/service';
 import type { HealthActionType } from './types';
 
@@ -23,45 +23,26 @@ interface RepoContext {
 }
 
 async function gatherContext(userId: string, owner: string, repo: string): Promise<RepoContext> {
-  const octokit = await getOctokit(userId);
-
-  const [readmeResult, packageJsonResult, langResult, treeResult] = await Promise.allSettled([
-    octokit.rest.repos.getReadme({ owner, repo }),
-    octokit.rest.repos.getContent({ owner, repo, path: 'package.json' }),
-    octokit.rest.repos.listLanguages({ owner, repo }),
-    octokit.rest.git.getTree({ owner, repo, tree_sha: 'HEAD', recursive: 'true' }),
+  const [readme, languages, treePaths] = await Promise.all([
+    repositoryIntelligenceService.getReadme(userId, owner, repo),
+    repositoryIntelligenceService.getLanguages(userId, owner, repo),
+    repositoryIntelligenceService.getFlatFilePaths(userId, owner, repo),
   ]);
 
-  let readme = '';
-  if (readmeResult.status === 'fulfilled' && 'content' in readmeResult.value.data) {
-    readme = Buffer.from(readmeResult.value.data.content, 'base64')
-      .toString('utf-8')
-      .slice(0, 6000);
-  }
-
   let packageJson: Record<string, unknown> | null = null;
-  if (
-    packageJsonResult.status === 'fulfilled' &&
-    'content' in (packageJsonResult.value.data as Record<string, unknown>)
-  ) {
+  const packageContent = await repositoryIntelligenceService.getFileContent(
+    userId,
+    owner,
+    repo,
+    'package.json',
+  );
+  if (packageContent) {
     try {
-      const raw = Buffer.from(
-        (packageJsonResult.value.data as { content: string }).content,
-        'base64',
-      ).toString('utf-8');
-      packageJson = JSON.parse(raw) as Record<string, unknown>;
+      packageJson = JSON.parse(packageContent.content) as Record<string, unknown>;
     } catch {
       // ignore parse errors
     }
   }
-
-  const languages =
-    langResult.status === 'fulfilled' ? (langResult.value.data as Record<string, number>) : {};
-
-  const treePaths =
-    treeResult.status === 'fulfilled'
-      ? (treeResult.value.data.tree as Array<{ path: string }>).map((t) => t.path)
-      : [];
 
   const primaryLanguage = Object.entries(languages).sort(([, a], [, b]) => b - a)[0]?.[0] ?? null;
 

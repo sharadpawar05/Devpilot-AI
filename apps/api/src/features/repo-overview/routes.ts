@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { authenticate } from '@/core/auth';
-import { getOctokit } from '@/core/github';
+import { repositoryIntelligenceService } from '@/features/repo-intelligence';
 import { aiService } from '@/core/ai/service';
 import { repoOverviewService } from './overview-service';
 import { generatorService } from './generator-service';
@@ -89,13 +89,7 @@ export async function repoOverviewRoutes(app: FastifyInstance) {
       const { owner, repo } = parsed.data;
 
       try {
-        const octokit = await getOctokit(auth.sub);
-        const { data: treeData } = await octokit.rest.git.getTree({
-          owner,
-          repo,
-          tree_sha: 'HEAD',
-          recursive: 'true',
-        });
+        const tree = await repositoryIntelligenceService.getFileTree(auth.sub, owner, repo);
 
         const IGNORED = new Set([
           'node_modules',
@@ -118,10 +112,10 @@ export async function repoOverviewRoutes(app: FastifyInstance) {
           '.venv',
         ]);
 
-        const tree = (treeData.tree as Array<{ path: string; type: string; size?: number }>)
+        const filteredTree = tree
           .filter((item) => {
             const name = item.path.split('/').pop() || '';
-            if (item.type === 'tree')
+            if (item.type === 'dir')
               return !IGNORED.has(name) && !(name.startsWith('.') && name !== '.github');
             return true;
           })
@@ -129,11 +123,11 @@ export async function repoOverviewRoutes(app: FastifyInstance) {
           .map((item) => ({
             path: item.path,
             name: item.path.split('/').pop() || '',
-            type: item.type === 'tree' ? ('dir' as const) : ('file' as const),
+            type: item.type === 'dir' ? ('dir' as const) : ('file' as const),
             size: item.size,
           }));
 
-        return reply.send({ success: true, tree });
+        return reply.send({ success: true, tree: filteredTree });
       } catch (error: unknown) {
         const err = error as { status?: number; message?: string };
         return reply.status(err.status || 500).send({
@@ -170,28 +164,26 @@ export async function repoOverviewRoutes(app: FastifyInstance) {
       }
 
       try {
-        const octokit = await getOctokit(auth.sub);
-        const { data } = await octokit.rest.repos.getContent({
+        const content = await repositoryIntelligenceService.getFileContent(
+          auth.sub,
           owner,
           repo,
           path,
-          ref: 'HEAD',
-        });
+        );
 
-        if ('content' in data && data.content) {
-          const content = Buffer.from(data.content, 'base64').toString('utf-8');
-          return reply.send({
-            success: true,
-            content,
-            name: data.name,
-            path: data.path,
-            size: data.size,
+        if (!content) {
+          return reply.status(404).send({
+            success: false,
+            error: { message: 'File not found or is a directory' },
           });
         }
 
-        return reply.status(404).send({
-          success: false,
-          error: { message: 'File not found or is a directory' },
+        return reply.send({
+          success: true,
+          content: content.content,
+          name: content.name,
+          path: content.path,
+          size: content.size,
         });
       } catch (error: unknown) {
         const err = error as { status?: number; message?: string };
@@ -226,29 +218,12 @@ export async function repoOverviewRoutes(app: FastifyInstance) {
       const { owner, repo } = parsed.data;
 
       try {
-        const octokit = await getOctokit(auth.sub);
-
-        const [readmeResult, packageJsonResult, overview] = await Promise.allSettled([
-          octokit.rest.repos.getReadme({ owner, repo }),
-          octokit.rest.repos.getContent({ owner, repo, path: 'package.json' }),
+        const [readmeContent, overview] = await Promise.allSettled([
+          repositoryIntelligenceService.getReadme(auth.sub, owner, repo),
           repoOverviewService.getOverview(auth.sub, owner, repo),
         ]);
 
-        let readmeContent = '';
-        if (readmeResult.status === 'fulfilled' && 'content' in readmeResult.value.data) {
-          readmeContent = Buffer.from(readmeResult.value.data.content, 'base64').toString('utf-8');
-          readmeContent = readmeContent.slice(0, 8000);
-        }
-
-        let packageJsonContent = '';
-        if (packageJsonResult.status === 'fulfilled' && 'content' in packageJsonResult.value.data) {
-          packageJsonContent = Buffer.from(
-            (packageJsonResult.value.data as { content: string }).content,
-            'base64',
-          ).toString('utf-8');
-          packageJsonContent = packageJsonContent.slice(0, 5000);
-        }
-
+        const readme = readmeContent.status === 'fulfilled' ? readmeContent.value : '';
         const overviewData = overview.status === 'fulfilled' ? overview.value : null;
 
         const treeSummary = overviewData?.tree
@@ -288,10 +263,7 @@ Directory Structure:
 ${treeSummary || 'Not available'}
 
 README Content:
-${readmeContent || 'No README found'}
-
-Package.json:
-${packageJsonContent || 'No package.json found'}
+${readme || 'No README found'}
 
 Please provide:
 1. **Project Purpose**: What this project does and why it exists
@@ -347,21 +319,15 @@ Keep each section concise (2-4 sentences). Use markdown headers and bullet point
       const { owner, repo } = parsed.data;
 
       try {
-        const octokit = await getOctokit(auth.sub);
-        const { data } = await octokit.rest.repos.listContributors({
+        const contributors = await repositoryIntelligenceService.getContributors(
+          auth.sub,
           owner,
           repo,
-          per_page: 20,
-        });
+        );
 
         return reply.send({
           success: true,
-          contributors: data.map((c) => ({
-            login: c.login || '',
-            avatar_url: c.avatar_url || '',
-            contributions: c.contributions,
-            html_url: c.html_url || '',
-          })),
+          contributors,
         });
       } catch (error: unknown) {
         const err = error as { message?: string };

@@ -160,7 +160,7 @@ export const RepositoryIntelligencePanel = memo(function RepositoryIntelligenceP
   const invalidateMutation = useInvalidateIntelligence();
 
   const handleRefresh = () => {
-    invalidateMutation.mutate({ owner, repo, branch });
+    invalidateMutation.mutate({ owner, repo });
   };
 
   if (isLoading) {
