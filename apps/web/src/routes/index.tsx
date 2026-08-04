@@ -13,6 +13,7 @@ import { PullRequestAssistantPage } from '@/pages/pull-request-assistant';
 import { RepositoryChatPage } from '@/pages/repository-chat';
 import RepositoryOverviewPage from '@/pages/repository-overview';
 import { HistoryPage } from '@/pages/history';
+import AnalyticsPage from '@/pages/analytics';
 import SettingsPage from '@/pages/settings';
 import { NotFoundPage } from '@/pages/not-found';
 import { useAuth } from '@/auth';
@@ -55,6 +56,7 @@ const routes: RouteObject[] = [
       { path: '/repository-overview', element: <RepositoryOverviewPage /> },
       { path: '/repository-chat', element: <RepositoryChatPage /> },
       { path: '/history', element: <HistoryPage /> },
+      { path: '/analytics', element: <AnalyticsPage /> },
       { path: '/settings', element: <SettingsPage /> },
     ],
   },
