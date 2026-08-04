@@ -1,7 +1,7 @@
+import { memo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Github, FileCode, GitPullRequest, Play, Check } from 'lucide-react';
+import { Rocket, Github, FileCode, GitPullRequest, Play, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useState } from 'react';
 
 interface OnboardingStep {
   id: number;
@@ -9,51 +9,47 @@ interface OnboardingStep {
   description: string;
   icon: typeof Github;
   href: string;
-  completed: boolean;
 }
 
-export function EmptyState() {
+const steps: OnboardingStep[] = [
+  {
+    id: 1,
+    title: 'Connect GitHub',
+    description: 'Link your GitHub account to access repositories and pull requests',
+    icon: Github,
+    href: '/github',
+  },
+  {
+    id: 2,
+    title: 'Run First Code Review',
+    description: 'Paste some code and get AI-powered feedback on quality and issues',
+    icon: FileCode,
+    href: '/code-review',
+  },
+  {
+    id: 3,
+    title: 'Review a Pull Request',
+    description: 'Select a PR from your repository and get comprehensive AI analysis',
+    icon: GitPullRequest,
+    href: '/pull-request-assistant',
+  },
+  {
+    id: 4,
+    title: 'Explore Playground',
+    description: 'Experiment with different AI models and prompts',
+    icon: Play,
+    href: '/playground',
+  },
+];
+
+export const EmptyState = memo(function EmptyState() {
   const navigate = useNavigate();
-  const [steps] = useState<OnboardingStep[]>([
-    {
-      id: 1,
-      title: 'Connect GitHub',
-      description: 'Link your GitHub account to access repositories and pull requests',
-      icon: Github,
-      href: '/github',
-      completed: false,
-    },
-    {
-      id: 2,
-      title: 'Run First Code Review',
-      description: 'Paste some code and get AI-powered feedback on quality and issues',
-      icon: FileCode,
-      href: '/code-review',
-      completed: false,
-    },
-    {
-      id: 3,
-      title: 'Review a Pull Request',
-      description: 'Select a PR from your repository and get comprehensive AI analysis',
-      icon: GitPullRequest,
-      href: '/pull-request-assistant',
-      completed: false,
-    },
-    {
-      id: 4,
-      title: 'Explore Playground',
-      description: 'Experiment with different AI models and prompts',
-      icon: Play,
-      href: '/playground',
-      completed: false,
-    },
-  ]);
 
   return (
-    <div className="rounded-xl border border-dashed border-primary/30 bg-primary/5 p-8">
+    <div className="rounded-2xl border border-dashed border-primary/30 bg-primary/5 p-8">
       <div className="mx-auto max-w-md text-center">
-        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-          <Check className="h-8 w-8 text-primary" />
+        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
+          <Rocket className="h-8 w-8 text-primary" />
         </div>
         <h2 className="text-xl font-bold">Welcome to DevPilot</h2>
         <p className="mt-2 text-sm text-muted-foreground">
@@ -62,38 +58,30 @@ export function EmptyState() {
       </div>
       <div className="mx-auto mt-8 max-w-md space-y-3">
         {steps.map((step, i) => (
-          <div
+          <button
             key={step.id}
-            className={`flex items-center gap-4 rounded-lg border p-4 transition-colors ${
-              step.completed
-                ? 'border-green-500/30 bg-green-500/5'
-                : 'border-input bg-card hover:bg-muted/50'
-            }`}
+            onClick={() => navigate(step.href)}
+            className="group flex w-full items-center gap-4 rounded-xl border border-input bg-card p-4 text-left transition-all duration-200 hover:border-primary/30 hover:shadow-sm cursor-pointer"
           >
-            <div
-              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
-                step.completed ? 'bg-green-500 text-white' : 'bg-muted text-muted-foreground'
-              }`}
-            >
-              {step.completed ? <Check className="h-4 w-4" /> : i + 1}
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted text-sm font-bold text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+              {i + 1}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium">{step.title}</p>
+              <p className="text-sm font-semibold group-hover:text-primary transition-colors">
+                {step.title}
+              </p>
               <p className="mt-0.5 text-xs text-muted-foreground">{step.description}</p>
             </div>
-            {!step.completed && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => navigate(step.href)}
-                className="shrink-0"
-              >
-                Start
-              </Button>
-            )}
-          </div>
+            <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground/0 transition-all duration-200 group-hover:text-muted-foreground group-hover:translate-x-0.5" />
+          </button>
         ))}
+      </div>
+      <div className="mt-6 text-center">
+        <Button variant="ghost" size="sm" onClick={() => navigate('/playground')}>
+          Skip to Playground
+          <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+        </Button>
       </div>
     </div>
   );
-}
+});
