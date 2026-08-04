@@ -12,6 +12,7 @@ import { GitHubReviewPage } from '@/pages/github';
 import { PullRequestAssistantPage } from '@/pages/pull-request-assistant';
 import { RepositoryChatPage } from '@/pages/repository-chat';
 import RepositoryOverviewPage from '@/pages/repository-overview';
+import SprintSummaryPage from '@/pages/sprint-summary';
 import { HistoryPage } from '@/pages/history';
 import AnalyticsPage from '@/pages/analytics';
 import SettingsPage from '@/pages/settings';
@@ -54,6 +55,7 @@ const routes: RouteObject[] = [
       { path: '/github', element: <GitHubReviewPage /> },
       { path: '/pull-request-assistant', element: <PullRequestAssistantPage /> },
       { path: '/repository-overview', element: <RepositoryOverviewPage /> },
+      { path: '/sprint-summary', element: <SprintSummaryPage /> },
       { path: '/repository-chat', element: <RepositoryChatPage /> },
       { path: '/history', element: <HistoryPage /> },
       { path: '/analytics', element: <AnalyticsPage /> },
