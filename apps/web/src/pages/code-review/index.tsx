@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
-import { Send, Loader2, AlertCircle, RotateCcw, ChevronDown } from 'lucide-react';
+import { Send, Loader2, AlertCircle, RotateCcw } from 'lucide-react';
 import { Group, Panel, Separator } from 'react-resizable-panels';
 import { Button } from '@/components/ui/button';
 import { useCodeReview, type CodeReviewResponse } from '@/hooks/use-code-review';
@@ -7,7 +7,24 @@ import { useFixMode } from '@/hooks/use-fix-mode';
 import { FixPanel } from '@/components/ai/fix-mode';
 import { useTheme } from '@/hooks/use-theme';
 import { StreamingResponse } from '@/components/ai/streaming-response';
-import { LANGUAGES, REVIEW_TYPES, REVIEW_DEPTHS, MONACO_LANG_MAP } from './form-config';
+import {
+  LANGUAGES,
+  REVIEW_TYPES,
+  REVIEW_DEPTHS,
+  MONACO_LANG_MAP,
+  PROVIDERS,
+} from '@/lib/constants';
+import {
+  extractScore,
+  getScoreColor,
+  getScoreLabel,
+  getScoreBg,
+  renderMarkdown,
+  extractSections,
+} from '@/lib/markdown';
+import { useCopyToClipboard } from '@/lib/clipboard';
+import { useDownloadFile } from '@/lib/download';
+import { Select } from '@/components/ui/select';
 import {
   EditorToolbar,
   ReviewHeader,
@@ -56,107 +73,11 @@ function saveState(state: PersistedState) {
   }
 }
 
-const PROVIDERS = [
-  { value: 'gemini', label: 'Gemini Flash' },
-  { value: 'openai', label: 'GPT-4o' },
-  { value: 'anthropic', label: 'Claude 3.5' },
-  { value: 'openrouter', label: 'OpenRouter' },
-];
-
-const selectClass =
-  'w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
-
-function extractScore(text: string): number | null {
-  const patterns = [
-    /\*\*(\d+\.?\d*)\s*\/\s*10\*\*/,
-    /(\d+\.?\d*)\s*\/\s*10/,
-    /Score:\s*(\d+\.?\d*)/i,
-  ];
-  for (const p of patterns) {
-    const m = text.match(p);
-    if (m) {
-      const s = parseFloat(m[1]);
-      if (s >= 0 && s <= 10) return s;
-    }
-  }
-  return null;
-}
-
-function getScoreColor(score: number): string {
-  if (score >= 9) return 'text-green-500';
-  if (score >= 7) return 'text-blue-500';
-  if (score >= 5) return 'text-amber-500';
-  return 'text-red-500';
-}
-
-function getScoreLabel(score: number): string {
-  if (score >= 9) return 'Excellent';
-  if (score >= 7) return 'Good';
-  if (score >= 5) return 'Needs Improvement';
-  return 'Poor';
-}
-
-function getScoreBg(score: number): string {
-  if (score >= 9) return 'bg-green-500/10 border-green-500/30';
-  if (score >= 7) return 'bg-blue-500/10 border-blue-500/30';
-  if (score >= 5) return 'bg-amber-500/10 border-amber-500/30';
-  return 'bg-red-500/10 border-red-500/30';
-}
-
 function getScoreAccent(score: number): string {
   if (score >= 9) return '#22c55e';
   if (score >= 7) return '#3b82f6';
   if (score >= 5) return '#f59e0b';
   return '#ef4444';
-}
-
-function renderMarkdown(text: string): string {
-  let html = text;
-  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_m, lang: string, code: string) => {
-    const escaped = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    return `<div class="relative my-3 rounded-md border border-input bg-muted/50"><div class="flex items-center justify-between px-3 py-1.5 text-xs text-muted-foreground border-b border-input"><span>${lang || 'code'}</span></div><pre class="overflow-x-auto p-4 font-mono text-sm"><code>${escaped}</code></pre></div>`;
-  });
-  html = html.replace(
-    /`([^`]+)`/g,
-    '<code class="rounded bg-muted px-1.5 py-0.5 font-mono text-sm">$1</code>',
-  );
-  html = html.replace(/^### (.+)$/gm, '<h3 class="mt-4 mb-2 text-base font-semibold">$1</h3>');
-  html = html.replace(/^## (.+)$/gm, '<h2 class="mt-5 mb-2 text-lg font-bold">$1</h2>');
-  html = html.replace(/^# (.+)$/gm, '<h1 class="mt-6 mb-3 text-xl font-bold">$1</h1>');
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-  html = html.replace(/^---$/gm, '<hr class="my-4 border-input" />');
-  html = html.replace(/^- (.+)$/gm, '<li class="ml-4 list-disc">$1</li>');
-  html = html.replace(
-    /(<li[^>]*>.*<\/li>\n?)+/g,
-    (match) => `<ul class="my-2 space-y-1">${match}</ul>`,
-  );
-  html = html.replace(/^\d+\. (.+)$/gm, '<li class="ml-4 list-decimal">$1</li>');
-  html = html.replace(/^(?!<[a-z/])((?!^\s*$).+)$/gm, '<p class="mb-2">$1</p>');
-  return html;
-}
-
-function extractSections(text: string): { title: string; content: string }[] {
-  const sections: { title: string; content: string }[] = [];
-  const lines = text.split('\n');
-  let currentTitle = '';
-  let currentContent: string[] = [];
-  for (const line of lines) {
-    const h1 = line.match(/^# (.+)$/);
-    const h2 = line.match(/^## (.+)$/);
-    const match = h1 || h2;
-    if (match) {
-      if (currentTitle)
-        sections.push({ title: currentTitle, content: currentContent.join('\n').trim() });
-      currentTitle = match[1].replace(/\*\*/g, '');
-      currentContent = [];
-    } else {
-      currentContent.push(line);
-    }
-  }
-  if (currentTitle)
-    sections.push({ title: currentTitle, content: currentContent.join('\n').trim() });
-  return sections;
 }
 
 export function CodeReviewPage() {
@@ -172,7 +93,6 @@ export function CodeReviewPage() {
   const [provider, setProvider] = useState(saved.provider);
 
   const [result, setResult] = useState<CodeReviewResponse | null>(null);
-  const [copied, setCopied] = useState(false);
   const [useStreaming] = useState(true);
   const [showFixMode, setShowFixMode] = useState(false);
   const [wordWrap, setWordWrap] = useState(true);
@@ -260,22 +180,17 @@ export function CodeReviewPage() {
     );
   }
 
+  const { copied, copy: copyToClipboard } = useCopyToClipboard();
+  const { downloadMarkdown } = useDownloadFile();
+
   function handleCopyReport() {
     if (!result) return;
-    navigator.clipboard.writeText(result.response);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    copyToClipboard(result.response);
   }
 
   function handleDownloadMarkdown() {
     if (!result) return;
-    const blob = new Blob([result.response], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `code-review-${Date.now()}.md`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadMarkdown(result.response, 'code-review');
   }
 
   async function handlePaste() {
@@ -344,114 +259,58 @@ export function CodeReviewPage() {
         <div className="flex items-center gap-2">
           {/* Compact config toolbar */}
           <div className="hidden md:flex items-center gap-1.5">
-            <div className="relative">
-              <select
-                value={language}
-                onChange={(e) => handleLanguageChange(e.target.value)}
-                className="appearance-none rounded-md border border-input bg-background px-2 py-1 pr-6 text-xs ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                {LANGUAGES.map((l) => (
-                  <option key={l.value} value={l.value}>
-                    {l.label}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
-            </div>
-            <div className="relative">
-              <select
-                value={reviewType}
-                onChange={(e) => handleReviewTypeChange(e.target.value)}
-                className="appearance-none rounded-md border border-input bg-background px-2 py-1 pr-6 text-xs ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                {REVIEW_TYPES.map((rt) => (
-                  <option key={rt.value} value={rt.value}>
-                    {rt.label}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
-            </div>
-            <div className="relative">
-              <select
-                value={reviewDepth}
-                onChange={(e) => handleReviewDepthChange(e.target.value)}
-                className="appearance-none rounded-md border border-input bg-background px-2 py-1 pr-6 text-xs ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                {REVIEW_DEPTHS.map((d) => (
-                  <option key={d.value} value={d.value}>
-                    {d.label}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
-            </div>
+            <Select
+              options={LANGUAGES}
+              value={language}
+              onChange={(e) => handleLanguageChange(e.target.value)}
+              className="h-8 w-auto min-w-[100px] px-2 py-1 pr-7 text-xs"
+            />
+            <Select
+              options={REVIEW_TYPES}
+              value={reviewType}
+              onChange={(e) => handleReviewTypeChange(e.target.value)}
+              className="h-8 w-auto min-w-[110px] px-2 py-1 pr-7 text-xs"
+            />
+            <Select
+              options={REVIEW_DEPTHS}
+              value={reviewDepth}
+              onChange={(e) => handleReviewDepthChange(e.target.value)}
+              className="h-8 w-auto min-w-[90px] px-2 py-1 pr-7 text-xs"
+            />
           </div>
 
           <div className="h-4 w-px bg-border hidden md:block" />
 
-          <div className="relative">
-            <select
-              value={provider}
-              onChange={(e) => handleProviderChange(e.target.value)}
-              className="appearance-none rounded-md border border-input bg-background px-2 py-1 pr-6 text-xs font-medium ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              {PROVIDERS.map((p) => (
-                <option key={p.value} value={p.value}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
-          </div>
+          <Select
+            options={PROVIDERS}
+            value={provider}
+            onChange={(e) => handleProviderChange(e.target.value)}
+            className="h-8 w-auto min-w-[100px] px-2 py-1 pr-7 text-xs font-medium"
+          />
         </div>
       </div>
 
       {/* Mobile config (stacked on small screens) */}
       <div className="md:hidden border-b border-border px-5 py-2.5 space-y-2 shrink-0">
         <div className="grid grid-cols-3 gap-2">
-          <div className="relative">
-            <select
-              value={language}
-              onChange={(e) => handleLanguageChange(e.target.value)}
-              className={`${selectClass} text-xs py-1 appearance-none pr-6`}
-            >
-              {LANGUAGES.map((l) => (
-                <option key={l.value} value={l.value}>
-                  {l.label}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
-          </div>
-          <div className="relative">
-            <select
-              value={reviewType}
-              onChange={(e) => handleReviewTypeChange(e.target.value)}
-              className={`${selectClass} text-xs py-1 appearance-none pr-6`}
-            >
-              {REVIEW_TYPES.map((rt) => (
-                <option key={rt.value} value={rt.value}>
-                  {rt.label}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
-          </div>
-          <div className="relative">
-            <select
-              value={reviewDepth}
-              onChange={(e) => handleReviewDepthChange(e.target.value)}
-              className={`${selectClass} text-xs py-1 appearance-none pr-6`}
-            >
-              {REVIEW_DEPTHS.map((d) => (
-                <option key={d.value} value={d.value}>
-                  {d.label}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
-          </div>
+          <Select
+            options={LANGUAGES}
+            value={language}
+            onChange={(e) => handleLanguageChange(e.target.value)}
+            className="h-8 text-xs"
+          />
+          <Select
+            options={REVIEW_TYPES}
+            value={reviewType}
+            onChange={(e) => handleReviewTypeChange(e.target.value)}
+            className="h-8 text-xs"
+          />
+          <Select
+            options={REVIEW_DEPTHS}
+            value={reviewDepth}
+            onChange={(e) => handleReviewDepthChange(e.target.value)}
+            className="h-8 text-xs"
+          />
         </div>
       </div>
 

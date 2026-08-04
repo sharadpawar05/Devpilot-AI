@@ -1,9 +1,9 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
 import { useAuth } from '@/auth';
 import { useGitHub } from '@/hooks/use-github';
 import { useRepositoryChat } from '@/hooks/use-repository-chat';
+import { useCopyResponse } from '@/hooks/use-keyboard-shortcuts';
 import { aiHistoryApi } from '@/lib/ai-history';
 import { RepositoryChatState, deriveChatState } from '@/components/repository-chat/state';
 import { RepositoryChatLayout } from '@/components/repository-chat/RepositoryChatLayout';
@@ -13,6 +13,7 @@ import { RepositoryIndexingState } from '@/components/repository-chat/Repository
 import { RepositoryReadyState } from '@/components/repository-chat/RepositoryReadyState';
 import { ConversationState } from '@/components/repository-chat/ConversationState';
 import { RepositoryErrorState } from '@/components/repository-chat/RepositoryErrorState';
+import { RepoChatLoadingSteps } from '@/components/shared/LoadingSteps';
 
 export function RepositoryChatPage() {
   const { session } = useAuth();
@@ -26,6 +27,14 @@ export function RepositoryChatPage() {
   const [isLoadingSession, setIsLoadingSession] = useState(false);
 
   const isIndexed = (chat.tree?.length ?? 0) > 0;
+
+  useCopyResponse({
+    getContent: () => {
+      const lastAssistant = chat.messages?.filter((m) => m.role === 'assistant').pop();
+      return lastAssistant?.content;
+    },
+    enabled: (chat.messages?.length ?? 0) > 0,
+  });
 
   useEffect(() => {
     const sessionId = searchParams.get('continue');
@@ -140,7 +149,7 @@ export function RepositoryChatPage() {
   if (isLoadingSession) {
     return (
       <div className="flex h-full items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <RepoChatLoadingSteps />
       </div>
     );
   }

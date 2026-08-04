@@ -57,3 +57,40 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer utilities {
+  .animate-fade-in {
+    animation: fadeIn 200ms ease-out;
+  }
+  .animate-slide-up {
+    animation: slideUp 200ms ease-out;
+  }
+  .animate-slide-down {
+    animation: slideDown 200ms ease-out;
+  }
+  .animate-shimmer {
+    background: linear-gradient(90deg, transparent 0%, hsl(var(--muted)) 50%, transparent 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
