@@ -16,6 +16,7 @@ import { repoIntelligenceRoutes } from '@/features/repo-intelligence';
 import { sprintSummaryRoutes } from '@/features/sprint-summary';
 import { releaseNotesRoutes } from '@/features/release-notes';
 import { engineeringStatusRoutes } from '@/features/engineering-status';
+import { incidentSummaryRoutes } from '@/features/incident-summary';
 
 export async function apiV1Routes(app: FastifyInstance) {
   await app.register(healthRoutes);
@@ -36,4 +37,5 @@ export async function apiV1Routes(app: FastifyInstance) {
   await app.register(sprintSummaryRoutes);
   await app.register(releaseNotesRoutes);
   await app.register(engineeringStatusRoutes);
+  await app.register(incidentSummaryRoutes);
 }

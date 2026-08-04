@@ -13,6 +13,7 @@ import {
   FileText,
   Tag,
   Activity,
+  AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -48,6 +49,7 @@ const NAV_ITEMS = [
       { label: 'Sprint Summary', href: '/sprint-summary', icon: FileText },
       { label: 'Release Notes', href: '/release-notes', icon: Tag },
       { label: 'Engineering Status', href: '/engineering-status', icon: Activity },
+      { label: 'Incident Summary', href: '/incident-summary', icon: AlertTriangle },
       { label: 'GitHub', href: '/github', icon: Github },
     ],
   },
