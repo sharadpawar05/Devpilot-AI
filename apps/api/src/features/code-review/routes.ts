@@ -38,7 +38,7 @@ const codeReviewSchema = z.object({
 type CodeReviewRequest = z.infer<typeof codeReviewSchema>;
 
 const DEFAULT_MODELS: Record<string, string> = {
-  gemini: 'gemini-3.5-flash',
+  gemini: 'gemini-3.6-flash',
   openai: 'gpt-4o',
   anthropic: 'claude-3.5-sonnet',
   openrouter: 'gpt-4',

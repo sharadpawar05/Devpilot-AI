@@ -11,9 +11,15 @@ interface LoadingStepsProps {
   steps: Step[];
   className?: string;
   showProgress?: boolean;
+  externalProgress?: number;
 }
 
-function LoadingSteps({ steps, className, showProgress = true }: LoadingStepsProps) {
+function LoadingSteps({
+  steps,
+  className,
+  showProgress = true,
+  externalProgress,
+}: LoadingStepsProps) {
   const [activeStep, setActiveStep] = useState(0);
 
   useEffect(() => {
@@ -25,7 +31,7 @@ function LoadingSteps({ steps, className, showProgress = true }: LoadingStepsPro
     return () => clearTimeout(timeout);
   }, [activeStep, steps]);
 
-  const progress = Math.round(((activeStep + 1) / steps.length) * 100);
+  const progress = externalProgress ?? Math.round(((activeStep + 1) / steps.length) * 100);
 
   return (
     <div className={cn('flex items-center justify-center p-8', className)}>
@@ -173,8 +179,34 @@ function CodeReviewLoadingSteps({ className }: { className?: string }) {
   return <LoadingSteps steps={CODE_REVIEW_LOADING_STEPS} className={className} />;
 }
 
-function PRLoadingSteps({ className }: { className?: string }) {
-  return <LoadingSteps steps={PR_LOADING_STEPS} className={className} />;
+function PRLoadingSteps({
+  className,
+  isLoading = true,
+}: {
+  className?: string;
+  isLoading?: boolean;
+}) {
+  const [activeStep, setActiveStep] = useState(0);
+
+  useEffect(() => {
+    let timeout: ReturnType<typeof setTimeout>;
+    if (!isLoading) {
+      setActiveStep(PR_LOADING_STEPS.length - 1);
+      return;
+    }
+    const duration = PR_LOADING_STEPS[activeStep]?.duration ?? 2500;
+    if (activeStep < PR_LOADING_STEPS.length - 1) {
+      timeout = setTimeout(() => setActiveStep((s) => s + 1), duration);
+    }
+    return () => clearTimeout(timeout);
+  }, [activeStep, isLoading]);
+
+  const stepProgress = Math.round(((activeStep + 1) / PR_LOADING_STEPS.length) * 100);
+  const progress = isLoading ? Math.min(stepProgress, 99) : 100;
+
+  return (
+    <LoadingSteps steps={PR_LOADING_STEPS} className={className} externalProgress={progress} />
+  );
 }
 
 function RepoChatLoadingSteps({ className }: { className?: string }) {
