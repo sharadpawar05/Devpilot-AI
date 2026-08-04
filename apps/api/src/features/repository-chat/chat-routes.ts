@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { authenticate } from '@/core/auth';
-import { getOctokit } from '@/core/github';
+import { repositoryIntelligenceService } from '@/features/repo-intelligence';
 import { aiService } from '@/core/ai/service';
 import { repositoryIndexer } from './indexer';
 import { repositoryStatusService } from './status';
@@ -228,8 +228,6 @@ export async function repositoryChatRoutes(app: FastifyInstance) {
         });
       }
 
-      const octokit = await getOctokit(auth.sub);
-
       let relevantFiles: string[] = [];
       if (fileFilter) {
         relevantFiles = findFilesByKeywords(index.tree, [fileFilter]);
@@ -245,18 +243,18 @@ export async function repositoryChatRoutes(app: FastifyInstance) {
       const fileContents: Record<string, string> = {};
       for (const filePath of relevantFiles) {
         try {
-          const { data } = await octokit.rest.repos.getContent({
+          const content = await repositoryIntelligenceService.getFileContent(
+            auth.sub,
             owner,
             repo,
-            path: filePath,
-            ref: branch,
-          });
-          if ('content' in data && data.content) {
-            const content = Buffer.from(data.content, 'base64').toString('utf-8');
+            filePath,
+            branch,
+          );
+          if (content) {
             fileContents[filePath] =
-              content.length > MAX_FILE_SIZE
-                ? content.slice(0, MAX_FILE_SIZE) + '\n... (truncated)'
-                : content;
+              content.content.length > MAX_FILE_SIZE
+                ? content.content.slice(0, MAX_FILE_SIZE) + '\n... (truncated)'
+                : content.content;
           }
         } catch {
           // Skip unreadable files

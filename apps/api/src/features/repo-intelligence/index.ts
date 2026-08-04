@@ -1,4 +1,5 @@
 export { repoIntelligenceRoutes } from './routes';
+export { repositoryIntelligenceService } from './repository-service';
 export { intelligenceService } from './intelligence-service';
 export type {
   RepositoryIntelligence,
@@ -9,13 +10,23 @@ export type {
   FolderNode,
   ProjectType,
   PackageManager,
-  BuildTool,
-  TestingFramework,
-  LintingTool,
-  FormattingTool,
-  Framework,
-  Database,
-  ORM,
-  StylingTool,
-  StateManagement,
+  RepositoryMetadata,
+  RepositoryStatistics,
+  RepositoryHealth,
+  Contributor,
+  Branch,
+  PullRequest,
+  PullRequestFile,
+  Commit,
+  Release,
+  Issue,
+  ActivityEvent,
+  CommitActivity,
+  FileTreeNode,
+  FileContent,
+  HealthCheckDetail,
+  HealthSeverity,
+  HealthActionType,
+  ScoreBreakdownItem,
+  ApiResponse,
 } from './types';

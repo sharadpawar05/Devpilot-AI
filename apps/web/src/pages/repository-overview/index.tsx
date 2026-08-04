@@ -268,7 +268,7 @@ export default function RepositoryOverviewPage() {
 
   if (!selectedRepo) {
     return (
-      <div className="mx-auto max-w-[1400px] px-6 py-20 flex flex-col items-center justify-center">
+      <div className="w-full px-6 py-20 flex flex-col items-center justify-center">
         <div className="rounded-lg border border-dashed bg-card p-12 text-center w-full max-w-lg">
           <FolderOpen className="mx-auto mb-4 h-12 w-12 text-muted-foreground/50" />
           <h2 className="mb-2 text-lg font-semibold">Repository Overview</h2>
@@ -298,7 +298,7 @@ export default function RepositoryOverviewPage() {
   }
 
   return (
-    <div className="mx-auto max-w-[1400px] px-6 py-6 space-y-6">
+    <div className="w-full px-6 py-6 space-y-6">
       {/* Header with Repo Selector */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <RepoSelector

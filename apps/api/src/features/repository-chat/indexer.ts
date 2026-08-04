@@ -1,12 +1,9 @@
-import { getOctokit } from '@/core/github';
+import { repositoryIntelligenceService } from '@/features/repo-intelligence';
 import { repositoryCache } from './cache';
 import { repositoryStatusService } from './status';
-import { buildRepoTree, filterSupportedFiles, parseFileMetadata } from './parser';
+import { buildRepoTree, parseFileMetadata } from './parser';
 import { analyzeLanguageBreakdown, analyzeStats } from './analyzer';
 import type { RepoIndexData } from './types';
-
-const MAX_FILE_CONTENT_FETCH = 50;
-const MAX_FILE_CONTENT_SIZE = 50_000;
 
 export class RepositoryIndexer {
   async index(
@@ -15,66 +12,53 @@ export class RepositoryIndexer {
     repo: string,
     branch: string = 'main',
   ): Promise<RepoIndexData> {
-    const octokit = await getOctokit(userId);
-
-    const { data: refData } = await octokit.rest.git.getRef({
-      owner,
-      repo,
-      ref: `heads/${branch}`,
-    });
-    const commitSha = refData.object.sha;
-
-    const shouldSkip = !(await repositoryStatusService.shouldReindex(
+    // Use intelligence service to get file tree and contents
+    const filePaths = await repositoryIntelligenceService.getFlatFilePaths(
       userId,
       owner,
       repo,
       branch,
-      commitSha,
-    ));
-    if (shouldSkip) {
-      const cached = await repositoryCache.getIndexed(userId, owner, repo, branch);
-      if (cached) return cached;
-    }
+    );
+    const fileContents = await repositoryIntelligenceService.getFileContents(
+      userId,
+      owner,
+      repo,
+      this.getKeyFilePaths(filePaths.map((p) => ({ path: p, type: 'blob' }))),
+      branch,
+    );
 
-    try {
-      const { data: treeData } = await octokit.rest.git.getTree({
-        owner,
-        repo,
-        tree_sha: branch,
-        recursive: 'true',
-      });
+    // Build tree from flat paths
+    const items = filePaths.map((p) => ({
+      path: p,
+      type: p.includes('/') ? 'tree' : ('blob' as string),
+    }));
+    const filteredItems = items.filter((item) => {
+      const name = item.path.split('/').pop() || '';
+      return !name.startsWith('.') || name === '.github';
+    });
 
-      const filteredItems = filterSupportedFiles(treeData.tree as any[]);
-      const tree = buildRepoTree(treeData.tree as any[]);
+    const tree = buildRepoTree(items as any[]);
 
-      const keyFiles = this.getKeyFilePaths(filteredItems);
-      const fileContents = await this.fetchFileContents(octokit, owner, repo, keyFiles);
+    const fileMetadata = filteredItems.map((item) =>
+      parseFileMetadata(item, fileContents.get(item.path)),
+    );
 
-      const fileMetadata = filteredItems.map((item) =>
-        parseFileMetadata(item, fileContents.get(item.path)),
-      );
+    const languageBreakdown = analyzeLanguageBreakdown(fileMetadata);
+    const stats = analyzeStats(tree, fileMetadata, fileContents);
 
-      const languageBreakdown = analyzeLanguageBreakdown(fileMetadata);
-      const stats = analyzeStats(tree, fileMetadata, fileContents);
+    const indexData: RepoIndexData = {
+      tree,
+      fileMetadata,
+      languageBreakdown,
+      stats,
+      commitSha: branch,
+      indexedAt: new Date(),
+    };
 
-      const indexData: RepoIndexData = {
-        tree,
-        fileMetadata,
-        languageBreakdown,
-        stats,
-        commitSha: treeData.sha,
-        indexedAt: new Date(),
-      };
+    await repositoryCache.saveIndex(userId, owner, repo, branch, indexData);
+    await repositoryStatusService.markReady(userId, owner, repo, branch);
 
-      await repositoryCache.saveIndex(userId, owner, repo, branch, indexData);
-      await repositoryStatusService.markReady(userId, owner, repo, branch);
-
-      return indexData;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      await repositoryStatusService.markFailed(userId, owner, repo, branch, message);
-      throw error;
-    }
+    return indexData;
   }
 
   async getIndex(
@@ -112,32 +96,6 @@ export class RepositoryIndexer {
       })
       .slice(0, 10)
       .map((item) => item.path);
-  }
-
-  private async fetchFileContents(
-    octokit: any,
-    owner: string,
-    repo: string,
-    paths: string[],
-  ): Promise<Map<string, string>> {
-    const contents = new Map<string, string>();
-
-    const fetches = paths.slice(0, MAX_FILE_CONTENT_FETCH).map(async (path) => {
-      try {
-        const { data } = await octokit.rest.repos.getContent({ owner, repo, path });
-        if ('content' in data && typeof data.content === 'string') {
-          const decoded = Buffer.from(data.content, 'base64').toString('utf-8');
-          if (decoded.length <= MAX_FILE_CONTENT_SIZE) {
-            contents.set(path, decoded);
-          }
-        }
-      } catch {
-        // Skip files that can't be fetched
-      }
-    });
-
-    await Promise.allSettled(fetches);
-    return contents;
   }
 }
 

@@ -1,10 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { Octokit } from 'octokit';
 import { authenticate } from '@/core/auth';
 import { aiService } from '@/core/ai/service';
 import { PromptRegistry, loadMarkdownPrompts } from '@devpilot/ai-prompts';
-import { getOctokit } from '@/core/github';
+import { repositoryIntelligenceService } from '@/features/repo-intelligence';
 
 const registry = new PromptRegistry();
 registry.registerAll(loadMarkdownPrompts());
@@ -29,7 +28,7 @@ const analyzeSchema = z.object({
 });
 
 const DEFAULT_MODELS: Record<string, string> = {
-  gemini: 'gemini-3.5-flash',
+  gemini: 'gemini-3.6-flash',
   openai: 'gpt-4o',
   anthropic: 'claude-3.5-sonnet',
   openrouter: 'gpt-4',
@@ -146,25 +145,32 @@ export async function prReviewRoutes(app: FastifyInstance) {
 
       const { owner, repo, pull_number, files, reviewType, reviewDepth, provider } = parsed.data;
 
-      let octokit: Octokit;
-      try {
-        octokit = await getOctokit(auth.sub);
-      } catch (error) {
-        return reply.status(400).send({
-          success: false,
-          error: { code: 'NOT_CONNECTED', message: (error as Error).message },
-        });
-      }
-
       let prData;
       let filesData;
       try {
-        const [prResp, filesResp] = await Promise.all([
-          octokit.rest.pulls.get({ owner, repo, pull_number }),
-          octokit.rest.pulls.listFiles({ owner, repo, pull_number, per_page: 100 }),
+        const [prResult, filesResult] = await Promise.all([
+          repositoryIntelligenceService.getPullRequest(auth.sub, owner, repo, pull_number),
+          repositoryIntelligenceService.getPullRequestFiles(auth.sub, owner, repo, pull_number),
         ]);
-        prData = prResp.data;
-        filesData = filesResp.data;
+
+        if (!prResult) {
+          return reply.status(404).send({
+            success: false,
+            error: { code: 'PR_NOT_FOUND', message: 'Pull request not found' },
+          });
+        }
+
+        prData = {
+          title: prResult.title,
+          body: prResult.body,
+          user: { login: prResult.user },
+          html_url: prResult.html_url,
+          additions: prResult.additions,
+          deletions: prResult.deletions,
+          base: { ref: prResult.base_branch || 'main' },
+          head: { ref: prResult.head_branch || 'feature' },
+        };
+        filesData = filesResult;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         return reply.status(500).send({
@@ -302,25 +308,32 @@ export async function prReviewRoutes(app: FastifyInstance) {
 
       const { owner, repo, pull_number, provider } = parsed.data;
 
-      let octokit: Octokit;
-      try {
-        octokit = await getOctokit(auth.sub);
-      } catch (error) {
-        return reply.status(400).send({
-          success: false,
-          error: { code: 'NOT_CONNECTED', message: (error as Error).message },
-        });
-      }
-
       let prData;
       let filesData;
       try {
-        const [prResp, filesResp] = await Promise.all([
-          octokit.rest.pulls.get({ owner, repo, pull_number }),
-          octokit.rest.pulls.listFiles({ owner, repo, pull_number, per_page: 100 }),
+        const [prResult, filesResult] = await Promise.all([
+          repositoryIntelligenceService.getPullRequest(auth.sub, owner, repo, pull_number),
+          repositoryIntelligenceService.getPullRequestFiles(auth.sub, owner, repo, pull_number),
         ]);
-        prData = prResp.data;
-        filesData = filesResp.data;
+
+        if (!prResult) {
+          return reply.status(404).send({
+            success: false,
+            error: { code: 'PR_NOT_FOUND', message: 'Pull request not found' },
+          });
+        }
+
+        prData = {
+          title: prResult.title,
+          body: prResult.body,
+          user: { login: prResult.user },
+          html_url: prResult.html_url,
+          additions: prResult.additions,
+          deletions: prResult.deletions,
+          base: { ref: prResult.base_branch || 'main' },
+          head: { ref: prResult.head_branch || 'feature' },
+        };
+        filesData = filesResult;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         return reply.status(500).send({

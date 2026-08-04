@@ -864,7 +864,7 @@ export function PullRequestAssistantPage() {
         </div>
       )}
 
-      {analyzing && !hasResult && <PRLoadingSteps className="flex-1" />}
+      {analyzing && !hasResult && <PRLoadingSteps className="flex-1" isLoading={analyzing} />}
 
       {!hasResult && !error && !analyzing && !gh.loading && (
         <div className="flex flex-1 items-center justify-center p-8">
