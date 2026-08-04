@@ -50,7 +50,7 @@ const NAV_ITEMS = [
   },
   {
     label: 'Settings',
-    items: [{ label: 'Settings', href: '/settings', icon: Settings, disabled: true }],
+    items: [{ label: 'Settings', href: '/settings', icon: Settings }],
   },
 ];
 
