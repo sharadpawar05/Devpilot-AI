@@ -13,6 +13,7 @@ import { streamingRoutes } from '@/features/streaming';
 import { fixRoutes } from '@/features/fix/routes';
 import { repoOverviewRoutes } from '@/features/repo-overview';
 import { repoIntelligenceRoutes } from '@/features/repo-intelligence';
+import { sprintSummaryRoutes } from '@/features/sprint-summary';
 
 export async function apiV1Routes(app: FastifyInstance) {
   await app.register(healthRoutes);
@@ -30,4 +31,5 @@ export async function apiV1Routes(app: FastifyInstance) {
   await app.register(aiHistoryRoutes);
   await app.register(streamingRoutes);
   await app.register(fixRoutes);
+  await app.register(sprintSummaryRoutes);
 }

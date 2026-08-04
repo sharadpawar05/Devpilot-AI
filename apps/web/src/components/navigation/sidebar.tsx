@@ -10,6 +10,7 @@ import {
   History,
   FolderOpen,
   BarChart3,
+  FileText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -42,6 +43,7 @@ const NAV_ITEMS = [
     label: 'Integrations',
     items: [
       { label: 'Repository Overview', href: '/repository-overview', icon: FolderOpen },
+      { label: 'Sprint Summary', href: '/sprint-summary', icon: FileText },
       { label: 'GitHub', href: '/github', icon: Github },
     ],
   },
