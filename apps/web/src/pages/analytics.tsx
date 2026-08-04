@@ -1,4 +1,9 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useCallback } from 'react';
+import { useAuth } from '@/auth';
+import { useHistory } from '@/hooks/use-history';
+import { useGitHub } from '@/hooks/use-github';
+import { useSettingsState } from '@/lib/settings-context';
+import { useAnalytics, type DateRange } from '@/hooks/use-analytics';
 import {
   Zap,
   BarChart3,
@@ -11,8 +16,6 @@ import {
   Clock,
   CheckCircle,
 } from 'lucide-react';
-import type { DateRange } from '@/lib/analytics-types';
-import { generateMockAnalytics } from '@/lib/analytics-data';
 import {
   MetricCard,
   UsageChart,
@@ -27,29 +30,147 @@ import {
 } from '@/components/analytics';
 
 export default function AnalyticsPage() {
+  const { isAuthenticated } = useAuth();
+  const { sessions, isLoading: historyLoading } = useHistory();
+  const gh = useGitHub();
+  const settings = useSettingsState();
   const [dateRange, setDateRange] = useState<DateRange>('30days');
-  const [isLoading] = useState(false);
 
-  const data = useMemo(() => generateMockAnalytics(), []);
+  const data = useAnalytics(sessions, gh, settings, dateRange);
 
   const handleExport = useCallback(
     (format: 'pdf' | 'csv' | 'json') => {
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `devpilot-analytics.${format === 'json' ? 'json' : format === 'csv' ? 'csv' : 'txt'}`;
-      a.click();
-      URL.revokeObjectURL(url);
+      if (format === 'json') {
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'devpilot-analytics.json';
+        a.click();
+        URL.revokeObjectURL(url);
+        return;
+      }
+
+      if (format === 'csv') {
+        const rows = [
+          ['Metric', 'Value'],
+          ['Total Sessions', String(data.overview.totalSessions)],
+          ['Repos Connected', String(data.overview.reposConnected)],
+          ['AI Provider', data.overview.aiProvider],
+          ['AI Model', data.overview.aiModel],
+          ['', ''],
+          ['Feature', 'Count', 'Percentage'],
+          ...data.featureUsage.map((f) => [f.feature, String(f.count), `${f.percentage}%`]),
+          ['', ''],
+          ['Provider', 'Requests', 'Avg Response (ms)', 'Total Tokens'],
+          ...data.providerStats.map((p) => [
+            p.provider,
+            String(p.requestCount),
+            String(p.avgResponseTime),
+            String(p.totalTokens),
+          ]),
+          ['', ''],
+          ['Repository', 'Sessions', 'Total Tokens'],
+          ...data.repositoryActivity.map((r) => [
+            r.name,
+            String(r.sessionCount),
+            String(r.totalTokens),
+          ]),
+        ];
+        const csv = rows.map((r) => r.map((c) => `"${c}"`).join(',')).join('\n');
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'devpilot-analytics.csv';
+        a.click();
+        URL.revokeObjectURL(url);
+        return;
+      }
+
+      // PDF — open print-friendly HTML in new tab
+      const html = `<!DOCTYPE html>
+<html><head><title>DevPilot Analytics</title>
+<style>
+  body { font-family: -apple-system, sans-serif; padding: 40px; color: #1a1a1a; }
+  h1 { font-size: 24px; margin-bottom: 4px; }
+  h2 { font-size: 16px; margin-top: 28px; border-bottom: 1px solid #ddd; padding-bottom: 6px; }
+  .muted { color: #666; font-size: 13px; margin-bottom: 24px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid #eee; }
+  th { font-weight: 600; background: #f5f5f5; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .card { border: 1px solid #eee; border-radius: 8px; padding: 14px; }
+  .card p { font-size: 22px; font-weight: 700; margin: 4px 0 0; }
+  .card span { font-size: 12px; color: #666; }
+  @media print { body { padding: 20px; } }
+</style></head><body>
+<h1>DevPilot Analytics Report</h1>
+<p class="muted">Generated ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+
+<h2>Overview</h2>
+<div class="grid">
+  <div class="card"><span>Total Sessions</span><p>${data.overview.totalSessions}</p></div>
+  <div class="card"><span>Repositories</span><p>${data.overview.reposConnected}</p></div>
+  <div class="card"><span>AI Provider</span><p>${data.overview.aiProvider}</p></div>
+  <div class="card"><span>AI Model</span><p>${data.overview.aiModel}</p></div>
+</div>
+
+<h2>AI Usage</h2>
+<div class="grid">
+  <div class="card"><span>Total Requests</span><p>${data.aiUsage.totalRequests}</p></div>
+  <div class="card"><span>Total Tokens</span><p>${data.aiUsage.totalTokens.toLocaleString()}</p></div>
+  <div class="card"><span>PR Reviews</span><p>${data.aiUsage.prReviews}</p></div>
+  <div class="card"><span>Code Reviews</span><p>${data.aiUsage.codeReviews}</p></div>
+  <div class="card"><span>Repo Chats</span><p>${data.aiUsage.repoChats}</p></div>
+  <div class="card"><span>Playground Sessions</span><p>${data.aiUsage.playgroundSessions}</p></div>
+</div>
+
+<h2>Feature Usage</h2>
+<table>
+<tr><th>Feature</th><th>Count</th><th>Percentage</th></tr>
+${data.featureUsage.map((f) => `<tr><td>${f.feature}</td><td>${f.count}</td><td>${f.percentage}%</td></tr>`).join('\n')}
+</table>
+
+<h2>Provider Stats</h2>
+<table>
+<tr><th>Provider</th><th>Requests</th><th>Avg Response</th><th>Total Tokens</th><th>Models</th></tr>
+${data.providerStats.map((p) => `<tr><td>${p.provider}</td><td>${p.requestCount}</td><td>${(p.avgResponseTime / 1000).toFixed(1)}s</td><td>${p.totalTokens.toLocaleString()}</td><td>${p.models.join(', ')}</td></tr>`).join('\n')}
+</table>
+
+<h2>Repository Activity</h2>
+<table>
+<tr><th>Repository</th><th>Sessions</th><th>Total Tokens</th><th>Features Used</th></tr>
+${data.repositoryActivity.map((r) => `<tr><td>${r.name}</td><td>${r.sessionCount}</td><td>${r.totalTokens.toLocaleString()}</td><td>${r.workflowTypes.join(', ')}</td></tr>`).join('\n')}
+</table>
+
+<h2>Daily Usage (Last 30 Days)</h2>
+<table>
+<tr><th>Date</th><th>Requests</th><th>Tokens</th></tr>
+${data.dailyUsage
+  .filter((d) => d.requests > 0)
+  .map(
+    (d) => `<tr><td>${d.date}</td><td>${d.requests}</td><td>${d.tokens.toLocaleString()}</td></tr>`,
+  )
+  .join('\n')}
+</table>
+
+</body></html>`;
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(html);
+        printWindow.document.close();
+        printWindow.focus();
+      }
     },
     [data],
   );
 
-  if (isLoading) return <AnalyticsPageSkeleton />;
+  if (historyLoading) return <AnalyticsPageSkeleton />;
 
-  if (!data) return <AnalyticsEmptyState />;
+  if (!isAuthenticated || sessions.length === 0) return <AnalyticsEmptyState />;
 
-  const { overview } = data;
+  const { overview, aiUsage } = data;
 
   return (
     <div className="space-y-6 p-6">
@@ -66,18 +187,16 @@ export default function AnalyticsPage() {
       {/* Overview Cards */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <MetricCard
-          label="AI Requests Today"
-          value={overview.aiRequestsToday}
+          label="AI Requests (Filtered)"
+          value={aiUsage.totalRequests}
           icon={<Zap className="h-5 w-5 text-amber-500" />}
           color="bg-amber-500/10"
-          change={12}
         />
         <MetricCard
-          label="Total AI Requests"
-          value={overview.totalAIRequests.toLocaleString()}
+          label="Total Sessions"
+          value={overview.totalSessions}
           icon={<BarChart3 className="h-5 w-5 text-blue-500" />}
           color="bg-blue-500/10"
-          change={8}
         />
         <MetricCard
           label="Repositories"
@@ -88,55 +207,51 @@ export default function AnalyticsPage() {
         <MetricCard
           label="Tokens Used"
           value={
-            overview.tokensUsed >= 1000
-              ? `${(overview.tokensUsed / 1000).toFixed(1)}k`
-              : overview.tokensUsed
+            aiUsage.totalTokens >= 1000
+              ? `${(aiUsage.totalTokens / 1000).toFixed(1)}k`
+              : aiUsage.totalTokens
           }
           icon={<Coins className="h-5 w-5 text-emerald-500" />}
           color="bg-emerald-500/10"
-          change={15}
         />
         <MetricCard
-          label="Success Rate"
-          value={`${overview.successRate.toFixed(1)}%`}
-          icon={<CheckCircle className="h-5 w-5 text-green-500" />}
-          color="bg-green-500/10"
+          label="Avg Latency"
+          value={aiUsage.avgLatency > 0 ? `${(aiUsage.avgLatency / 1000).toFixed(1)}s` : '—'}
+          icon={<Clock className="h-5 w-5 text-orange-500" />}
+          color="bg-orange-500/10"
         />
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <MetricCard
           label="PR Reviews"
-          value={overview.prReviews}
+          value={aiUsage.prReviews}
           icon={<GitPullRequest className="h-5 w-5 text-blue-500" />}
           color="bg-blue-500/10"
-          change={5}
         />
         <MetricCard
           label="Code Reviews"
-          value={overview.codeReviews}
+          value={aiUsage.codeReviews}
           icon={<FileCode className="h-5 w-5 text-purple-500" />}
           color="bg-purple-500/10"
-          change={10}
         />
         <MetricCard
           label="Repository Chats"
-          value={overview.repositoryChats}
+          value={aiUsage.repoChats}
           icon={<MessageSquare className="h-5 w-5 text-emerald-500" />}
           color="bg-emerald-500/10"
         />
         <MetricCard
           label="Playground Sessions"
-          value={overview.playgroundSessions}
+          value={aiUsage.playgroundSessions}
           icon={<Play className="h-5 w-5 text-pink-500" />}
           color="bg-pink-500/10"
         />
         <MetricCard
-          label="Time Saved"
-          value={`${overview.estimatedTimeSaved}h`}
-          icon={<Clock className="h-5 w-5 text-orange-500" />}
-          color="bg-orange-500/10"
-          change={20}
+          label="Repo Analyses"
+          value={aiUsage.repoAnalyses}
+          icon={<CheckCircle className="h-5 w-5 text-green-500" />}
+          color="bg-green-500/10"
         />
       </div>
 
@@ -160,32 +275,23 @@ export default function AnalyticsPage() {
         />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-2">
         <UsageChart
           title="Feature Usage"
-          data={data.featureUsage}
+          data={data.featureUsage.map((f) => ({ name: f.feature, count: f.count }))}
           type="pie"
           dataKey="count"
-          xKey="feature"
+          xKey="name"
           height={280}
           showLegend
         />
         <UsageChart
           title="AI Providers"
-          data={data.providerUsage}
+          data={data.providerStats.map((p) => ({ name: p.provider, requests: p.requestCount }))}
           type="bar"
           dataKey="requests"
-          xKey="provider"
+          xKey="name"
           color="#10b981"
-          height={280}
-        />
-        <UsageChart
-          title="Review Types"
-          data={data.reviewTypeUsage}
-          type="bar"
-          dataKey="count"
-          xKey="type"
-          color="#f59e0b"
           height={280}
         />
       </div>
@@ -193,14 +299,14 @@ export default function AnalyticsPage() {
       {/* Feature Breakdown + Productivity */}
       <div className="grid gap-6 lg:grid-cols-2">
         <FeatureBreakdown data={data.featureUsage} />
-        <ProductivityCard data={data.productivity} />
+        <ProductivityCard aiUsage={aiUsage} />
       </div>
 
       {/* Provider Analytics */}
-      <ProviderAnalytics data={data.providerUsage} />
+      <ProviderAnalytics data={data.providerStats} />
 
       {/* Repository Insights */}
-      <RepositoryInsights data={data.repositoryInsights} />
+      <RepositoryInsights data={data.repositoryActivity} />
 
       {/* Recent Activity */}
       <ActivityTimeline data={data.recentActivity} />

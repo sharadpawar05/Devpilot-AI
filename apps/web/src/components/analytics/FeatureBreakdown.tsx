@@ -1,11 +1,22 @@
 import { memo } from 'react';
-import type { FeatureUsage } from '@/lib/analytics-types';
+import type { FeatureUsageStat } from '@/hooks/use-analytics';
 
 interface FeatureBreakdownProps {
-  data: FeatureUsage[];
+  data: FeatureUsageStat[];
 }
 
 export const FeatureBreakdown = memo(function FeatureBreakdown({ data }: FeatureBreakdownProps) {
+  if (!data || data.length === 0) {
+    return (
+      <div className="rounded-2xl border border-input bg-card p-5 shadow-sm">
+        <h3 className="mb-4 text-sm font-semibold">Feature Usage</h3>
+        <div className="flex items-center justify-center py-8">
+          <p className="text-sm text-muted-foreground">No feature usage data yet</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-2xl border border-input bg-card p-5 shadow-sm">
       <h3 className="mb-4 text-sm font-semibold">Feature Usage</h3>
@@ -15,7 +26,7 @@ export const FeatureBreakdown = memo(function FeatureBreakdown({ data }: Feature
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-sm">{item.feature}</span>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">{item.count}</span>
+                <span className="text-xs text-muted-foreground">{item.count} sessions</span>
                 <span className="text-xs font-medium">{item.percentage}%</span>
               </div>
             </div>

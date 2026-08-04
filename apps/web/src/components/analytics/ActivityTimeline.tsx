@@ -5,23 +5,31 @@ import {
   GitPullRequest,
   FileCode,
   Play,
-  Folder,
+  BookOpen,
+  FlaskConical,
+  Shield,
+  Layout,
   Clock,
   ArrowRight,
 } from 'lucide-react';
-import type { ActivityTimelineItem } from '@/lib/analytics-types';
+import type { AIHistorySessionMetadata, WorkflowType } from '@devpilot/types';
+import { WORKFLOW_TYPE_LABELS } from '@devpilot/types';
 import { cn } from '@/lib/utils';
 
 interface ActivityTimelineProps {
-  data: ActivityTimelineItem[];
+  data: AIHistorySessionMetadata[];
 }
 
-const typeConfig: Record<string, { icon: typeof MessageSquare; color: string; label: string }> = {
-  'repo-chat': { icon: MessageSquare, color: 'bg-emerald-500', label: 'Repository Chat' },
-  'pr-review': { icon: GitPullRequest, color: 'bg-blue-500', label: 'PR Review' },
-  'code-review': { icon: FileCode, color: 'bg-purple-500', label: 'Code Review' },
-  playground: { icon: Play, color: 'bg-pink-500', label: 'Playground' },
-  'repo-analysis': { icon: Folder, color: 'bg-amber-500', label: 'Repository Analysis' },
+const typeConfig: Record<WorkflowType, { icon: typeof MessageSquare; color: string }> = {
+  playground: { icon: Play, color: 'bg-pink-500' },
+  'code-review': { icon: FileCode, color: 'bg-purple-500' },
+  'pr-review': { icon: GitPullRequest, color: 'bg-blue-500' },
+  'pr-analysis': { icon: GitPullRequest, color: 'bg-blue-500' },
+  'repository-chat': { icon: MessageSquare, color: 'bg-emerald-500' },
+  documentation: { icon: BookOpen, color: 'bg-orange-500' },
+  'test-generation': { icon: FlaskConical, color: 'bg-amber-500' },
+  'security-review': { icon: Shield, color: 'bg-red-500' },
+  'architecture-review': { icon: Layout, color: 'bg-indigo-500' },
 };
 
 function formatRelativeTime(dateStr: string): string {
@@ -41,31 +49,39 @@ export const ActivityTimeline = memo(function ActivityTimeline({ data }: Activit
   const navigate = useNavigate();
 
   const handleClick = useCallback(
-    (item: ActivityTimelineItem) => {
-      const routes: Record<string, string> = {
-        'repo-chat': '/repository-chat',
-        'pr-review': '/pull-request-assistant',
-        'code-review': '/code-review',
-        playground: '/playground',
-        'repo-analysis': '/repository-overview',
-      };
-      navigate(routes[item.type] || '/dashboard');
+    (session: AIHistorySessionMetadata) => {
+      navigate(`/history?session=${session.id}`);
     },
     [navigate],
   );
+
+  if (!data || data.length === 0) {
+    return (
+      <div className="rounded-2xl border border-input bg-card p-5 shadow-sm">
+        <h3 className="mb-4 text-sm font-semibold">Recent Activity</h3>
+        <div className="flex flex-col items-center justify-center py-8 text-center">
+          <Clock className="mb-2 h-8 w-8 text-muted-foreground/50" />
+          <p className="text-sm text-muted-foreground">No activity yet</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Start using AI features to see your activity here.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-2xl border border-input bg-card p-5 shadow-sm">
       <h3 className="mb-4 text-sm font-semibold">Recent Activity</h3>
       <div className="relative space-y-3">
         <div className="absolute left-[11px] top-2 h-[calc(100%-16px)] w-px bg-border" />
-        {data.map((item) => {
-          const config = typeConfig[item.type] || typeConfig['code-review'];
+        {data.map((session) => {
+          const config = typeConfig[session.workflowType] || typeConfig.playground;
           const Icon = config.icon;
           return (
             <button
-              key={item.id}
-              onClick={() => handleClick(item)}
+              key={session.id}
+              onClick={() => handleClick(session)}
               className="group relative flex w-full items-start gap-3 rounded-lg p-1 text-left transition-colors hover:bg-muted/30"
             >
               <div
@@ -78,25 +94,21 @@ export const ActivityTimeline = memo(function ActivityTimeline({ data }: Activit
               </div>
               <div className="min-w-0 flex-1 pt-0.5">
                 <p className="text-sm font-medium group-hover:text-primary transition-colors">
-                  {item.title}
+                  {session.title}
                 </p>
                 <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
-                  <span>{config.label}</span>
-                  {item.repository && (
+                  <span>{WORKFLOW_TYPE_LABELS[session.workflowType]}</span>
+                  {session.repository && (
                     <>
                       <span>·</span>
-                      <span className="truncate">{item.repository}</span>
+                      <span className="truncate">{session.repository}</span>
                     </>
                   )}
-                  {item.model && (
-                    <>
-                      <span>·</span>
-                      <span>{item.model}</span>
-                    </>
-                  )}
+                  <span>·</span>
+                  <span>{session.provider}</span>
                   <span className="flex items-center gap-1">
                     <Clock className="h-3 w-3" />
-                    {formatRelativeTime(item.timestamp)}
+                    {formatRelativeTime(session.updatedAt)}
                   </span>
                 </div>
               </div>

@@ -28,7 +28,7 @@ export const MetricCard = memo(function MetricCard({
         >
           {icon}
         </div>
-        {change !== undefined && (
+        {change !== undefined && change !== 0 && (
           <span
             className={cn(
               'inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-medium',
@@ -42,7 +42,7 @@ export const MetricCard = memo(function MetricCard({
             ) : (
               <ArrowDownRight className="h-3 w-3" />
             )}
-            {Math.abs(change)}%
+            {Math.abs(change)}
           </span>
         )}
       </div>

@@ -1,9 +1,32 @@
 import { memo } from 'react';
 import { Clock, Code, GitPullRequest, Bug, FileText, MessageSquare } from 'lucide-react';
-import type { ProductivityMetrics } from '@/lib/analytics-types';
+
+interface AIUsageStats {
+  totalRequests: number;
+  repoChats: number;
+  playgroundSessions: number;
+  codeReviews: number;
+  prReviews: number;
+  repoAnalyses: number;
+  totalTokens: number;
+  avgLatency: number;
+}
 
 interface ProductivityCardProps {
-  data: ProductivityMetrics;
+  aiUsage: AIUsageStats;
+}
+
+function estimateHoursSaved(usage: AIUsageStats): number {
+  const avgMinutesPerTask = 8;
+  return Math.round(((usage.totalRequests * avgMinutesPerTask) / 60) * 10) / 10;
+}
+
+function estimateLinesReviewed(usage: AIUsageStats): number {
+  return usage.codeReviews * 250 + usage.prReviews * 400;
+}
+
+function estimateBugsPrevented(usage: AIUsageStats): number {
+  return Math.round(usage.codeReviews * 0.3 + usage.prReviews * 0.5);
 }
 
 const metrics = [
@@ -15,7 +38,7 @@ const metrics = [
     format: (v: number) => `${v}h`,
   },
   {
-    key: 'codeLinesReviewed' as const,
+    key: 'linesReviewed' as const,
     label: 'Lines Reviewed',
     icon: Code,
     color: 'text-blue-500',
@@ -36,22 +59,31 @@ const metrics = [
     format: (v: number) => `~${v}`,
   },
   {
-    key: 'documentationGenerated' as const,
+    key: 'docsGenerated' as const,
     label: 'Docs Generated',
     icon: FileText,
     color: 'text-orange-500',
     format: (v: number) => v.toString(),
   },
   {
-    key: 'commitMessagesGenerated' as const,
-    label: 'Commits Generated',
+    key: 'sessionsCompleted' as const,
+    label: 'Sessions Completed',
     icon: MessageSquare,
     color: 'text-pink-500',
     format: (v: number) => v.toString(),
   },
 ];
 
-export const ProductivityCard = memo(function ProductivityCard({ data }: ProductivityCardProps) {
+export const ProductivityCard = memo(function ProductivityCard({ aiUsage }: ProductivityCardProps) {
+  const data = {
+    hoursSaved: estimateHoursSaved(aiUsage),
+    linesReviewed: estimateLinesReviewed(aiUsage),
+    prsImproved: aiUsage.prReviews,
+    bugsPrevented: estimateBugsPrevented(aiUsage),
+    docsGenerated: aiUsage.repoAnalyses,
+    sessionsCompleted: aiUsage.totalRequests,
+  };
+
   return (
     <div className="rounded-2xl border border-input bg-card p-5 shadow-sm">
       <h3 className="mb-4 text-sm font-semibold">Productivity Impact</h3>

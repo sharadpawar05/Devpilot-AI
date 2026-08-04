@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import type { DateRange } from '@/lib/analytics-types';
+import type { DateRange } from '@/hooks/use-analytics';
 import { cn } from '@/lib/utils';
 
 interface FilterBarProps {

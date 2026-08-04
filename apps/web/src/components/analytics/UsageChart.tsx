@@ -41,6 +41,17 @@ export const UsageChart = memo(function UsageChart({
   height = 300,
   showLegend,
 }: UsageChartProps) {
+  if (!data || data.length === 0) {
+    return (
+      <div className="rounded-2xl border border-input bg-card p-5 shadow-sm">
+        <h3 className="mb-4 text-sm font-semibold">{title}</h3>
+        <div className="flex items-center justify-center" style={{ height }}>
+          <p className="text-sm text-muted-foreground">No data available</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-2xl border border-input bg-card p-5 shadow-sm">
       <h3 className="mb-4 text-sm font-semibold">{title}</h3>
@@ -114,6 +125,7 @@ export const UsageChart = memo(function UsageChart({
                 outerRadius={90}
                 paddingAngle={3}
                 dataKey={dataKey}
+                nameKey={xKey}
               >
                 {data.map((_, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />

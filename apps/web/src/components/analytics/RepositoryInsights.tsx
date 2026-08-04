@@ -1,18 +1,9 @@
 import { memo } from 'react';
-import {
-  Folder,
-  Shield,
-  GitPullRequest,
-  MessageSquare,
-  FileCode,
-  Clock,
-  Lightbulb,
-} from 'lucide-react';
-import type { RepositoryInsight } from '@/lib/analytics-types';
-import { cn } from '@/lib/utils';
+import { Folder, Clock, MessageSquare, Coins } from 'lucide-react';
+import type { RepositoryActivity } from '@/hooks/use-analytics';
 
 interface RepositoryInsightsProps {
-  data: RepositoryInsight[];
+  data: RepositoryActivity[];
 }
 
 function formatRelativeTime(dateStr: string | null): string {
@@ -32,10 +23,25 @@ function formatRelativeTime(dateStr: string | null): string {
 export const RepositoryInsights = memo(function RepositoryInsights({
   data,
 }: RepositoryInsightsProps) {
+  if (!data || data.length === 0) {
+    return (
+      <div className="rounded-2xl border border-input bg-card p-5 shadow-sm">
+        <h3 className="mb-4 text-sm font-semibold">Repository Activity</h3>
+        <div className="flex flex-col items-center justify-center py-8 text-center">
+          <Folder className="mb-2 h-8 w-8 text-muted-foreground/50" />
+          <p className="text-sm text-muted-foreground">No repository activity yet</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Connect GitHub and start using AI features to see repository insights.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-2xl border border-input bg-card p-5 shadow-sm">
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-sm font-semibold">Repository Insights</h3>
+        <h3 className="text-sm font-semibold">Repository Activity</h3>
         <span className="text-xs text-muted-foreground">{data.length} repositories</span>
       </div>
       <div className="space-y-3">
@@ -49,35 +55,17 @@ export const RepositoryInsights = memo(function RepositoryInsights({
                 <Folder className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm font-medium">{repo.name}</span>
               </div>
-              {repo.healthScore != null && (
-                <span
-                  className={cn(
-                    'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium',
-                    repo.healthScore >= 80
-                      ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                      : repo.healthScore >= 50
-                        ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                        : 'bg-red-500/10 text-red-600 dark:text-red-400',
-                  )}
-                >
-                  <Shield className="h-3 w-3" />
-                  {repo.healthScore}
-                </span>
-              )}
+              <span className="text-xs text-muted-foreground">{repo.sessionCount} sessions</span>
             </div>
 
             <div className="mt-3 flex flex-wrap gap-3 text-xs text-muted-foreground">
               <span className="flex items-center gap-1">
-                <GitPullRequest className="h-3 w-3" />
-                {repo.prReviews} PR reviews
-              </span>
-              <span className="flex items-center gap-1">
                 <MessageSquare className="h-3 w-3" />
-                {repo.repoChats} chats
+                {repo.workflowTypes.length} features used
               </span>
               <span className="flex items-center gap-1">
-                <FileCode className="h-3 w-3" />
-                {repo.codeReviews} reviews
+                <Coins className="h-3 w-3" />
+                {repo.totalTokens.toLocaleString()} tokens
               </span>
               <span className="flex items-center gap-1">
                 <Clock className="h-3 w-3" />
@@ -85,22 +73,16 @@ export const RepositoryInsights = memo(function RepositoryInsights({
               </span>
             </div>
 
-            {repo.topSuggestions.length > 0 && (
-              <div className="mt-3 border-t border-border/50 pt-3">
-                <p className="mb-1.5 flex items-center gap-1 text-xs font-medium text-muted-foreground">
-                  <Lightbulb className="h-3 w-3 text-amber-500" />
-                  Top Suggestions
-                </p>
-                <div className="flex flex-wrap gap-1">
-                  {repo.topSuggestions.map((s, i) => (
-                    <span
-                      key={i}
-                      className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground"
-                    >
-                      {s}
-                    </span>
-                  ))}
-                </div>
+            {repo.workflowTypes.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-1">
+                {repo.workflowTypes.map((wt: string) => (
+                  <span
+                    key={wt}
+                    className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground"
+                  >
+                    {wt}
+                  </span>
+                ))}
               </div>
             )}
           </div>

@@ -182,3 +182,9 @@ export function useSettings() {
   }
   return context;
 }
+
+export function useSettingsState(): SettingsState {
+  const context = useContext(SettingsContext);
+  if (context) return context.settings;
+  return loadSettings();
+}
