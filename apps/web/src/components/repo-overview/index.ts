@@ -8,6 +8,7 @@ export {
   MetricCardSkeleton,
   OverviewHeaderSkeleton,
   SummarySkeleton,
+  TechStackSkeleton,
   LanguageSkeleton,
   TreeSkeleton,
   HealthSkeleton,
