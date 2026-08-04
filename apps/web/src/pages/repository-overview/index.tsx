@@ -33,8 +33,9 @@ import {
   ContributorList,
   FullPageSkeleton,
   GenerationModal,
+  TechnologyStackCard,
 } from '@/components/repo-overview';
-import type { RepoOverviewData, HealthActionType } from '@/lib/repo-overview';
+import type { RepoOverviewData, HealthActionType, TechnologyStack } from '@/lib/repo-overview';
 
 function formatSize(kb: number): string {
   if (kb >= 1024 * 1024) return `${(kb / (1024 * 1024)).toFixed(1)} GB`;
@@ -143,6 +144,8 @@ export default function RepositoryOverviewPage() {
     open: boolean;
     actionType: HealthActionType;
   }>({ open: false, actionType: 'none' });
+  const [techStack, setTechStack] = useState<TechnologyStack | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const owner = selectedRepo.split('/')[0] || '';
   const repo = selectedRepo.split('/')[1] || '';
@@ -199,11 +202,28 @@ export default function RepositoryOverviewPage() {
     }
   }, [owner, repo, token]);
 
+  const fetchTechStack = useCallback(async () => {
+    if (!owner || !repo || !token) return;
+
+    setIsAnalyzing(true);
+    try {
+      const result = await repoOverviewApi.analyze(owner, repo, token);
+      if (result.success && result.stack) {
+        setTechStack(result.stack);
+      }
+    } catch {
+      // Silently fail - tech stack is non-critical
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }, [owner, repo, token]);
+
   useEffect(() => {
     if (owner && repo && token) {
       fetchOverview();
+      fetchTechStack();
     }
-  }, [owner, repo, token, fetchOverview]);
+  }, [owner, repo, token, fetchOverview, fetchTechStack]);
 
   useEffect(() => {
     if (owner && repo && token) {
@@ -218,6 +238,7 @@ export default function RepositoryOverviewPage() {
       setOverviewData(null);
       setSummary(null);
       setError(null);
+      setTechStack(null);
       if (fullName) {
         const [o, r] = fullName.split('/');
         gh.fetchBranches(o, r);
@@ -231,6 +252,7 @@ export default function RepositoryOverviewPage() {
     setOverviewData(null);
     setSummary(null);
     setError(null);
+    setTechStack(null);
   }, []);
 
   const handleGenerate = useCallback((actionType: HealthActionType) => {
@@ -480,6 +502,14 @@ export default function RepositoryOverviewPage() {
         )}
       </div>
 
+      {/* Technology Stack */}
+      {(techStack || isAnalyzing) && (
+        <TechnologyStackCard
+          stack={techStack || {}}
+          className={isAnalyzing ? 'animate-pulse' : ''}
+        />
+      )}
+
       {/* Content Grid: Structure + Languages + Health */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Repository Structure */}
@@ -513,8 +543,9 @@ export default function RepositoryOverviewPage() {
           <div className="rounded-lg border bg-card p-6">
             <h2 className="mb-4 text-lg font-semibold flex items-center gap-2">
               <Code className="h-5 w-5 text-muted-foreground" />
-              Languages
+              Programming Languages
             </h2>
+            <p className="mb-3 text-xs text-muted-foreground">GitHub language statistics</p>
             {overviewData?.languages && Object.keys(overviewData.languages).length > 0 ? (
               <LanguageBar languages={overviewData.languages} />
             ) : (

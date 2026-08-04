@@ -5,6 +5,7 @@ import { getOctokit } from '@/core/github';
 import { aiService } from '@/core/ai/service';
 import { repoOverviewService } from './overview-service';
 import { generatorService } from './generator-service';
+import { repositoryAnalyzer } from './analyzer-service';
 import type { HealthActionType } from './types';
 
 const overviewQuerySchema = z.object({
@@ -367,6 +368,43 @@ Keep each section concise (2-4 sentences). Use markdown headers and bullet point
         return reply.status(500).send({
           success: false,
           error: { message: err.message || 'Failed to fetch contributors' },
+        });
+      }
+    },
+  );
+
+  // ─── Technology Analyzer ─────────────────────────────────────────────────
+
+  app.get(
+    '/repo-overview/analyze',
+    {
+      preHandler: [authenticate],
+      schema: {
+        description: 'Analyze repository technology stack',
+        tags: ['repo-overview'],
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (request, reply) => {
+      const auth = (request as { auth: { sub: string } }).auth;
+      const parsed = overviewQuerySchema.safeParse(request.query);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          success: false,
+          error: { message: parsed.error.errors[0].message },
+        });
+      }
+
+      const { owner, repo } = parsed.data;
+
+      try {
+        const stack = await repositoryAnalyzer.analyze(auth.sub, owner, repo);
+        return reply.send({ success: true, stack });
+      } catch (error: unknown) {
+        const err = error as { status?: number; message?: string };
+        return reply.status(err.status || 500).send({
+          success: false,
+          error: { message: err.message || 'Failed to analyze repository' },
         });
       }
     },

@@ -1,6 +1,7 @@
 import type { RepoOverviewData, RepoFileNode, RepoContributor } from './types';
 import type { GenerationResult, GenerationError } from './generators';
 import type { HealthActionType } from './types';
+import type { TechnologyStack } from './analyzer';
 
 const API_BASE = '/api/v1';
 
@@ -174,6 +175,26 @@ export const repoOverviewApi = {
           message: error instanceof Error ? error.message : 'Network error',
         },
       };
+    }
+  },
+
+  async analyze(
+    owner: string,
+    repo: string,
+    token?: string,
+  ): Promise<{ success: boolean; stack?: TechnologyStack; error?: string }> {
+    const params = new URLSearchParams({ owner, repo });
+    try {
+      const res = await authFetch(`${API_BASE}/repo-overview/analyze?${params}`, token);
+      const json = await safeJson(res);
+      if (!json.success)
+        return {
+          success: false,
+          error: (json.error as { message?: string })?.message || 'Failed to analyze repository',
+        };
+      return { success: true, stack: json.stack as TechnologyStack };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Network error' };
     }
   },
 };

@@ -21,3 +21,5 @@ export type {
   GenerationState,
 } from './generators';
 export { GENERATOR_LABELS, GENERATOR_FILE_ICONS } from './generators';
+export type { TechCategory, DetectedTech, TechnologyStack } from './analyzer';
+export { CATEGORY_META, CATEGORY_ORDER, STACK_KEY_MAP, getConfidenceColor } from './analyzer';
