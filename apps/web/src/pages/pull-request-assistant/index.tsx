@@ -5,10 +5,7 @@ import {
   ChevronDown,
   Send,
   Loader2,
-  Check,
   Copy,
-  Download,
-  GitPullRequest,
   FileCode,
   ExternalLink,
   FileText,
@@ -23,14 +20,13 @@ import {
   type GitHubReviewResponse,
   type GitHubAnalyzeResponse,
 } from '@/hooks/use-github';
-import {
-  renderMarkdown,
-  extractSections,
-  extractScore,
-  getScoreColor,
-  getScoreLabel,
-  getScoreBg,
-} from '@/lib/markdown';
+import { useCopyResponse } from '@/hooks/use-keyboard-shortcuts';
+import { renderMarkdown, extractSections } from '@/lib/markdown';
+import { WorkspaceLayout } from '@/components/workspace/WorkspaceLayout';
+import { PageHeader } from '@/components/workspace/PageHeader';
+import { ResponseActionBar } from '@/components/workspace/ResponseActionBar';
+import { EmptyState } from '@/components/shared/EmptyState';
+import { PRLoadingSteps } from '@/components/shared/LoadingSteps';
 
 const selectClass =
   'w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
@@ -54,14 +50,6 @@ const REVIEW_DEPTHS = [
   { value: 'Deep', label: 'Deep' },
 ] as const;
 
-const PROGRESS_MESSAGES = [
-  'Loading Pull Request...',
-  'Analyzing files...',
-  'Generating review...',
-  'Preparing documentation...',
-  'Building checklists...',
-];
-
 const TAB_ITEMS = [
   { id: 'overview', label: 'Overview', icon: BarChart3 },
   { id: 'review', label: 'AI Review', icon: FileCode },
@@ -71,51 +59,6 @@ const TAB_ITEMS = [
 ] as const;
 
 type TabId = 'overview' | 'review' | 'docs' | 'quality' | 'metrics';
-
-function LoadingProgress() {
-  const [messageIndex, setMessageIndex] = useState(0);
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setMessageIndex((prev) => (prev + 1) % PROGRESS_MESSAGES.length);
-    }, 3000);
-    return () => clearInterval(interval);
-  }, []);
-  return (
-    <div className="flex h-full min-h-[300px] items-center justify-center">
-      <div className="text-center">
-        <Loader2 className="mx-auto mb-3 h-8 w-8 animate-spin text-primary" />
-        <p className="text-sm font-medium">{PROGRESS_MESSAGES[messageIndex]}</p>
-        <div className="mt-3 flex justify-center gap-1">
-          {PROGRESS_MESSAGES.map((_, i) => (
-            <div
-              key={i}
-              className={`h-1.5 w-1.5 rounded-full transition-colors ${i === messageIndex ? 'bg-primary' : 'bg-muted'}`}
-            />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function CopyButton({ text, label }: { text: string; label?: string }) {
-  const [copied, setCopied] = useState(false);
-  const handleCopy = useCallback(async () => {
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }, [text]);
-  return (
-    <button
-      type="button"
-      onClick={handleCopy}
-      className="flex items-center gap-1.5 rounded-md border border-input bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-    >
-      {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
-      {copied ? 'Copied!' : (label ?? 'Copy')}
-    </button>
-  );
-}
 
 function MarkdownContent({ text }: { text: string }) {
   const html = useMemo(() => renderMarkdown(text), [text]);
@@ -302,28 +245,11 @@ function extractExecutiveSummary(text: string): string {
   return firstSection ? firstSection.split('\n').slice(1).join('\n').trim() : text.slice(0, 500);
 }
 
-function DownloadButton({ text, filename }: { text: string; filename: string }) {
-  const handleDownload = useCallback(() => {
-    const blob = new Blob([text], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [text, filename]);
-
-  return (
-    <button
-      type="button"
-      onClick={handleDownload}
-      className="flex items-center gap-1.5 rounded-md border border-input bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-    >
-      <Download className="h-3.5 w-3.5" />
-      .md
-    </button>
-  );
-}
+const PR_FEATURES = [
+  { icon: BarChart3, label: 'Full Analysis' },
+  { icon: FileCode, label: 'Code Review' },
+  { icon: FileText, label: 'Documentation' },
+];
 
 export function PullRequestAssistantPage() {
   const gh = useGitHub();
@@ -342,11 +268,6 @@ export function PullRequestAssistantPage() {
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const score = useMemo(() => {
-    const result = analysisType === 'full' ? analyzeResult?.response : reviewResult?.response;
-    return result ? extractScore(result) : null;
-  }, [analysisType, analyzeResult, reviewResult]);
-
   const activeResponse = useMemo(() => {
     if (analysisType === 'full' && analyzeResult) return analyzeResult.response;
     if (analysisType === 'review' && reviewResult) return reviewResult.response;
@@ -357,7 +278,11 @@ export function PullRequestAssistantPage() {
     return activeResponse ? extractSections(activeResponse) : [];
   }, [activeResponse]);
 
-  // Clear local state when GitHub is disconnected
+  useCopyResponse({
+    getContent: () => activeResponse ?? undefined,
+    enabled: !!activeResponse,
+  });
+
   useEffect(() => {
     if (!gh.connected) {
       setSelectedRepo(null);
@@ -369,7 +294,6 @@ export function PullRequestAssistantPage() {
     }
   }, [gh.connected]);
 
-  // Restore selected repo from localStorage when repositories load
   useEffect(() => {
     if (gh.selectedRepoName && gh.repositories.length > 0 && !selectedRepo) {
       const stored = gh.repositories.find((r) => r.full_name === gh.selectedRepoName);
@@ -382,7 +306,6 @@ export function PullRequestAssistantPage() {
     }
   }, [gh.selectedRepoName, gh.repositories, selectedRepo, gh.fetchBranches, gh.fetchPulls]);
 
-  // Restore selected PR from localStorage when pulls load
   useEffect(() => {
     if (gh.selectedPRNumber !== null && gh.pulls.length > 0 && !selectedPR) {
       const stored = gh.pulls.find((p) => p.number === gh.selectedPRNumber);
@@ -542,520 +465,432 @@ export function PullRequestAssistantPage() {
     [activeResponse, activeSections],
   );
 
-  return (
-    <div className="flex h-full">
-      {/* Left Panel */}
-      <div className="flex w-80 flex-1 flex-col overflow-y-auto border-r border-input">
-        <div className="flex-1 p-6">
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold">PR Assistant</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              AI-powered pull request analysis and documentation.
-            </p>
-          </div>
+  const responseMetadata = useMemo(() => {
+    const result = analysisType === 'full' ? analyzeResult : reviewResult;
+    if (!result) return null;
+    return {
+      provider: result.provider,
+      model: result.model,
+      latencyMs: result.latencyMs,
+      tokens: result.usage,
+    };
+  }, [analysisType, analyzeResult, reviewResult]);
 
-          <div className="space-y-4">
-            {/* GitHub Account Section */}
-            <div className="rounded-md border border-input p-4">
-              <h3 className="mb-3 text-sm font-medium">GitHub Account</h3>
-              {gh.connected && gh.githubUser ? (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="relative">
-                        <img
-                          src={gh.githubUser.avatar_url}
-                          alt={gh.githubUser.login}
-                          className="h-10 w-10 rounded-full"
-                        />
-                        <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background bg-green-500" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium">
-                          {gh.githubUser.name || gh.githubUser.login}
-                        </p>
-                        <p className="text-xs text-muted-foreground">@{gh.githubUser.login}</p>
-                      </div>
-                    </div>
-                    <span className="rounded-full bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-600 dark:text-green-400">
-                      Connected
-                    </span>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={gh.disconnect}
-                    disabled={gh.disconnecting}
-                    className="w-full"
-                  >
-                    {gh.disconnecting ? (
-                      <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                    ) : (
-                      <Unlink className="mr-1 h-3 w-3" />
-                    )}
-                    {gh.disconnecting ? 'Disconnecting...' : 'Disconnect'}
-                  </Button>
-                </div>
-              ) : (
-                <Button variant="outline" onClick={handleConnect} disabled={connecting}>
-                  {connecting ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Github className="mr-2 h-4 w-4" />
-                  )}
-                  {connecting ? 'Connecting...' : 'Connect GitHub'}
-                </Button>
-              )}
-            </div>
-
-            {/* Repository Selector */}
-            {gh.connected && (
-              <div className="space-y-1.5">
-                <label htmlFor="repo" className="text-sm font-medium">
-                  Repository
-                </label>
-                <div className="relative">
-                  <select
-                    id="repo"
-                    value={selectedRepo?.full_name ?? ''}
-                    onChange={(e) => handleRepoSelect(e.target.value)}
-                    className={`${selectClass} appearance-none pr-10`}
-                  >
-                    <option value="">Select a repository...</option>
-                    {gh.repositories.map((r) => (
-                      <option key={r.full_name} value={r.full_name}>
-                        {r.full_name} {r.private ? '(private)' : ''}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                </div>
-              </div>
-            )}
-
-            {/* PR Selector */}
-            {gh.connected && selectedRepo && (
-              <div className="space-y-1.5">
-                <label htmlFor="pr" className="text-sm font-medium">
-                  Pull Request
-                </label>
-                <div className="relative">
-                  <select
-                    id="pr"
-                    value={selectedPR?.number ?? ''}
-                    onChange={(e) => handlePRSelect(Number(e.target.value))}
-                    className={`${selectClass} appearance-none pr-10`}
-                  >
-                    <option value="">Select a PR...</option>
-                    {gh.pulls.map((p) => (
-                      <option key={p.number} value={p.number}>
-                        #{p.number} - {p.title}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                </div>
-              </div>
-            )}
-
-            {/* PR Info */}
-            {selectedPR && (
-              <div className="rounded-md border border-input p-3">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-sm font-medium">
-                      #{selectedPR.number} - {selectedPR.title}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      by {selectedPR.user} | +{selectedPR.additions} -{selectedPR.deletions} |{' '}
-                      {selectedPR.changed_files} files
-                    </p>
-                  </div>
-                  <a
-                    href={selectedPR.html_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-muted-foreground hover:text-foreground"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                  </a>
-                </div>
-              </div>
-            )}
-
-            {/* Files Changed */}
-            {gh.files.length > 0 && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium">Files Changed ({gh.files.length})</label>
-                  <button
-                    type="button"
-                    onClick={handleSelectAllFiles}
-                    className="text-xs text-muted-foreground hover:text-foreground"
-                  >
-                    {selectedFiles.size === gh.files.length ? 'Deselect All' : 'Select All'}
-                  </button>
-                </div>
-                <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-input p-2">
-                  {gh.files.map((f) => (
-                    <div
-                      key={f.filename}
-                      className="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-accent"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedFiles.has(f.filename)}
-                        onChange={() => handleFileToggle(f.filename)}
-                        className="h-3.5 w-3.5"
-                      />
-                      <FileCode className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      <span className="flex-1 truncate font-mono text-xs">{f.filename}</span>
-                      <span className="text-xs text-green-500">+{f.additions}</span>
-                      <span className="text-xs text-red-500">-{f.deletions}</span>
-                    </div>
-                  ))}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {selectedFiles.size === 0
-                    ? 'All files will be analyzed'
-                    : `${selectedFiles.size} file(s) selected for review`}
-                </p>
-              </div>
-            )}
-
-            {/* Analysis Options */}
-            {selectedPR && (
+  const leftPanel = (
+    <>
+      <PageHeader
+        title="PR Assistant"
+        description="AI-powered pull request analysis and documentation."
+      />
+      <div className="flex-1 overflow-y-auto p-6">
+        <div className="space-y-4">
+          <div className="rounded-md border border-input p-4">
+            <h3 className="mb-3 text-sm font-medium">GitHub Account</h3>
+            {gh.connected && gh.githubUser ? (
               <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <label htmlFor="analysisType" className="text-sm font-medium">
-                    Analysis Type
-                  </label>
-                  <div className="relative">
-                    <select
-                      id="analysisType"
-                      value={analysisType}
-                      onChange={(e) => setAnalysisType(e.target.value as 'full' | 'review')}
-                      className={`${selectClass} appearance-none pr-10`}
-                    >
-                      {ANALYSIS_TYPES.map((at) => (
-                        <option key={at.value} value={at.value}>
-                          {at.label}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  </div>
-                </div>
-
-                {analysisType === 'review' && (
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <label htmlFor="reviewType" className="text-sm font-medium">
-                        Type
-                      </label>
-                      <div className="relative">
-                        <select
-                          id="reviewType"
-                          value={reviewType}
-                          onChange={(e) => setReviewType(e.target.value)}
-                          className={`${selectClass} appearance-none pr-10`}
-                        >
-                          {REVIEW_TYPES.map((rt) => (
-                            <option key={rt.value} value={rt.value}>
-                              {rt.label}
-                            </option>
-                          ))}
-                        </select>
-                        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                      </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      <img
+                        src={gh.githubUser.avatar_url}
+                        alt={gh.githubUser.login}
+                        className="h-10 w-10 rounded-full"
+                      />
+                      <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background bg-green-500" />
                     </div>
-                    <div className="space-y-1.5">
-                      <label htmlFor="reviewDepth" className="text-sm font-medium">
-                        Depth
-                      </label>
-                      <div className="relative">
-                        <select
-                          id="reviewDepth"
-                          value={reviewDepth}
-                          onChange={(e) => setReviewDepth(e.target.value)}
-                          className={`${selectClass} appearance-none pr-10`}
-                        >
-                          {REVIEW_DEPTHS.map((d) => (
-                            <option key={d.value} value={d.value}>
-                              {d.label}
-                            </option>
-                          ))}
-                        </select>
-                        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                      </div>
+                    <div>
+                      <p className="text-sm font-medium">
+                        {gh.githubUser.name || gh.githubUser.login}
+                      </p>
+                      <p className="text-xs text-muted-foreground">@{gh.githubUser.login}</p>
                     </div>
                   </div>
-                )}
-
-                <div className="space-y-1.5">
-                  <label htmlFor="provider" className="text-sm font-medium">
-                    Provider
-                  </label>
-                  <div className="relative">
-                    <select
-                      id="provider"
-                      value={provider}
-                      onChange={(e) => setProvider(e.target.value)}
-                      className={`${selectClass} appearance-none pr-10`}
-                    >
-                      <option value="gemini">Gemini</option>
-                      <option value="openai">OpenAI</option>
-                      <option value="anthropic">Anthropic</option>
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  </div>
+                  <span className="rounded-full bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-600 dark:text-green-400">
+                    Connected
+                  </span>
                 </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={gh.disconnect}
+                  disabled={gh.disconnecting}
+                  className="w-full"
+                >
+                  {gh.disconnecting ? (
+                    <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                  ) : (
+                    <Unlink className="mr-1 h-3 w-3" />
+                  )}
+                  {gh.disconnecting ? 'Disconnecting...' : 'Disconnect'}
+                </Button>
               </div>
-            )}
-
-            {/* Analyze Button */}
-            {selectedPR && (
-              <Button onClick={handleAnalyze} disabled={!canAnalyze} className="w-full">
-                {analyzing ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Analyzing...
-                  </>
+            ) : (
+              <Button variant="outline" onClick={handleConnect} disabled={connecting}>
+                {connecting ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
-                  <>
-                    <Send className="mr-2 h-4 w-4" /> Analyze PR
-                  </>
+                  <Github className="mr-2 h-4 w-4" />
                 )}
+                {connecting ? 'Connecting...' : 'Connect GitHub'}
               </Button>
             )}
-
-            {/* Error */}
-            {error && (
-              <div
-                className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive"
-                role="alert"
-              >
-                {error}
-              </div>
-            )}
           </div>
-        </div>
-      </div>
 
-      {/* Right Panel - Results */}
-      <div className="flex flex-1 flex-col overflow-y-auto">
-        <div className="flex-1 p-6">
-          {/* Tabs */}
-          {hasResult && (
-            <div className="mb-6 flex flex-wrap gap-1 rounded-md border border-input bg-muted/30 p-1">
-              {TAB_ITEMS.map((tab) => {
-                const Icon = tab.icon;
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                      activeTab === tab.id
-                        ? 'bg-background text-foreground shadow-sm'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    <Icon className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">{tab.label}</span>
-                  </button>
-                );
-              })}
+          {gh.connected && (
+            <div className="space-y-1.5">
+              <label htmlFor="repo" className="text-sm font-medium">
+                Repository
+              </label>
+              <div className="relative">
+                <select
+                  id="repo"
+                  value={selectedRepo?.full_name ?? ''}
+                  onChange={(e) => handleRepoSelect(e.target.value)}
+                  className={`${selectClass} appearance-none pr-10`}
+                >
+                  <option value="">Select a repository...</option>
+                  {gh.repositories.map((r) => (
+                    <option key={r.full_name} value={r.full_name}>
+                      {r.full_name} {r.private ? '(private)' : ''}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              </div>
             </div>
           )}
 
-          {/* Metrics Bar */}
-          {hasResult && (
-            <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
-              {score !== null && (
-                <div className={`rounded-md border p-3 text-center ${getScoreBg(score)}`}>
-                  <p className="text-xs text-muted-foreground">Score</p>
-                  <p className={`text-xl font-bold ${getScoreColor(score)}`}>{score}/10</p>
-                  <p className={`text-xs font-medium ${getScoreColor(score)}`}>
-                    {getScoreLabel(score)}
+          {gh.connected && selectedRepo && (
+            <div className="space-y-1.5">
+              <label htmlFor="pr" className="text-sm font-medium">
+                Pull Request
+              </label>
+              <div className="relative">
+                <select
+                  id="pr"
+                  value={selectedPR?.number ?? ''}
+                  onChange={(e) => handlePRSelect(Number(e.target.value))}
+                  className={`${selectClass} appearance-none pr-10`}
+                >
+                  <option value="">Select a PR...</option>
+                  {gh.pulls.map((p) => (
+                    <option key={p.number} value={p.number}>
+                      #{p.number} - {p.title}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              </div>
+            </div>
+          )}
+
+          {selectedPR && (
+            <div className="rounded-md border border-input p-3">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-sm font-medium">
+                    #{selectedPR.number} - {selectedPR.title}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    by {selectedPR.user} | +{selectedPR.additions} -{selectedPR.deletions} |{' '}
+                    {selectedPR.changed_files} files
                   </p>
                 </div>
+                <a
+                  href={selectedPR.html_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+              </div>
+            </div>
+          )}
+
+          {gh.files.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">Files Changed ({gh.files.length})</label>
+                <button
+                  type="button"
+                  onClick={handleSelectAllFiles}
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                >
+                  {selectedFiles.size === gh.files.length ? 'Deselect All' : 'Select All'}
+                </button>
+              </div>
+              <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-input p-2">
+                {gh.files.map((f) => (
+                  <div
+                    key={f.filename}
+                    className="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-accent"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedFiles.has(f.filename)}
+                      onChange={() => handleFileToggle(f.filename)}
+                      className="h-3.5 w-3.5"
+                    />
+                    <FileCode className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    <span className="flex-1 truncate font-mono text-xs">{f.filename}</span>
+                    <span className="text-xs text-green-500">+{f.additions}</span>
+                    <span className="text-xs text-red-500">-{f.deletions}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {selectedFiles.size === 0
+                  ? 'All files will be analyzed'
+                  : `${selectedFiles.size} file(s) selected for review`}
+              </p>
+            </div>
+          )}
+
+          {selectedPR && (
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <label htmlFor="analysisType" className="text-sm font-medium">
+                  Analysis Type
+                </label>
+                <div className="relative">
+                  <select
+                    id="analysisType"
+                    value={analysisType}
+                    onChange={(e) => setAnalysisType(e.target.value as 'full' | 'review')}
+                    className={`${selectClass} appearance-none pr-10`}
+                  >
+                    {ANALYSIS_TYPES.map((at) => (
+                      <option key={at.value} value={at.value}>
+                        {at.label}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                </div>
+              </div>
+
+              {analysisType === 'review' && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label htmlFor="reviewType" className="text-sm font-medium">
+                      Type
+                    </label>
+                    <div className="relative">
+                      <select
+                        id="reviewType"
+                        value={reviewType}
+                        onChange={(e) => setReviewType(e.target.value)}
+                        className={`${selectClass} appearance-none pr-10`}
+                      >
+                        {REVIEW_TYPES.map((rt) => (
+                          <option key={rt.value} value={rt.value}>
+                            {rt.label}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="reviewDepth" className="text-sm font-medium">
+                      Depth
+                    </label>
+                    <div className="relative">
+                      <select
+                        id="reviewDepth"
+                        value={reviewDepth}
+                        onChange={(e) => setReviewDepth(e.target.value)}
+                        className={`${selectClass} appearance-none pr-10`}
+                      >
+                        {REVIEW_DEPTHS.map((d) => (
+                          <option key={d.value} value={d.value}>
+                            {d.label}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    </div>
+                  </div>
+                </div>
               )}
-              <div className="rounded-md border border-input p-3 text-center">
+
+              <div className="space-y-1.5">
+                <label htmlFor="provider" className="text-sm font-medium">
+                  Provider
+                </label>
+                <div className="relative">
+                  <select
+                    id="provider"
+                    value={provider}
+                    onChange={(e) => setProvider(e.target.value)}
+                    className={`${selectClass} appearance-none pr-10`}
+                  >
+                    <option value="gemini">Gemini</option>
+                    <option value="openai">OpenAI</option>
+                    <option value="anthropic">Anthropic</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {selectedPR && (
+            <Button onClick={handleAnalyze} disabled={!canAnalyze} className="w-full">
+              {analyzing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Analyzing...
+                </>
+              ) : (
+                <>
+                  <Send className="mr-2 h-4 w-4" /> Analyze PR
+                </>
+              )}
+            </Button>
+          )}
+
+          {error && (
+            <div
+              className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive"
+              role="alert"
+            >
+              {error}
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+
+  const rightPanel = (
+    <>
+      {hasResult && (
+        <div className="mb-4 flex flex-wrap gap-1 border-b border-border bg-muted/30 p-1">
+          {TAB_ITEMS.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  activeTab === tab.id
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {hasResult && responseMetadata && (
+        <ResponseActionBar
+          metadata={responseMetadata}
+          responseContent={activeResponse ?? undefined}
+          filename={`pr-${activeTab}.md`}
+          showTimestamp
+          compact
+        />
+      )}
+
+      {hasResult && activeTab === 'overview' && (
+        <div className="p-4">
+          <OverviewTab
+            analyzeResult={analyzeResult}
+            selectedRepo={selectedRepo}
+            selectedPR={selectedPR}
+            selectedFiles={selectedFiles}
+            files={gh.files}
+          />
+        </div>
+      )}
+
+      {hasResult && activeTab !== 'overview' && activeTab !== 'metrics' && (
+        <div className="p-4">
+          <MarkdownContent text={getActiveResultForTab(activeTab) ?? ''} />
+        </div>
+      )}
+
+      {hasResult && activeTab === 'metrics' && (
+        <div className="space-y-4 p-4">
+          <div className="rounded-md border border-input p-4">
+            <h3 className="mb-3 text-sm font-semibold">AI Generation Metrics</h3>
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+              <div>
                 <p className="text-xs text-muted-foreground">Provider</p>
-                <p className="mt-1 text-sm font-semibold capitalize">
-                  {analyzeResult?.provider ?? reviewResult?.provider ?? provider}
+                <p className="text-sm font-medium capitalize">
+                  {analyzeResult?.provider ?? reviewResult?.provider}
                 </p>
               </div>
-              <div className="rounded-md border border-input p-3 text-center">
+              <div>
+                <p className="text-xs text-muted-foreground">Model</p>
+                <p className="text-sm font-medium">{analyzeResult?.model ?? reviewResult?.model}</p>
+              </div>
+              <div>
                 <p className="text-xs text-muted-foreground">Latency</p>
-                <p className="mt-1 text-sm font-semibold">
-                  {((analyzeResult?.latencyMs ?? reviewResult?.latencyMs ?? 0) / 1000).toFixed(1)}s
+                <p className="text-sm font-medium">
+                  {((analyzeResult?.latencyMs ?? reviewResult?.latencyMs ?? 0) / 1000).toFixed(2)}s
                 </p>
               </div>
-              <div className="rounded-md border border-input p-3 text-center">
-                <p className="text-xs text-muted-foreground">Tokens</p>
-                <p className="mt-1 text-sm font-semibold">
+              <div>
+                <p className="text-xs text-muted-foreground">Input Tokens</p>
+                <p className="text-sm font-medium">
+                  {(analyzeResult?.usage.input ?? reviewResult?.usage.input ?? 0).toLocaleString()}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Output Tokens</p>
+                <p className="text-sm font-medium">
+                  {(
+                    analyzeResult?.usage.output ??
+                    reviewResult?.usage.output ??
+                    0
+                  ).toLocaleString()}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Total Tokens</p>
+                <p className="text-sm font-medium">
                   {(analyzeResult?.usage.total ?? reviewResult?.usage.total ?? 0).toLocaleString()}
                 </p>
               </div>
-              <div className="rounded-md border border-input p-3 text-center">
-                <p className="text-xs text-muted-foreground">Files</p>
-                <p className="mt-1 text-sm font-semibold">
-                  {analyzeResult?.pr.filesChanged ??
-                    reviewResult?.pr.filesChanged ??
-                    selectedPR?.changed_files ??
-                    0}
-                </p>
-              </div>
             </div>
-          )}
-
-          {/* Tab Content */}
-          {hasResult && activeTab === 'overview' && (
-            <div className="rounded-md border border-input bg-muted/20">
-              <div className="flex items-center justify-between border-b border-input px-4 py-2">
-                <span className="text-sm font-medium">
-                  <BarChart3 className="mr-1 inline h-4 w-4" />
-                  Overview
-                </span>
-                <div className="flex items-center gap-1">
-                  <CopyButton text={activeResponse ?? ''} />
-                  <DownloadButton text={activeResponse ?? ''} filename="pr-overview.md" />
-                </div>
-              </div>
-              <div className="p-4">
-                <OverviewTab
-                  analyzeResult={analyzeResult}
-                  selectedRepo={selectedRepo}
-                  selectedPR={selectedPR}
-                  selectedFiles={selectedFiles}
-                  files={gh.files}
-                />
-              </div>
-            </div>
-          )}
-
-          {hasResult && activeTab !== 'overview' && activeTab !== 'metrics' && (
-            <div className="rounded-md border border-input bg-muted/20">
-              <div className="flex items-center justify-between border-b border-input px-4 py-2">
-                <span className="text-sm font-medium">
-                  {TAB_ITEMS.find((t) => t.id === activeTab)?.icon &&
-                    (() => {
-                      const Icon = TAB_ITEMS.find((t) => t.id === activeTab)!.icon;
-                      return <Icon className="mr-1 inline h-4 w-4" />;
-                    })()}
-                  {TAB_ITEMS.find((t) => t.id === activeTab)?.label}
-                </span>
-                <div className="flex items-center gap-1">
-                  <CopyButton text={getActiveResultForTab(activeTab) ?? ''} />
-                  <DownloadButton
-                    text={getActiveResultForTab(activeTab) ?? ''}
-                    filename={`pr-${activeTab}.md`}
-                  />
-                </div>
-              </div>
-              <div className="p-4">
-                <MarkdownContent text={getActiveResultForTab(activeTab) ?? ''} />
-              </div>
-            </div>
-          )}
-
-          {hasResult && activeTab === 'metrics' && (
-            <div className="space-y-4">
-              <div className="rounded-md border border-input p-4">
-                <h3 className="mb-3 text-sm font-semibold">AI Generation Metrics</h3>
-                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Provider</p>
-                    <p className="text-sm font-medium capitalize">
-                      {analyzeResult?.provider ?? reviewResult?.provider}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Model</p>
-                    <p className="text-sm font-medium">
-                      {analyzeResult?.model ?? reviewResult?.model}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Latency</p>
-                    <p className="text-sm font-medium">
-                      {((analyzeResult?.latencyMs ?? reviewResult?.latencyMs ?? 0) / 1000).toFixed(
-                        2,
-                      )}
-                      s
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Input Tokens</p>
-                    <p className="text-sm font-medium">
-                      {(
-                        analyzeResult?.usage.input ??
-                        reviewResult?.usage.input ??
-                        0
-                      ).toLocaleString()}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Output Tokens</p>
-                    <p className="text-sm font-medium">
-                      {(
-                        analyzeResult?.usage.output ??
-                        reviewResult?.usage.output ??
-                        0
-                      ).toLocaleString()}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Total Tokens</p>
-                    <p className="text-sm font-medium">
-                      {(
-                        analyzeResult?.usage.total ??
-                        reviewResult?.usage.total ??
-                        0
-                      ).toLocaleString()}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Timestamp</p>
-                    <p className="text-sm font-medium">{new Date().toLocaleString()}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Review Duration</p>
-                    <p className="text-sm font-medium">
-                      {((analyzeResult?.latencyMs ?? reviewResult?.latencyMs ?? 0) / 1000).toFixed(
-                        1,
-                      )}
-                      s
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Truncated</p>
-                    <p className="text-sm font-medium">{analyzeResult?.truncated ? 'Yes' : 'No'}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Loading */}
-          {(analyzing || gh.loading) && !hasResult && <LoadingProgress />}
-
-          {/* Empty state */}
-          {!hasResult && !error && !analyzing && !gh.loading && (
-            <div className="flex h-full min-h-[300px] items-center justify-center rounded-md border border-dashed text-muted-foreground">
-              <div className="text-center">
-                <GitPullRequest className="mx-auto mb-2 h-6 w-6" />
-                <p className="text-sm">
-                  {gh.connected
-                    ? 'Select a repository and PR to get started'
-                    : 'Connect your GitHub account to get started'}
-                </p>
-              </div>
-            </div>
-          )}
+          </div>
         </div>
-      </div>
-    </div>
+      )}
+
+      {analyzing && !hasResult && <PRLoadingSteps className="flex-1" />}
+
+      {!hasResult && !error && !analyzing && !gh.loading && (
+        <div className="flex flex-1 items-center justify-center p-8">
+          <EmptyState
+            title={gh.connected ? 'Select a repository and PR' : 'Connect your GitHub account'}
+            description={
+              gh.connected
+                ? 'Choose a repository and pull request to get AI-powered analysis.'
+                : 'Connect your GitHub account to analyze pull requests.'
+            }
+            variant="pr-assistant"
+            features={PR_FEATURES}
+          />
+        </div>
+      )}
+    </>
+  );
+
+  return (
+    <WorkspaceLayout
+      left={leftPanel}
+      right={rightPanel}
+      defaultLeftSize={35}
+      minLeftSize={25}
+      maxLeftSize={50}
+      storageKey="devpilot_pr_assistant_layout"
+    />
   );
 }
