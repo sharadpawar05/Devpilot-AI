@@ -744,11 +744,16 @@ export class IntelligenceService {
     );
 
     // Also try to find nested package.json files (monorepo)
-    const pkgPaths = filePaths.filter(
-      (p) => p.endsWith('/package.json') && !p.includes('node_modules'),
-    );
+    // Prioritize apps/ over packages/ to ensure backend/frontend are detected
+    const pkgPaths = filePaths
+      .filter((p) => p.endsWith('/package.json') && !p.includes('node_modules'))
+      .sort((a, b) => {
+        const aIsApp = a.startsWith('apps/') ? 0 : 1;
+        const bIsApp = b.startsWith('apps/') ? 0 : 1;
+        return aIsApp - bIsApp;
+      });
     await Promise.all(
-      pkgPaths.slice(0, 5).map(async (path) => {
+      pkgPaths.slice(0, 20).map(async (path) => {
         try {
           const { data } = await octokit.rest.repos.getContent({
             owner,
@@ -780,12 +785,14 @@ export class IntelligenceService {
       Object.assign(mergedDeps, deps);
       Object.assign(mergedDevDeps, devDeps);
     }
+    const rootPkg = (packageJsons.get('root') || {}) as Record<string, unknown>;
+    const { dependencies: _rootDeps, devDependencies: _rootDevDeps, ...rootMeta } = rootPkg;
     const mergedPkg: Record<string, unknown> | null =
       packageJsons.size > 0
         ? {
+            ...rootMeta,
             dependencies: mergedDeps,
             devDependencies: mergedDevDeps,
-            ...((packageJsons.get('root') || {}) as Record<string, unknown>),
           }
         : null;
 
