@@ -1,50 +1,74 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { History, Loader2 } from 'lucide-react';
-import type { AIHistorySessionMetadata, AIHistorySession, AIHistoryFilters } from '@devpilot/types';
+import type {
+  AIHistorySessionMetadata,
+  AIHistorySession,
+  AIHistoryFilters,
+  WorkflowType,
+} from '@devpilot/types';
 import { useAuth } from '@/auth';
 import { useHistory } from '@/hooks/use-history';
 import { useHistorySearch } from '@/hooks/use-history-search';
 import { HistoryCard } from '@/components/history/HistoryCard';
 import { SearchBar } from '@/components/history/SearchBar';
-import { FilterPanel } from '@/components/history/FilterPanel';
+import { FilterTabs, type FilterTab } from '@/components/history/FilterTabs';
+import { BulkActionsBar } from '@/components/history/BulkActionsBar';
+import { HistoryEmptyState } from '@/components/history/HistoryEmptyState';
+import { HistoryPageSkeleton } from '@/components/history/HistorySkeletons';
+import { TimeGroupHeader } from '@/components/history/TimeGroupHeader';
 import { ConversationView } from '@/components/history/ConversationView';
+import { groupSessionsByTime } from '@/lib/history-utils';
 import { aiHistoryApi } from '@/lib/ai-history';
+
+const TAB_TO_WORKFLOW: Record<FilterTab, WorkflowType[] | undefined> = {
+  all: undefined,
+  'code-review': ['code-review'],
+  'pr-assistant': ['pr-review', 'pr-analysis'],
+  'repository-chat': ['repository-chat'],
+  playground: [
+    'playground',
+    'documentation',
+    'test-generation',
+    'security-review',
+    'architecture-review',
+  ],
+  'github-review': ['pr-review', 'pr-analysis'],
+};
 
 export function HistoryPage() {
   const navigate = useNavigate();
   const { session } = useAuth();
   const token = session?.accessToken;
-  const [filters, setFilters] = useState<AIHistoryFilters>({});
+
+  const [activeTab, setActiveTab] = useState<FilterTab>('all');
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [selectedSession, setSelectedSession] = useState<AIHistorySession | null>(null);
-  const [repositories, setRepositories] = useState<string[]>([]);
-  const { query, setQuery, results: searchResults, isSearching } = useHistorySearch();
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const filters: AIHistoryFilters = useMemo(() => {
+    const workflowTypes = TAB_TO_WORKFLOW[activeTab];
+    return workflowTypes ? { workflowType: workflowTypes } : {};
+  }, [activeTab]);
+
   const {
     sessions,
     pagination,
     isLoading,
     loadMore,
     deleteSession,
-    togglePin,
     toggleFavorite,
-    toggleArchive,
     updateSession,
     getSession,
+    refresh,
   } = useHistory(filters);
+
+  const { query, setQuery, results: searchResults, isSearching } = useHistorySearch();
 
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const loadRepos = async () => {
-      if (!token) return;
-      const repos = await aiHistoryApi.getUniqueRepositories(token);
-      setRepositories(repos);
-    };
-    loadRepos();
-  }, [sessions, token]);
-
+  // Infinite scrolling
   useEffect(() => {
     if (observerRef.current) observerRef.current.disconnect();
 
@@ -63,6 +87,38 @@ export function HistoryPage() {
 
     return () => observerRef.current?.disconnect();
   }, [pagination?.hasMore, isLoading, loadMore]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Delete' && selectedIds.size > 0) {
+        handleBulkDelete();
+      }
+      if (e.key === 'Enter' && selectedIds.size === 1) {
+        const id = Array.from(selectedIds)[0];
+        const s = displaySessions.find((sess) => sess.id === id);
+        if (s) handleSelectSession(s);
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [selectedIds]);
+
+  const displaySessions = query.trim() ? searchResults : sessions;
+
+  const groupedSessions = useMemo(() => groupSessionsByTime(displaySessions), [displaySessions]);
+
+  const tabCounts = useMemo(() => {
+    const counts: Partial<Record<FilterTab, number>> = { all: sessions.length };
+    for (const tab of Object.keys(TAB_TO_WORKFLOW) as FilterTab[]) {
+      if (tab === 'all') continue;
+      const types = TAB_TO_WORKFLOW[tab];
+      if (types) {
+        counts[tab] = sessions.filter((s) => types.includes(s.workflowType)).length;
+      }
+    }
+    return counts;
+  }, [sessions]);
 
   const handleSelectSession = useCallback(
     async (sessionMeta: AIHistorySessionMetadata) => {
@@ -105,14 +161,54 @@ export function HistoryPage() {
     [deleteSession, selectedSessionId],
   );
 
-  const handleRenameSession = useCallback(
-    async (id: string, title: string) => {
-      await updateSession(id, { title });
+  const handleToggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleBulkDelete = useCallback(async () => {
+    for (const id of selectedIds) {
+      await deleteSession(id);
+    }
+    setSelectedIds(new Set());
+  }, [selectedIds, deleteSession]);
+
+  const handleBulkFavorite = useCallback(async () => {
+    for (const id of selectedIds) {
+      const s = sessions.find((sess) => sess.id === id);
+      if (s) {
+        await updateSession(id, { favorite: !s.favorite });
+      }
+    }
+    setSelectedIds(new Set());
+  }, [selectedIds, sessions, updateSession]);
+
+  const handleDuplicate = useCallback(
+    async (sessionMeta: AIHistorySessionMetadata) => {
+      if (!token) return;
+      const fullSession = await getSession(sessionMeta.id);
+      if (!fullSession) return;
+      await aiHistoryApi.createSession(token, {
+        workflowType: fullSession.workflowType,
+        repository: fullSession.repository,
+        title: `${fullSession.title} (Copy)`,
+        provider: fullSession.provider,
+        model: fullSession.model,
+        messages: fullSession.messages,
+      });
+      await refresh();
     },
-    [updateSession],
+    [token, getSession, refresh],
   );
 
-  const displaySessions = query.trim() ? searchResults : sessions;
+  const hasFilters = query.trim().length > 0 || activeTab !== 'all';
 
   if (selectedSession) {
     return (
@@ -143,77 +239,89 @@ export function HistoryPage() {
     );
   }
 
+  if (isLoading && sessions.length === 0) {
+    return <HistoryPageSkeleton />;
+  }
+
   return (
-    <div className="flex h-full">
-      <div className="w-64 shrink-0 border-r border-input p-4">
-        <FilterPanel filters={filters} onFiltersChange={setFilters} repositories={repositories} />
-      </div>
-
-      <div className="flex-1 overflow-hidden">
-        <div className="flex h-full flex-col">
-          <div className="border-b border-input p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <History className="h-5 w-5" />
-                <h1 className="text-lg font-semibold">AI History</h1>
-              </div>
-              {pagination && (
-                <span className="text-sm text-muted-foreground">
-                  {pagination.total} conversations
-                </span>
-              )}
-            </div>
-            <SearchBar
-              value={query}
-              onChange={setQuery}
-              placeholder="Search by title or repository..."
-              className="mt-4"
-            />
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-4">
-            {isSearching || isLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : displaySessions.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <History className="mb-3 h-12 w-12 text-muted-foreground/50" />
-                <h3 className="text-lg font-medium">No history yet</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Your AI conversations will appear here.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {displaySessions.map((session) => (
-                  <HistoryCard
-                    key={session.id}
-                    session={session}
-                    onSelect={handleSelectSession}
-                    onContinue={handleContinueSession}
-                    onTogglePin={togglePin}
-                    onToggleFavorite={toggleFavorite}
-                    onToggleArchive={toggleArchive}
-                    onDelete={handleDeleteSession}
-                    onRename={handleRenameSession}
-                  />
-                ))}
-                <div ref={loadMoreRef} className="h-4" />
-                {isLoading && (
-                  <div className="flex items-center justify-center py-4">
-                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                  </div>
-                )}
-                {pagination && !pagination.hasMore && displaySessions.length > 0 && (
-                  <p className="py-4 text-center text-sm text-muted-foreground">
-                    No more conversations to load
-                  </p>
-                )}
-              </div>
+    <div className="flex h-full flex-col">
+      <div className="border-b border-input px-6 py-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <History className="h-5 w-5 text-muted-foreground" />
+            <h1 className="text-lg font-semibold">History</h1>
+            {pagination && (
+              <span className="text-sm text-muted-foreground">
+                {pagination.total} conversations
+              </span>
             )}
           </div>
+          <SearchBar value={query} onChange={setQuery} className="w-full sm:w-80" />
         </div>
+
+        <div className="mt-4">
+          <FilterTabs active={activeTab} onChange={setActiveTab} counts={tabCounts} />
+        </div>
+
+        {selectedIds.size > 0 && (
+          <div className="mt-4">
+            <BulkActionsBar
+              count={selectedIds.size}
+              onClearSelection={() => setSelectedIds(new Set())}
+              onFavoriteSelected={handleBulkFavorite}
+              onDeleteSelected={handleBulkDelete}
+            />
+          </div>
+        )}
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-6 py-4">
+        {isSearching ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : displaySessions.length === 0 ? (
+          <HistoryEmptyState hasFilters={hasFilters} />
+        ) : (
+          <div className="space-y-4">
+            {groupedSessions.map((group, groupIdx) => (
+              <div key={group.key}>
+                <TimeGroupHeader
+                  label={group.label}
+                  count={group.sessions.length}
+                  isFirst={groupIdx === 0}
+                />
+                <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+                  {group.sessions.map((session) => (
+                    <HistoryCard
+                      key={session.id}
+                      session={session as AIHistorySessionMetadata}
+                      onSelect={handleSelectSession}
+                      onContinue={handleContinueSession}
+                      onToggleFavorite={toggleFavorite}
+                      onDelete={handleDeleteSession}
+                      onDuplicate={handleDuplicate}
+                      selected={selectedIds.has(session.id)}
+                      onToggleSelect={handleToggleSelect}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+
+            <div ref={loadMoreRef} className="h-4" />
+            {isLoading && (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            )}
+            {pagination && !pagination.hasMore && displaySessions.length > 0 && (
+              <p className="py-4 text-center text-sm text-muted-foreground">
+                No more sessions to load
+              </p>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
