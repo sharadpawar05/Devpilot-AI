@@ -9,6 +9,7 @@ import {
   BookOpen,
   History,
   FolderOpen,
+  BarChart3,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -46,7 +47,10 @@ const NAV_ITEMS = [
   },
   {
     label: 'Activity',
-    items: [{ label: 'History', href: '/history', icon: History }],
+    items: [
+      { label: 'History', href: '/history', icon: History },
+      { label: 'Analytics', href: '/analytics', icon: BarChart3 },
+    ],
   },
   {
     label: 'Settings',
