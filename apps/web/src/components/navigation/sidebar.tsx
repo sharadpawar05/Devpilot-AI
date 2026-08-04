@@ -8,6 +8,7 @@ import {
   MessageSquare,
   BookOpen,
   History,
+  FolderOpen,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -38,7 +39,10 @@ const NAV_ITEMS = [
   },
   {
     label: 'Integrations',
-    items: [{ label: 'GitHub', href: '/github', icon: Github }],
+    items: [
+      { label: 'Repository Overview', href: '/repository-overview', icon: FolderOpen },
+      { label: 'GitHub', href: '/github', icon: Github },
+    ],
   },
   {
     label: 'Activity',
