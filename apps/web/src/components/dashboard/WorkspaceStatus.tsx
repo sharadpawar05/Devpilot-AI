@@ -1,15 +1,13 @@
 import { memo } from 'react';
-import { Shield, GitPullRequest, Github, Cpu } from 'lucide-react';
+import { GitPullRequest, Github, Cpu } from 'lucide-react';
 
 interface WorkspaceStatusProps {
-  repoHealthScore: number | null;
   pendingPRReviews: number;
   githubConnected: boolean;
   lastAIModel: string | null;
 }
 
 export const WorkspaceStatus = memo(function WorkspaceStatus({
-  repoHealthScore,
   pendingPRReviews,
   githubConnected,
   lastAIModel,
@@ -18,27 +16,6 @@ export const WorkspaceStatus = memo(function WorkspaceStatus({
     <div className="rounded-2xl border border-input bg-card p-6 shadow-sm">
       <h3 className="mb-4 text-sm font-semibold">Workspace Status</h3>
       <div className="space-y-3">
-        <StatusRow
-          icon={Shield}
-          label="Repository Health"
-          value={
-            repoHealthScore != null ? (
-              <span
-                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                  repoHealthScore >= 80
-                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                    : repoHealthScore >= 50
-                      ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                      : 'bg-red-500/10 text-red-600 dark:text-red-400'
-                }`}
-              >
-                {repoHealthScore}/100
-              </span>
-            ) : (
-              <span className="text-xs text-muted-foreground">No data</span>
-            )
-          }
-        />
         <StatusRow
           icon={GitPullRequest}
           label="PR Reviews Pending"
@@ -97,7 +74,7 @@ function StatusRow({
   label,
   value,
 }: {
-  icon: typeof Shield;
+  icon: typeof GitPullRequest;
   label: string;
   value: React.ReactNode;
 }) {

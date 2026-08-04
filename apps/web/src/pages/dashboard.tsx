@@ -145,7 +145,6 @@ export function DashboardPage() {
         <div className="space-y-6">
           <RecentActivity activities={dashboardData?.activity ?? []} />
           <WorkspaceStatus
-            repoHealthScore={null}
             pendingPRReviews={gh.pulls.length}
             githubConnected={gh.connected}
             lastAIModel={stats.lastAIModel}
