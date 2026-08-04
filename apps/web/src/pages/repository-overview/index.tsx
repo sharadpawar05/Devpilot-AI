@@ -277,7 +277,7 @@ export default function RepositoryOverviewPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 space-y-6">
+    <div className="mx-auto max-w-[1400px] px-6 py-6 space-y-6">
       {/* Header with Repo Selector */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <RepoSelector
