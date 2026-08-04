@@ -31,10 +31,7 @@ import {
   HealthScore,
   FileTree,
   ContributorList,
-  OverviewHeaderSkeleton,
-  LanguageSkeleton,
-  TreeSkeleton,
-  HealthSkeleton,
+  FullPageSkeleton,
   LoadingProgress,
   GenerationModal,
 } from '@/components/repo-overview';
@@ -299,7 +296,9 @@ export default function RepositoryOverviewPage() {
       </div>
 
       {/* Loading State */}
-      {isLoading && loadingSteps.length > 0 && <LoadingProgress steps={loadingSteps} />}
+      {isLoading && !metadata && loadingSteps.length > 0 && (
+        <LoadingProgress steps={loadingSteps} />
+      )}
 
       {/* Error State */}
       {error && (
@@ -322,7 +321,7 @@ export default function RepositoryOverviewPage() {
 
       {/* Repository Header */}
       {isLoading && !metadata ? (
-        <OverviewHeaderSkeleton />
+        <FullPageSkeleton />
       ) : metadata ? (
         <div className="rounded-lg border bg-card p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -500,9 +499,7 @@ export default function RepositoryOverviewPage() {
               </span>
             )}
           </h2>
-          {isLoading && !overviewData ? (
-            <TreeSkeleton />
-          ) : overviewData?.tree ? (
+          {overviewData?.tree ? (
             <FileTree
               tree={overviewData.tree}
               onFileSelect={setSelectedFile}
@@ -511,7 +508,7 @@ export default function RepositoryOverviewPage() {
             />
           ) : (
             <p className="text-sm text-muted-foreground text-center py-8">
-              No file structure available
+              {isLoading ? 'Loading...' : 'No file structure available'}
             </p>
           )}
         </div>
@@ -524,13 +521,11 @@ export default function RepositoryOverviewPage() {
               <Code className="h-5 w-5 text-muted-foreground" />
               Languages
             </h2>
-            {isLoading && !overviewData ? (
-              <LanguageSkeleton />
-            ) : overviewData?.languages && Object.keys(overviewData.languages).length > 0 ? (
+            {overviewData?.languages && Object.keys(overviewData.languages).length > 0 ? (
               <LanguageBar languages={overviewData.languages} />
             ) : (
               <p className="text-sm text-muted-foreground text-center py-4">
-                No language data available
+                {isLoading ? 'Loading...' : 'No language data available'}
               </p>
             )}
           </div>
@@ -541,13 +536,11 @@ export default function RepositoryOverviewPage() {
               <Shield className="h-5 w-5 text-muted-foreground" />
               Repository Health
             </h2>
-            {isLoading && !overviewData ? (
-              <HealthSkeleton />
-            ) : overviewData?.health ? (
+            {overviewData?.health ? (
               <HealthScore health={overviewData.health} onGenerate={handleGenerate} />
             ) : (
               <p className="text-sm text-muted-foreground text-center py-4">
-                No health data available
+                {isLoading ? 'Loading...' : 'No health data available'}
               </p>
             )}
           </div>

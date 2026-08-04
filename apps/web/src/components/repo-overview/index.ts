@@ -10,6 +10,7 @@ export {
   LanguageSkeleton,
   TreeSkeleton,
   HealthSkeleton,
+  FullPageSkeleton,
   LoadingProgress,
 } from './LoadingSkeletons';
 export {
