@@ -12,6 +12,7 @@ import {
   BarChart3,
   FileText,
   Tag,
+  Activity,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -46,6 +47,7 @@ const NAV_ITEMS = [
       { label: 'Repository Overview', href: '/repository-overview', icon: FolderOpen },
       { label: 'Sprint Summary', href: '/sprint-summary', icon: FileText },
       { label: 'Release Notes', href: '/release-notes', icon: Tag },
+      { label: 'Engineering Status', href: '/engineering-status', icon: Activity },
       { label: 'GitHub', href: '/github', icon: Github },
     ],
   },
