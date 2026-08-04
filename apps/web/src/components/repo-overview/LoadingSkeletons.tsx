@@ -139,7 +139,7 @@ export function HealthSkeleton() {
 
 export function FullPageSkeleton() {
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
+    <div className="animate-in fade-in duration-300 space-y-6">
       <OverviewHeaderSkeleton />
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <MetricCardSkeleton />
