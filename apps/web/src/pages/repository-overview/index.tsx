@@ -290,7 +290,7 @@ export default function RepositoryOverviewPage() {
   // Loading state - show full skeleton
   if (isLoading && !metadata) {
     return (
-      <div className="mx-auto max-w-[1400px] px-6 py-6">
+      <div className="w-full space-y-6 p-6">
         <FullPageSkeleton />
       </div>
     );
