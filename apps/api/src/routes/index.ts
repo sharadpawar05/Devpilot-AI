@@ -11,6 +11,7 @@ import { repositoryChatRoutes, repositoryRoutes } from '@/features/repository-ch
 import { aiHistoryRoutes } from '@/features/ai-history';
 import { streamingRoutes } from '@/features/streaming';
 import { fixRoutes } from '@/features/fix/routes';
+import { repoOverviewRoutes } from '@/features/repo-overview';
 
 export async function apiV1Routes(app: FastifyInstance) {
   await app.register(healthRoutes);
@@ -23,6 +24,7 @@ export async function apiV1Routes(app: FastifyInstance) {
   await app.register(prReviewRoutes);
   await app.register(repositoryRoutes);
   await app.register(repositoryChatRoutes);
+  await app.register(repoOverviewRoutes);
   await app.register(aiHistoryRoutes);
   await app.register(streamingRoutes);
   await app.register(fixRoutes);
