@@ -18,6 +18,7 @@ import EngineeringStatusPage from '@/pages/engineering-status';
 import { HistoryPage } from '@/pages/history';
 import AnalyticsPage from '@/pages/analytics';
 import SettingsPage from '@/pages/settings';
+import ProfilePage from '@/pages/profile';
 import { NotFoundPage } from '@/pages/not-found';
 import { useAuth } from '@/auth';
 
@@ -64,6 +65,7 @@ const routes: RouteObject[] = [
       { path: '/history', element: <HistoryPage /> },
       { path: '/analytics', element: <AnalyticsPage /> },
       { path: '/settings', element: <SettingsPage /> },
+      { path: '/profile', element: <ProfilePage /> },
     ],
   },
   { path: '*', element: <NotFoundPage /> },
