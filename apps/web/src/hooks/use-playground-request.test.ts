@@ -165,13 +165,13 @@ describe('usePlaygroundRequest', () => {
     expect(onError).toHaveBeenCalled();
   });
 
-  it('retryRequest uses last request parameters', async () => {
+  it('retryRequest uses current provider/model, not failed request', async () => {
     mockFetch
       .mockResolvedValueOnce(createErrorResponse('TIMEOUT', 'Request timed out'))
       .mockResolvedValueOnce(
         createSuccessResponse({
-          provider: 'gemini',
-          model: 'gemini-2.5-flash',
+          provider: 'openai',
+          model: 'gpt-4o',
           latencyMs: 500,
           tokens: { input: 10, output: 5, total: 15 },
         }),
@@ -179,7 +179,7 @@ describe('usePlaygroundRequest', () => {
 
     const { result } = renderHook(() => usePlaygroundRequest());
 
-    // First request fails
+    // First request fails with gemini
     await act(async () => {
       result.current.startRequest({
         provider: 'gemini',
@@ -193,20 +193,21 @@ describe('usePlaygroundRequest', () => {
 
     expect(result.current.status).toBe(RequestState.Failed);
 
-    // Retry succeeds
+    // Retry with CURRENT provider/model (openai/gpt-4o)
     await act(async () => {
-      result.current.retryRequest();
+      result.current.retryRequest('openai', 'gpt-4o');
       await new Promise((resolve) => setTimeout(resolve, 200));
     });
 
     expect(result.current.status).toBe(RequestState.Success);
+    expect(result.current.metadata?.provider).toBe('openai');
     expect(mockFetch).toHaveBeenCalledTimes(2);
-    // Verify same parameters were used
-    const firstCall = mockFetch.mock.calls[0][1].body;
+
+    // Verify the retry used the new provider/model
     const secondCall = mockFetch.mock.calls[1][1].body;
-    expect(JSON.parse(firstCall).provider).toBe(JSON.parse(secondCall).provider);
-    expect(JSON.parse(firstCall).model).toBe(JSON.parse(secondCall).model);
-    expect(JSON.parse(firstCall).prompt).toBe(JSON.parse(secondCall).prompt);
+    const parsed = JSON.parse(secondCall);
+    expect(parsed.provider).toBe('openai');
+    expect(parsed.model).toBe('gpt-4o');
   });
 
   it('changing provider/model starts fresh request', async () => {
@@ -389,7 +390,7 @@ describe('usePlaygroundRequest', () => {
     expect(result.current.status).toBe(RequestState.Success);
   });
 
-  it('new conversation after failure starts fresh', async () => {
+  it('new request after failure starts fresh', async () => {
     mockFetch.mockResolvedValueOnce(createErrorResponse('ERROR', 'Failed')).mockResolvedValueOnce(
       createSuccessResponse({
         provider: 'openai',
@@ -416,7 +417,7 @@ describe('usePlaygroundRequest', () => {
     expect(result.current.status).toBe(RequestState.Failed);
     expect(result.current.error).toBeTruthy();
 
-    // New conversation with different provider
+    // New request with different provider
     await act(async () => {
       result.current.startRequest({
         provider: 'openai',
@@ -431,5 +432,78 @@ describe('usePlaygroundRequest', () => {
     expect(result.current.status).toBe(RequestState.Success);
     expect(result.current.error).toBeNull();
     expect(result.current.metadata?.provider).toBe('openai');
+  });
+
+  it('request only sends current prompt, not history', async () => {
+    mockFetch.mockResolvedValue(
+      createSuccessResponse({
+        provider: 'gemini',
+        model: 'gemini-2.5-flash',
+        latencyMs: 500,
+        tokens: { input: 10, output: 5, total: 15 },
+      }),
+    );
+
+    const { result } = renderHook(() => usePlaygroundRequest());
+
+    await act(async () => {
+      result.current.startRequest({
+        provider: 'gemini',
+        model: 'gemini-2.5-flash',
+        prompt: 'current prompt only',
+        temperature: 0.7,
+        maxTokens: 2048,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    });
+
+    // Verify the prompt in the request body is only the current prompt
+    const callBody = mockFetch.mock.calls[0][1].body;
+    const parsed = JSON.parse(callBody);
+    expect(parsed.prompt).toBe('current prompt only');
+    expect(parsed.workflowType).toBe('PLAYGROUND');
+  });
+
+  it('startRequest clears previous error and content', async () => {
+    mockFetch.mockResolvedValueOnce(createErrorResponse('ERROR', 'Failed')).mockResolvedValueOnce(
+      createSuccessResponse({
+        provider: 'gemini',
+        model: 'gemini-2.5-flash',
+        latencyMs: 500,
+        tokens: { input: 10, output: 5, total: 15 },
+      }),
+    );
+
+    const { result } = renderHook(() => usePlaygroundRequest());
+
+    // First request fails
+    await act(async () => {
+      result.current.startRequest({
+        provider: 'gemini',
+        model: 'gemini-2.5-flash',
+        prompt: 'first prompt',
+        temperature: 0.7,
+        maxTokens: 2048,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    });
+
+    expect(result.current.status).toBe(RequestState.Failed);
+    expect(result.current.error).toBeTruthy();
+
+    // Start new request - should clear error
+    await act(async () => {
+      result.current.startRequest({
+        provider: 'gemini',
+        model: 'gemini-2.5-flash',
+        prompt: 'second prompt',
+        temperature: 0.7,
+        maxTokens: 2048,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    // Error should be cleared immediately when starting new request
+    expect(result.current.error).toBeNull();
   });
 });

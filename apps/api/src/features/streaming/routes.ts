@@ -68,6 +68,12 @@ export async function streamingRoutes(app: FastifyInstance) {
       const { workflowType, provider, model, prompt, context, temperature, maxTokens, metadata } =
         parsed.data;
 
+      // Check if client is still connected
+      let isClientConnected = true;
+      request.raw.on('close', () => {
+        isClientConnected = false;
+      });
+
       reply.raw.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
@@ -76,7 +82,14 @@ export async function streamingRoutes(app: FastifyInstance) {
       });
 
       const sendEvent = (data: unknown) => {
-        reply.raw.write(`data: ${JSON.stringify(data)}\n\n`);
+        if (!isClientConnected) return false;
+        try {
+          reply.raw.write(`data: ${JSON.stringify(data)}\n\n`);
+          return true;
+        } catch {
+          isClientConnected = false;
+          return false;
+        }
       };
 
       try {
@@ -92,24 +105,37 @@ export async function streamingRoutes(app: FastifyInstance) {
         });
 
         for await (const chunk of stream) {
+          // Stop if client disconnected
+          if (!isClientConnected) break;
           sendEvent(chunk);
         }
 
-        sendEvent({ type: 'done' });
+        // Only send done event if client is still connected
+        if (isClientConnected) {
+          sendEvent({ type: 'done' });
+        }
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        const code =
-          error && typeof error === 'object' && 'code' in error
-            ? String((error as { code: unknown }).code)
-            : 'STREAM_ERROR';
+        // Only send error if client is still connected
+        if (isClientConnected) {
+          const message = error instanceof Error ? error.message : String(error);
+          const code =
+            error && typeof error === 'object' && 'code' in error
+              ? String((error as { code: unknown }).code)
+              : 'STREAM_ERROR';
 
-        sendEvent({
-          type: 'error',
-          error: { code, message },
-        });
+          sendEvent({
+            type: 'error',
+            error: { code, message },
+          });
+        }
+      } finally {
+        // Always end the response
+        try {
+          reply.raw.end();
+        } catch {
+          // Ignore errors when ending response
+        }
       }
-
-      reply.raw.end();
     },
   );
 }

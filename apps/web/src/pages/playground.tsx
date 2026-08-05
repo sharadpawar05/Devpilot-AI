@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import {
   AlertCircle,
   History,
@@ -20,11 +19,9 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
-import { useChatHistory } from '@/hooks/use-chat';
 import { usePlaygroundRequest } from '@/hooks/use-playground-request';
 import { useStreamingAbort, useCopyResponse } from '@/hooks/use-keyboard-shortcuts';
 import { useUserPreferences } from '@/hooks/use-user-preferences';
-import { useAuth } from '@/auth';
 import { MarkdownRenderer } from '@/components/shared/MarkdownRenderer';
 import { cn } from '@/lib/utils';
 import { WorkspaceLayout } from '@/components/workspace/WorkspaceLayout';
@@ -34,7 +31,7 @@ import { EmptyState } from '@/components/shared/EmptyState';
 import { PlaygroundLoadingSteps } from '@/components/shared/LoadingSteps';
 import { getProviderOptions, getModelOptions } from '@devpilot/config';
 import { getFriendlyError } from '@/lib/ai-errors';
-import type { AIHistorySession } from '@devpilot/types';
+import { generateId } from '@/lib/id';
 
 const PROVIDERS = getProviderOptions();
 
@@ -77,11 +74,17 @@ const PLAYGROUND_FEATURES = [
   { icon: Bug, label: 'Debug' },
 ];
 
+interface PlaygroundMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+}
+
 export function PlaygroundPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
   const { preferences, updatePreference, addRecentPrompt } = useUserPreferences();
-  const { session } = useAuth();
-  const token = session?.accessToken;
+
+  // Isolated playground state - NOT shared with other tools
   const [provider, setProvider] = useState(preferences.defaultProvider);
   const [model, setModel] = useState(preferences.defaultModel);
   const [prompt, setPrompt] = useState('');
@@ -90,26 +93,38 @@ export function PlaygroundPage() {
   const [template, setTemplate] = useState('custom');
   const [showVariables, setShowVariables] = useState(false);
   const [variables, setVariables] = useState<Record<string, string>>({});
-  const [currentSession, setCurrentSession] = useState<AIHistorySession | null>(null);
-  const [_isLoadingSession, setIsLoadingSession] = useState(false);
+
+  // Isolated conversation history for playground only
+  const [conversationHistory, setConversationHistory] = useState<PlaygroundMessage[]>([]);
 
   const responseRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const lastPromptRef = useRef('');
 
-  const { getSession } = useChatHistory();
-
-  // Use the new state machine hook
+  // Use the state machine hook with isolated state
   const request = usePlaygroundRequest({
     workflowType: 'PLAYGROUND',
-    onComplete: async () => {
-      if (!currentSession) {
-        loadRecentSession();
-      }
+    onComplete: async (_metadata, content) => {
+      // Only append to history AFTER successful completion
+      const userMessage: PlaygroundMessage = {
+        id: generateId(),
+        role: 'user',
+        content: lastPromptRef.current,
+        timestamp: new Date().toISOString(),
+      };
+
+      const assistantMessage: PlaygroundMessage = {
+        id: generateId(),
+        role: 'assistant',
+        content,
+        timestamp: new Date().toISOString(),
+      };
+
+      setConversationHistory((prev) => [...prev, userMessage, assistantMessage]);
     },
   });
 
   const availableModels = MODELS[provider] ?? MODELS.gemini;
+  const lastPromptRef = useRef('');
 
   useStreamingAbort({
     onAbort: request.cancelRequest,
@@ -122,31 +137,18 @@ export function PlaygroundPage() {
   });
 
   useEffect(() => {
-    const sessionId = searchParams.get('continue');
-    if (sessionId) {
-      loadSession(sessionId);
-    }
-  }, [searchParams]);
-
-  useEffect(() => {
     if (request.content && responseRef.current) {
       responseRef.current.scrollTop = responseRef.current.scrollHeight;
     }
   }, [request.content]);
 
-  async function loadSession(sessionId: string) {
-    setIsLoadingSession(true);
-    try {
-      const session = await getSession(sessionId);
-      if (session) {
-        setCurrentSession(session);
-        setProvider(session.provider);
-        setModel(session.model);
-      }
-    } finally {
-      setIsLoadingSession(false);
+  // Reset state when provider/model changes
+  useEffect(() => {
+    // Clear error and reset request state when provider/model changes
+    if (request.isFailed || request.isIdle) {
+      request.resetRequest();
     }
-  }
+  }, [provider, model]);
 
   function handleProviderChange(newProvider: string) {
     setProvider(newProvider);
@@ -165,8 +167,7 @@ export function PlaygroundPage() {
   }
 
   function handleClearSession() {
-    setCurrentSession(null);
-    setSearchParams({});
+    setConversationHistory([]);
     request.resetRequest();
     setPrompt('');
   }
@@ -181,7 +182,7 @@ export function PlaygroundPage() {
 
       addRecentPrompt(prompt.trim());
 
-      // Start request with current provider/model (not from failed request)
+      // Start request with CURRENT provider/model (not from failed request)
       request.startRequest({
         provider,
         model,
@@ -195,35 +196,6 @@ export function PlaygroundPage() {
     [prompt, request, provider, model, temperature, maxTokens],
   );
 
-  async function loadRecentSession() {
-    try {
-      const sessions = await import('@/lib/ai-history').then((m) =>
-        m.aiHistoryApi.listSessions(
-          token || '',
-          { workflowType: ['playground'] },
-          { page: 1, pageSize: 1 },
-        ),
-      );
-      if (sessions.sessions[0]) {
-        const session = await getSession(sessions.sessions[0].id);
-        if (session) {
-          setCurrentSession(session);
-          return;
-        }
-      }
-    } catch {
-      const sessions = await import('@/lib/ai-history').then((m) =>
-        m.aiHistoryStorage.getRecentActivity(1),
-      );
-      if (sessions[0]) {
-        const session = await getSession(sessions[0].id);
-        if (session) {
-          setCurrentSession(session);
-        }
-      }
-    }
-  }
-
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
@@ -233,14 +205,12 @@ export function PlaygroundPage() {
 
   // Derive button state from request state
   const getButtonLabel = () => {
-    if (currentSession) {
-      return request.isGenerating ? 'Streaming...' : 'Continue';
-    }
-    return request.isGenerating ? 'Streaming...' : 'Generate';
+    if (request.isGenerating) return 'Streaming...';
+    if (request.isFailed) return 'Retry';
+    return 'Generate';
   };
 
   const getButtonDisabled = () => {
-    // Disabled when generating or when prompt is empty (except in retry state)
     if (request.isGenerating) return false;
     if (request.isFailed) return false; // Allow retry
     return !prompt.trim();
@@ -249,15 +219,10 @@ export function PlaygroundPage() {
   const leftPanel = (
     <>
       <PageHeader
-        title={currentSession ? currentSession.title : 'AI Playground'}
-        description={
-          currentSession
-            ? `Continuing conversation · ${currentSession.messages.length} messages`
-            : 'Test the AI Gateway with different providers and models.'
-        }
-        onBack={currentSession ? handleClearSession : undefined}
+        title="AI Playground"
+        description="Test the AI Gateway with different providers and models."
         actions={
-          currentSession ? (
+          conversationHistory.length > 0 ? (
             <Button variant="ghost" size="sm" onClick={handleClearSession} className="h-7 text-xs">
               New
             </Button>
@@ -459,8 +424,8 @@ export function PlaygroundPage() {
 
   const rightPanel = (
     <>
-      {/* Empty state - only when idle and no content and no error */}
-      {request.isIdle && !request.content && !request.error && (
+      {/* Empty state - only when idle, no content, no error, and no conversation history */}
+      {request.isIdle && !request.content && !request.error && conversationHistory.length === 0 && (
         <div className="flex h-full flex-col items-center justify-center p-8">
           <EmptyState
             title="No response yet"
@@ -500,7 +465,7 @@ export function PlaygroundPage() {
         </div>
       )}
 
-      {/* Error banner - only when Failed and no successful content for this request */}
+      {/* Error banner - ONLY when Failed and NO content */}
       {request.isFailed && request.error && !request.content && (
         <div className="mx-auto max-w-3xl px-6 py-6">
           <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
@@ -519,8 +484,8 @@ export function PlaygroundPage() {
                           size="sm"
                           className="mt-3"
                           onClick={() => {
-                            // Retry with current provider/model, not the failed request's
-                            request.retryRequest();
+                            // Retry with CURRENT provider/model, not the failed request's
+                            request.retryRequest(provider, model);
                           }}
                         >
                           <RefreshCw className="mr-2 h-3 w-3" />
@@ -536,15 +501,15 @@ export function PlaygroundPage() {
         </div>
       )}
 
-      {/* Conversation history */}
-      {currentSession && currentSession.messages.length > 0 && !request.content && (
+      {/* Conversation history - isolated to playground only */}
+      {conversationHistory.length > 0 && !request.content && (
         <div className="mx-auto max-w-3xl px-6 py-6">
           <div className="mb-4 flex items-center gap-2 text-sm font-medium text-muted-foreground">
             <History className="h-4 w-4" />
             Conversation History
           </div>
           <div className="space-y-3">
-            {currentSession.messages.map((message) => (
+            {conversationHistory.map((message) => (
               <div
                 key={message.id}
                 className={cn(
