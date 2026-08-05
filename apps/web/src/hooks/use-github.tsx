@@ -276,7 +276,7 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
     } catch {
       setConnected(false);
     }
-  }, [token, authHeaders, fetchRepositories]);
+  }, [token, apiFetch, fetchRepositories]);
 
   useEffect(() => {
     checkConnection();
