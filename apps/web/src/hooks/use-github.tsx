@@ -195,6 +195,7 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
   const [disconnecting, setDisconnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const disconnectedRef = useRef(false);
+  const repositoriesFetchedRef = useRef(false);
 
   const [selectedRepoName, setSelectedRepoName] = useState<string | null>(() =>
     loadStoredValue<string | null>(STORAGE_KEYS.REPO, null),
@@ -234,6 +235,7 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
       const data = await res.json();
       if (data.success) {
         setRepositories(data.repositories);
+        repositoriesFetchedRef.current = true;
       } else {
         setError(data.error?.message ?? 'Failed to fetch repositories');
       }
@@ -253,8 +255,8 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
           setConnected(true);
           setGithubUser(data.user);
           setConnectedAt(data.connectedAt);
-          // Only fetch repositories if not already loaded
-          if (repositories.length === 0) {
+          // Only fetch repositories if not already fetched in this session
+          if (!repositoriesFetchedRef.current) {
             fetchRepositories();
           }
         }
@@ -266,7 +268,7 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
     } catch {
       setConnected(false);
     }
-  }, [token, authHeaders, fetchRepositories, repositories.length]);
+  }, [token, authHeaders, fetchRepositories]);
 
   useEffect(() => {
     checkConnection();
