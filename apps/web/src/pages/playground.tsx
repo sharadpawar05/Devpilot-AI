@@ -24,6 +24,7 @@ import { useChat, useChatHistory, type ChatResponse } from '@/hooks/use-chat';
 import { useStreamSession } from '@/hooks/use-stream';
 import { useStreamingAbort, useCopyResponse } from '@/hooks/use-keyboard-shortcuts';
 import { useUserPreferences } from '@/hooks/use-user-preferences';
+import { useAuth } from '@/auth';
 import { MarkdownRenderer } from '@/components/shared/MarkdownRenderer';
 import { cn } from '@/lib/utils';
 import { WorkspaceLayout } from '@/components/workspace/WorkspaceLayout';
@@ -79,6 +80,8 @@ const PLAYGROUND_FEATURES = [
 export function PlaygroundPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { preferences, updatePreference, addRecentPrompt } = useUserPreferences();
+  const { session } = useAuth();
+  const token = session?.accessToken;
   const [provider, setProvider] = useState(preferences.defaultProvider);
   const [model, setModel] = useState(preferences.defaultModel);
   const [prompt, setPrompt] = useState('');
@@ -200,13 +203,28 @@ export function PlaygroundPage() {
   );
 
   async function loadRecentSession() {
-    const sessions = await import('@/lib/ai-history').then((m) =>
-      m.aiHistoryStorage.getRecentActivity(1),
-    );
-    if (sessions[0]) {
-      const session = await getSession(sessions[0].id);
-      if (session) {
-        setCurrentSession(session);
+    try {
+      // First try to get from backend API
+      const sessions = await import('@/lib/ai-history').then((m) =>
+        m.aiHistoryApi.listSessions(token || '', {}, { page: 1, pageSize: 1 }),
+      );
+      if (sessions.sessions[0]) {
+        const session = await getSession(sessions.sessions[0].id);
+        if (session) {
+          setCurrentSession(session);
+          return;
+        }
+      }
+    } catch {
+      // Fallback to IndexedDB if backend fails
+      const sessions = await import('@/lib/ai-history').then((m) =>
+        m.aiHistoryStorage.getRecentActivity(1),
+      );
+      if (sessions[0]) {
+        const session = await getSession(sessions[0].id);
+        if (session) {
+          setCurrentSession(session);
+        }
       }
     }
   }

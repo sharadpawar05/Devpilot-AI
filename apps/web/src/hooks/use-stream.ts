@@ -67,8 +67,10 @@ export function useStreamSession() {
 
   const startStream = useCallback(
     (options: StreamOptions) => {
+      // Abort any existing stream
       abortControllerRef.current?.abort();
 
+      // Clear all buffers and timers
       contentBufferRef.current = '';
       totalContentRef.current = '';
       if (batchTimerRef.current) {
@@ -78,6 +80,7 @@ export function useStreamSession() {
 
       optionsRef.current = options;
 
+      // Reset state completely
       setState({
         content: '',
         isStreaming: true,
@@ -120,73 +123,78 @@ export function useStreamSession() {
           let buffer = '';
           let done = false;
 
-          while (!done) {
-            const result = await reader.read();
-            done = result.done;
-            if (done) break;
-            const value = result.value;
+          try {
+            while (!done) {
+              const result = await reader.read();
+              done = result.done;
+              if (done) break;
+              const value = result.value;
 
-            buffer += decoder.decode(value, { stream: true });
+              buffer += decoder.decode(value, { stream: true });
 
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
+              const lines = buffer.split('\n');
+              buffer = lines.pop() || '';
 
-            for (const line of lines) {
-              if (line.startsWith('data: ')) {
-                const data = line.slice(6);
-                if (data === '[DONE]') continue;
+              for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                  const data = line.slice(6);
+                  if (data === '[DONE]') continue;
 
-                try {
-                  const chunk: StreamChunk = JSON.parse(data);
+                  try {
+                    const chunk: StreamChunk = JSON.parse(data);
 
-                  if (chunk.type === 'token' && chunk.content) {
-                    contentBufferRef.current += chunk.content;
-                    options.onToken?.(chunk.content);
+                    if (chunk.type === 'token' && chunk.content) {
+                      contentBufferRef.current += chunk.content;
+                      options.onToken?.(chunk.content);
 
-                    if (!batchTimerRef.current) {
-                      batchTimerRef.current = setTimeout(flushBatch, BATCH_INTERVAL);
+                      if (!batchTimerRef.current) {
+                        batchTimerRef.current = setTimeout(flushBatch, BATCH_INTERVAL);
+                      }
+                    } else if (chunk.type === 'metadata') {
+                      const remainingBuffer = contentBufferRef.current;
+                      contentBufferRef.current = '';
+                      if (batchTimerRef.current) {
+                        clearTimeout(batchTimerRef.current);
+                        batchTimerRef.current = null;
+                      }
+                      const metadata = {
+                        provider: chunk.provider || '',
+                        model: chunk.model || '',
+                        latencyMs: chunk.latencyMs || 0,
+                        tokens: chunk.tokens || { input: 0, output: 0, total: 0 },
+                      };
+                      const fullContent = totalContentRef.current + remainingBuffer;
+                      setState((prev) => ({
+                        ...prev,
+                        content: fullContent,
+                        metadata,
+                      }));
+                      await options.onComplete?.(metadata, fullContent);
+                      setState((prev) => ({ ...prev, isStreaming: false }));
+                    } else if (chunk.type === 'error') {
+                      const finalContent = contentBufferRef.current;
+                      flushBatch();
+                      const error = chunk.error || { code: 'UNKNOWN', message: 'Unknown error' };
+                      setState((prev) => ({
+                        ...prev,
+                        content: prev.content + finalContent,
+                        error,
+                        isStreaming: false,
+                      }));
+                      options.onError?.(error);
+                    } else if (chunk.type === 'done') {
+                      flushBatch();
+                      setState((prev) => ({ ...prev, isStreaming: false }));
                     }
-                  } else if (chunk.type === 'metadata') {
-                    const remainingBuffer = contentBufferRef.current;
-                    contentBufferRef.current = '';
-                    if (batchTimerRef.current) {
-                      clearTimeout(batchTimerRef.current);
-                      batchTimerRef.current = null;
-                    }
-                    const metadata = {
-                      provider: chunk.provider || '',
-                      model: chunk.model || '',
-                      latencyMs: chunk.latencyMs || 0,
-                      tokens: chunk.tokens || { input: 0, output: 0, total: 0 },
-                    };
-                    const fullContent = totalContentRef.current + remainingBuffer;
-                    setState((prev) => ({
-                      ...prev,
-                      content: fullContent,
-                      metadata,
-                    }));
-                    await options.onComplete?.(metadata, fullContent);
-                    setState((prev) => ({ ...prev, isStreaming: false }));
-                  } else if (chunk.type === 'error') {
-                    const finalContent = contentBufferRef.current;
-                    flushBatch();
-                    const error = chunk.error || { code: 'UNKNOWN', message: 'Unknown error' };
-                    setState((prev) => ({
-                      ...prev,
-                      content: prev.content + finalContent,
-                      error,
-                      isStreaming: false,
-                    }));
-                    options.onError?.(error);
-                  } else if (chunk.type === 'done') {
-                    flushBatch();
-                    setState((prev) => ({ ...prev, isStreaming: false }));
+                  } catch {
+                    // Skip malformed JSON
                   }
-                } catch {
-                  // Skip malformed JSON
                 }
               }
             }
+          } finally {
+            // Ensure reader is released
+            reader.releaseLock();
           }
 
           flushBatch();
