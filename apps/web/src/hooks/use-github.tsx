@@ -261,11 +261,8 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
           storeValue(STORAGE_KEYS.REPOS_CONNECTED, true);
           setGithubUser(data.user);
           setConnectedAt(data.connectedAt);
-          // Only fetch repositories if not cached in localStorage
-          const cachedRepos = loadStoredValue<GitHubRepo[]>(STORAGE_KEYS.REPOSITORIES, []);
-          if (cachedRepos.length === 0) {
-            fetchRepositories();
-          }
+          // Only fetch repositories if not already loaded in state
+          // (state is initialized from localStorage on mount)
         }
       } else {
         setConnected(false);
@@ -276,7 +273,7 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
     } catch {
       setConnected(false);
     }
-  }, [token, apiFetch, fetchRepositories]);
+  }, [token, apiFetch]);
 
   useEffect(() => {
     checkConnection();
