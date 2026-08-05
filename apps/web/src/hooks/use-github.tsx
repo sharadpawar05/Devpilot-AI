@@ -201,6 +201,7 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
   const [disconnecting, setDisconnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const disconnectedRef = useRef(false);
+  const connectionCheckedRef = useRef(false);
 
   const [selectedRepoName, setSelectedRepoName] = useState<string | null>(() =>
     loadStoredValue<string | null>(STORAGE_KEYS.REPO, null),
@@ -252,6 +253,10 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
 
   const checkConnection = useCallback(async () => {
     if (!token) return;
+    // Prevent multiple calls on mount
+    if (connectionCheckedRef.current) return;
+    connectionCheckedRef.current = true;
+
     try {
       const res = await apiFetch(`${API_BASE_URL}/github/status`);
       const data = await res.json();
@@ -276,8 +281,13 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
   }, [token, apiFetch]);
 
   useEffect(() => {
+    // Reset the ref when token changes (e.g., on logout/login)
+    if (!token) {
+      connectionCheckedRef.current = false;
+      return;
+    }
     checkConnection();
-  }, [checkConnection]);
+  }, [token, checkConnection]);
 
   const connect = useCallback(
     async (returnTo?: string): Promise<string | null> => {
@@ -567,6 +577,8 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshConnection = useCallback(async () => {
+    // Reset the ref to allow re-checking
+    connectionCheckedRef.current = false;
     await checkConnection();
   }, [checkConnection]);
 

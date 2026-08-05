@@ -452,7 +452,7 @@ export function PlaygroundPage() {
 
   const rightPanel = (
     <>
-      {!hasResponse && !isStreaming && (
+      {!hasResponse && !isStreaming && !stream.error && (
         <div className="flex h-full flex-col items-center justify-center p-8">
           <EmptyState
             title="No response yet"
