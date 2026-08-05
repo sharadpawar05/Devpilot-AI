@@ -1,9 +1,10 @@
-import { Search, Bell, Menu, Moon, Sun } from 'lucide-react';
+import { Search, Menu, Moon, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/lib/theme';
 import { useCommandPalette } from '@/components/command-palette';
 import { useSidebar } from './sidebar-provider';
 import { UserMenu } from './user-menu';
+import { NotificationBell } from './notification-bell';
 
 export function TopNavigation() {
   const { theme, setTheme } = useTheme();
@@ -38,15 +39,7 @@ export function TopNavigation() {
       </div>
 
       <div className="flex items-center gap-1">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="shrink-0"
-          disabled
-          aria-label="Notifications"
-        >
-          <Bell className="h-4 w-4" />
-        </Button>
+        <NotificationBell />
 
         <Button
           variant="ghost"
