@@ -18,6 +18,8 @@ const STORAGE_KEYS = {
   REPO: 'devpilot_github_selected_repo',
   BRANCH: 'devpilot_github_selected_branch',
   PR: 'devpilot_github_selected_pr',
+  REPOSITORIES: 'devpilot_github_repositories',
+  REPOS_CONNECTED: 'devpilot_github_connected',
 } as const;
 
 interface GitHubUser {
@@ -184,10 +186,14 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
   const { session } = useAuth();
   const token = session?.accessToken;
 
-  const [connected, setConnected] = useState(false);
+  const [connected, setConnected] = useState(() =>
+    loadStoredValue<boolean>(STORAGE_KEYS.REPOS_CONNECTED, false),
+  );
   const [githubUser, setGithubUser] = useState<GitHubUser | null>(null);
   const [connectedAt, setConnectedAt] = useState<string | null>(null);
-  const [repositories, setRepositories] = useState<GitHubRepo[]>([]);
+  const [repositories, setRepositories] = useState<GitHubRepo[]>(() =>
+    loadStoredValue<GitHubRepo[]>(STORAGE_KEYS.REPOSITORIES, []),
+  );
   const [branches, setBranches] = useState<GitHubBranch[]>([]);
   const [pulls, setPulls] = useState<GitHubPull[]>([]);
   const [files, setFiles] = useState<GitHubFile[]>([]);
@@ -195,7 +201,6 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
   const [disconnecting, setDisconnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const disconnectedRef = useRef(false);
-  const repositoriesFetchedRef = useRef(false);
 
   const [selectedRepoName, setSelectedRepoName] = useState<string | null>(() =>
     loadStoredValue<string | null>(STORAGE_KEYS.REPO, null),
@@ -235,7 +240,7 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
       const data = await res.json();
       if (data.success) {
         setRepositories(data.repositories);
-        repositoriesFetchedRef.current = true;
+        storeValue(STORAGE_KEYS.REPOSITORIES, data.repositories);
       } else {
         setError(data.error?.message ?? 'Failed to fetch repositories');
       }
@@ -253,15 +258,18 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
       if (data.success && data.connected) {
         if (!disconnectedRef.current) {
           setConnected(true);
+          storeValue(STORAGE_KEYS.REPOS_CONNECTED, true);
           setGithubUser(data.user);
           setConnectedAt(data.connectedAt);
-          // Only fetch repositories if not already fetched in this session
-          if (!repositoriesFetchedRef.current) {
+          // Only fetch repositories if not cached in localStorage
+          const cachedRepos = loadStoredValue<GitHubRepo[]>(STORAGE_KEYS.REPOSITORIES, []);
+          if (cachedRepos.length === 0) {
             fetchRepositories();
           }
         }
       } else {
         setConnected(false);
+        storeValue(STORAGE_KEYS.REPOS_CONNECTED, false);
         setGithubUser(null);
         setConnectedAt(null);
       }
@@ -340,6 +348,8 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
     storeValue(STORAGE_KEYS.REPO, null);
     storeValue(STORAGE_KEYS.BRANCH, null);
     storeValue(STORAGE_KEYS.PR, null);
+    storeValue(STORAGE_KEYS.REPOSITORIES, null);
+    storeValue(STORAGE_KEYS.REPOS_CONNECTED, false);
     try {
       await apiFetch(`${API_BASE_URL}/github/disconnect`, {
         method: 'DELETE',
