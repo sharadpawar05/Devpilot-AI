@@ -20,8 +20,8 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
-import { useChat, useChatHistory, type ChatResponse } from '@/hooks/use-chat';
-import { useStreamSession } from '@/hooks/use-stream';
+import { useChatHistory } from '@/hooks/use-chat';
+import { usePlaygroundRequest } from '@/hooks/use-playground-request';
 import { useStreamingAbort, useCopyResponse } from '@/hooks/use-keyboard-shortcuts';
 import { useUserPreferences } from '@/hooks/use-user-preferences';
 import { useAuth } from '@/auth';
@@ -90,30 +90,35 @@ export function PlaygroundPage() {
   const [template, setTemplate] = useState('custom');
   const [showVariables, setShowVariables] = useState(false);
   const [variables, setVariables] = useState<Record<string, string>>({});
-  const [result, setResult] = useState<ChatResponse | null>(null);
   const [currentSession, setCurrentSession] = useState<AIHistorySession | null>(null);
   const [_isLoadingSession, setIsLoadingSession] = useState(false);
-  const lastPromptRef = useRef('');
 
   const responseRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const lastPromptRef = useRef('');
 
-  const chat = useChat();
   const { getSession } = useChatHistory();
-  const stream = useStreamSession();
+
+  // Use the new state machine hook
+  const request = usePlaygroundRequest({
+    workflowType: 'PLAYGROUND',
+    onComplete: async () => {
+      if (!currentSession) {
+        loadRecentSession();
+      }
+    },
+  });
 
   const availableModels = MODELS[provider] ?? MODELS.gemini;
-  const isStreaming = stream.isStreaming;
-  const isGenerating = chat.isPending || isStreaming;
 
   useStreamingAbort({
-    onAbort: stream.stopStream,
-    enabled: isStreaming,
+    onAbort: request.cancelRequest,
+    enabled: request.isGenerating,
   });
 
   useCopyResponse({
-    getContent: () => stream.content || result?.response,
-    enabled: !!(stream.content || result?.response),
+    getContent: () => request.content,
+    enabled: request.isSuccess && !!request.content,
   });
 
   useEffect(() => {
@@ -124,10 +129,10 @@ export function PlaygroundPage() {
   }, [searchParams]);
 
   useEffect(() => {
-    if (stream.content && responseRef.current) {
+    if (request.content && responseRef.current) {
       responseRef.current.scrollTop = responseRef.current.scrollHeight;
     }
-  }, [stream.content]);
+  }, [request.content]);
 
   async function loadSession(sessionId: string) {
     setIsLoadingSession(true);
@@ -162,53 +167,36 @@ export function PlaygroundPage() {
   function handleClearSession() {
     setCurrentSession(null);
     setSearchParams({});
-    setResult(null);
-    stream.reset();
+    request.resetRequest();
     setPrompt('');
   }
 
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
-      if (!prompt.trim() || isGenerating) return;
+      if (!prompt.trim() || request.isGenerating) return;
 
       // Save prompt for retry
       lastPromptRef.current = prompt.trim();
 
       addRecentPrompt(prompt.trim());
 
-      stream.startStream({
-        workflowType: 'PLAYGROUND',
+      // Start request with current provider/model (not from failed request)
+      request.startRequest({
         provider,
         model,
         prompt: prompt.trim(),
         temperature,
         maxTokens,
-        onComplete: async (metadata, content) => {
-          if (metadata) {
-            setResult({
-              success: true,
-              provider: metadata.provider,
-              model: metadata.model,
-              response: content,
-              latencyMs: metadata.latencyMs,
-              usage: metadata.tokens,
-            });
-          }
-          if (!currentSession) {
-            loadRecentSession();
-          }
-        },
       });
 
       setPrompt('');
     },
-    [prompt, isGenerating, provider, model, temperature, maxTokens, currentSession, stream],
+    [prompt, request, provider, model, temperature, maxTokens],
   );
 
   async function loadRecentSession() {
     try {
-      // First try to get from backend API - filter by playground workflow type
       const sessions = await import('@/lib/ai-history').then((m) =>
         m.aiHistoryApi.listSessions(
           token || '',
@@ -224,7 +212,6 @@ export function PlaygroundPage() {
         }
       }
     } catch {
-      // Fallback to IndexedDB if backend fails
       const sessions = await import('@/lib/ai-history').then((m) =>
         m.aiHistoryStorage.getRecentActivity(1),
       );
@@ -244,8 +231,20 @@ export function PlaygroundPage() {
     }
   };
 
-  const hasResponse = !!(stream.content || result?.response);
-  const responseContent = stream.content || result?.response || '';
+  // Derive button state from request state
+  const getButtonLabel = () => {
+    if (currentSession) {
+      return request.isGenerating ? 'Streaming...' : 'Continue';
+    }
+    return request.isGenerating ? 'Streaming...' : 'Generate';
+  };
+
+  const getButtonDisabled = () => {
+    // Disabled when generating or when prompt is empty (except in retry state)
+    if (request.isGenerating) return false;
+    if (request.isFailed) return false; // Allow retry
+    return !prompt.trim();
+  };
 
   const leftPanel = (
     <>
@@ -460,7 +459,8 @@ export function PlaygroundPage() {
 
   const rightPanel = (
     <>
-      {!hasResponse && !isStreaming && !stream.error && (
+      {/* Empty state - only when idle and no content and no error */}
+      {request.isIdle && !request.content && !request.error && (
         <div className="flex h-full flex-col items-center justify-center p-8">
           <EmptyState
             title="No response yet"
@@ -471,8 +471,12 @@ export function PlaygroundPage() {
           />
         </div>
       )}
-      {isStreaming && !responseContent && <PlaygroundLoadingSteps className="flex-1" />}
-      {hasResponse && (
+
+      {/* Loading state */}
+      {request.isGenerating && !request.content && <PlaygroundLoadingSteps className="flex-1" />}
+
+      {/* Response content - shows on Success and during streaming */}
+      {(request.isSuccess || request.isGenerating) && request.content && (
         <div ref={responseRef} className="flex-1 overflow-y-auto">
           <div className="mx-auto max-w-3xl px-6 py-6">
             <div className="mb-4 flex items-center justify-between">
@@ -481,31 +485,30 @@ export function PlaygroundPage() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => {
-                    stream.reset();
-                    setResult(null);
-                  }}
+                  onClick={() => request.resetRequest()}
                   className="h-7 text-xs"
                 >
                   Clear
                 </Button>
               </div>
             </div>
-            <MarkdownRenderer content={responseContent} />
-            {isStreaming && (
+            <MarkdownRenderer content={request.content} />
+            {request.isGenerating && (
               <span className="inline-block h-4 w-0.5 animate-pulse bg-foreground/70" />
             )}
           </div>
         </div>
       )}
-      {stream.error && (
+
+      {/* Error banner - only when Failed and no successful content for this request */}
+      {request.isFailed && request.error && !request.content && (
         <div className="mx-auto max-w-3xl px-6 py-6">
           <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
             <div className="flex items-start gap-3">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
               <div className="flex-1">
                 {(() => {
-                  const friendlyError = getFriendlyError(stream.error);
+                  const friendlyError = getFriendlyError(request.error);
                   return (
                     <>
                       <p className="text-sm font-medium text-destructive">{friendlyError.title}</p>
@@ -516,16 +519,8 @@ export function PlaygroundPage() {
                           size="sm"
                           className="mt-3"
                           onClick={() => {
-                            stream.reset();
-                            // Restore the last prompt for retry
-                            const retryPrompt = lastPromptRef.current;
-                            if (retryPrompt) {
-                              setPrompt(retryPrompt);
-                              // Use setTimeout to ensure state is updated before submitting
-                              setTimeout(() => {
-                                handleSubmit({ preventDefault: () => {} } as React.FormEvent);
-                              }, 0);
-                            }
+                            // Retry with current provider/model, not the failed request's
+                            request.retryRequest();
                           }}
                         >
                           <RefreshCw className="mr-2 h-3 w-3" />
@@ -540,7 +535,9 @@ export function PlaygroundPage() {
           </div>
         </div>
       )}
-      {currentSession && currentSession.messages.length > 0 && !hasResponse && (
+
+      {/* Conversation history */}
+      {currentSession && currentSession.messages.length > 0 && !request.content && (
         <div className="mx-auto max-w-3xl px-6 py-6">
           <div className="mb-4 flex items-center gap-2 text-sm font-medium text-muted-foreground">
             <History className="h-4 w-4" />
@@ -598,12 +595,14 @@ export function PlaygroundPage() {
       storageKey="devpilot_playground_layout"
       rightFooter={
         <StickySubmit
-          label={currentSession ? 'Continue' : 'Generate'}
-          loadingLabel={isStreaming ? 'Streaming...' : 'Generating...'}
-          isLoading={isGenerating}
-          disabled={!prompt.trim()}
+          label={getButtonLabel()}
+          loadingLabel={request.isGenerating ? 'Streaming...' : 'Generating...'}
+          isLoading={request.isGenerating}
+          disabled={getButtonDisabled()}
           onSubmit={() => handleSubmit({ preventDefault: () => {} } as React.FormEvent)}
-          error={chat.isError ? getFriendlyError(chat.error).message : undefined}
+          error={
+            request.isFailed && request.error ? getFriendlyError(request.error).message : undefined
+          }
         />
       }
     />
