@@ -1,5 +1,9 @@
 import DOMPurify from 'dompurify';
 
+/**
+ * @deprecated Use MarkdownRenderer component instead for proper react-markdown rendering.
+ * This function is kept for backward compatibility only.
+ */
 export function renderMarkdown(text: string): string {
   let html = text;
   html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_m, lang: string, code: string) => {

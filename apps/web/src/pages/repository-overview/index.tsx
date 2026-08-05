@@ -23,7 +23,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/auth';
 import { useGitHub } from '@/hooks/use-github';
 import { repoOverviewApi } from '@/lib/repo-overview/api';
-import { renderMarkdown } from '@/lib/markdown';
+import { MarkdownRenderer } from '@/components/shared/MarkdownRenderer';
 import { cn } from '@/lib/utils';
 import {
   MetricCard,
@@ -489,12 +489,7 @@ export default function RepositoryOverviewPage() {
           </div>
         )}
 
-        {summary && !isGeneratingSummary && (
-          <div
-            className="prose prose-sm dark:prose-invert max-w-none text-sm"
-            dangerouslySetInnerHTML={{ __html: renderMarkdown(summary) }}
-          />
-        )}
+        {summary && !isGeneratingSummary && <MarkdownRenderer content={summary} />}
 
         {!summary && !isGeneratingSummary && !summaryError && (
           <p className="text-sm text-muted-foreground py-4 text-center">

@@ -23,7 +23,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { useGitHub } from '@/hooks/use-github';
 import { useEngineeringStatus } from '@/lib/engineering-status';
-import { renderMarkdown } from '@/lib/markdown';
+import { MarkdownRenderer } from '@/components/shared/MarkdownRenderer';
 import { cn } from '@/lib/utils';
 import type {
   EngineeringStatusData,
@@ -578,10 +578,7 @@ export default function EngineeringStatusPage() {
 
           <div className="rounded-lg border bg-card p-6">
             <h2 className="mb-4 text-lg font-semibold">Executive Summary</h2>
-            <div
-              className="prose prose-sm dark:prose-invert max-w-none text-sm"
-              dangerouslySetInnerHTML={{ __html: renderMarkdown(result.executiveSummary) }}
-            />
+            <MarkdownRenderer content={result.executiveSummary} />
           </div>
 
           {result.teamHighlights.length > 0 && (

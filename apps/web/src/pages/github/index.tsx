@@ -23,13 +23,13 @@ import {
 } from '@/hooks/use-github';
 import { useTheme } from '@/hooks/use-theme';
 import {
-  renderMarkdown,
   extractSections,
   extractScore,
   getScoreColor,
   getScoreLabel,
   getScoreBg,
 } from '@/lib/markdown';
+import { MarkdownRenderer } from '@/components/shared/MarkdownRenderer';
 import { getReturnUrl, clearReturnUrl } from '@/lib/oauth-redirect';
 
 const Editor = lazy(() => import('@monaco-editor/react'));
@@ -716,12 +716,7 @@ export function GitHubReviewPage() {
                 {sections.map((section, i) => (
                   <div key={i} className="group relative">
                     <div className="flex items-center justify-between px-4 py-1.5">
-                      <div
-                        className="prose prose-sm dark:prose-invert flex-1 text-sm leading-relaxed"
-                        dangerouslySetInnerHTML={{
-                          __html: renderMarkdown(`# ${section.title}\n\n${section.content}`),
-                        }}
-                      />
+                      <MarkdownRenderer content={`# ${section.title}\n\n${section.content}`} />
                       <button
                         type="button"
                         onClick={() => handleCopySection(i)}

@@ -19,9 +19,9 @@ import {
   getScoreColor,
   getScoreLabel,
   getScoreBg,
-  renderMarkdown,
   extractSections,
 } from '@/lib/markdown';
+import { MarkdownRenderer } from '@/components/shared/MarkdownRenderer';
 import { useCopyToClipboard } from '@/lib/clipboard';
 import { useDownloadFile } from '@/lib/download';
 import { Select } from '@/components/ui/select';
@@ -478,12 +478,7 @@ export function CodeReviewPage() {
                       accent={getScoreAccent(score ?? 5)}
                       copyContent={`# ${section.title}\n\n${section.content}`}
                     >
-                      <div
-                        className="prose prose-sm dark:prose-invert text-sm leading-relaxed"
-                        dangerouslySetInnerHTML={{
-                          __html: renderMarkdown(`# ${section.title}\n\n${section.content}`),
-                        }}
-                      />
+                      <MarkdownRenderer content={`# ${section.title}\n\n${section.content}`} />
                     </ReviewCard>
                   ))}
                 </div>

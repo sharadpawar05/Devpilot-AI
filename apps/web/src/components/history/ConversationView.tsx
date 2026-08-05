@@ -2,7 +2,7 @@ import { ArrowLeft, Copy, Check, User, Bot, Clock, Zap, Coins } from 'lucide-rea
 import { useState } from 'react';
 import type { AIHistorySession } from '@devpilot/types';
 import { WORKFLOW_TYPE_LABELS } from '@devpilot/types';
-import { renderMarkdown } from '@/lib/markdown';
+import { MarkdownRenderer } from '@/components/shared/MarkdownRenderer';
 import { cn } from '@/lib/utils';
 
 interface ConversationViewProps {
@@ -111,12 +111,7 @@ export function ConversationView({ session, onBack, onContinue }: ConversationVi
                     <span>·</span>
                     <span>{message.tokens.toLocaleString()} tokens</span>
                   </div>
-                  <div
-                    className="mt-2 prose prose-sm max-w-none"
-                    dangerouslySetInnerHTML={{
-                      __html: renderMarkdown(message.content),
-                    }}
-                  />
+                  <MarkdownRenderer content={message.content} />
                 </div>
                 <button
                   onClick={() => copyToClipboard(message.content, message.id)}

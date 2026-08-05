@@ -21,7 +21,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { useGitHub } from '@/hooks/use-github';
 import { useSprintSummary } from '@/lib/sprint-summary';
-import { renderMarkdown } from '@/lib/markdown';
+import { MarkdownRenderer } from '@/components/shared/MarkdownRenderer';
 import { cn } from '@/lib/utils';
 import type {
   SprintSummaryData,
@@ -521,10 +521,7 @@ export default function SprintSummaryPage() {
               <BarChart3 className="h-5 w-5 text-muted-foreground" />
               Executive Summary
             </h2>
-            <div
-              className="prose prose-sm dark:prose-invert max-w-none text-sm"
-              dangerouslySetInnerHTML={{ __html: renderMarkdown(result.executiveSummary) }}
-            />
+            <MarkdownRenderer content={result.executiveSummary} />
           </div>
 
           {result.highlights.length > 0 && (

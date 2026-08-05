@@ -21,7 +21,8 @@ import {
   type GitHubAnalyzeResponse,
 } from '@/hooks/use-github';
 import { useCopyResponse } from '@/hooks/use-keyboard-shortcuts';
-import { renderMarkdown, extractSections } from '@/lib/markdown';
+import { extractSections } from '@/lib/markdown';
+import { MarkdownRenderer } from '@/components/shared/MarkdownRenderer';
 import { WorkspaceLayout } from '@/components/workspace/WorkspaceLayout';
 import { PageHeader } from '@/components/workspace/PageHeader';
 import { ResponseActionBar } from '@/components/workspace/ResponseActionBar';
@@ -61,7 +62,6 @@ const TAB_ITEMS = [
 type TabId = 'overview' | 'review' | 'docs' | 'quality' | 'metrics';
 
 function MarkdownContent({ text }: { text: string }) {
-  const html = useMemo(() => renderMarkdown(text), [text]);
   const sections = useMemo(() => extractSections(text), [text]);
 
   useEffect(() => {
@@ -87,24 +87,14 @@ function MarkdownContent({ text }: { text: string }) {
   }, []);
 
   if (sections.length <= 1) {
-    return (
-      <div
-        className="prose prose-sm dark:prose-invert max-w-none"
-        dangerouslySetInnerHTML={{ __html: html }}
-      />
-    );
+    return <MarkdownRenderer content={text} />;
   }
 
   return (
     <div className="divide-y divide-input">
       {sections.map((section, i) => (
         <div key={i} className="group relative px-4 py-3">
-          <div
-            className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed"
-            dangerouslySetInnerHTML={{
-              __html: renderMarkdown(`## ${section.title}\n\n${section.content}`),
-            }}
-          />
+          <MarkdownRenderer content={`## ${section.title}\n\n${section.content}`} />
           <button
             type="button"
             onClick={async () => {

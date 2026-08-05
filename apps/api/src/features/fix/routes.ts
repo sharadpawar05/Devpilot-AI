@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { aiService } from '@/core/ai/service';
 import { PromptRegistry, loadMarkdownPrompts } from '@devpilot/ai-prompts';
+import { getDefaultModel, type AIProviderName } from '@devpilot/config';
 
 const registry = new PromptRegistry();
 registry.registerAll(loadMarkdownPrompts());
@@ -17,13 +18,6 @@ const fixRequestSchema = z.object({
 });
 
 type FixRequest = z.infer<typeof fixRequestSchema>;
-
-const DEFAULT_MODELS: Record<string, string> = {
-  gemini: 'gemini-3.6-flash',
-  openai: 'gpt-4o',
-  anthropic: 'claude-3.5-sonnet',
-  openrouter: 'gpt-4',
-};
 
 export async function fixRoutes(app: FastifyInstance) {
   app.post<{
@@ -96,9 +90,10 @@ export async function fixRoutes(app: FastifyInstance) {
       }
 
       try {
+        const providerName = (provider || 'gemini') as AIProviderName;
         const result = await aiService.generate(rendered.userPrompt, rendered.systemPrompt, {
           provider,
-          model: (model ?? DEFAULT_MODELS[provider] ?? DEFAULT_MODELS.gemini) as never,
+          model: (model ?? getDefaultModel(providerName)) as never,
           temperature: temperature ?? 0.1,
           maxTokens: maxTokens ?? 4096,
         });

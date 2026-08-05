@@ -4,30 +4,9 @@ import {
   type DefaultReviewDepth,
 } from '@/lib/settings-context';
 import { Switch } from '@/components/ui/switch';
+import { getProviderOptions, getModelOptions } from '@devpilot/config';
 
-const PROVIDERS = [
-  { value: 'gemini', label: 'Google Gemini' },
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'anthropic', label: 'Anthropic' },
-  { value: 'openrouter', label: 'OpenRouter' },
-] as const;
-
-const MODELS: Record<string, { value: string; label: string }[]> = {
-  gemini: [
-    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
-    { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
-  ],
-  openai: [
-    { value: 'gpt-4o', label: 'GPT-4o' },
-    { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
-    { value: 'o3-mini', label: 'o3-mini' },
-  ],
-  anthropic: [
-    { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4' },
-    { value: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku' },
-  ],
-  openrouter: [{ value: 'auto', label: 'Auto (Best Available)' }],
-};
+const PROVIDERS = getProviderOptions();
 
 const REVIEW_TYPES = [
   { value: 'quick', label: 'Quick' },
@@ -43,7 +22,7 @@ const REVIEW_DEPTHS = [
 
 export function AIPreferencesSettings() {
   const { settings, updateAI } = useSettings();
-  const models = MODELS[settings.ai.defaultProvider] || MODELS.gemini;
+  const models = getModelOptions(settings.ai.defaultProvider as any) || getModelOptions('gemini');
 
   return (
     <div className="space-y-8">
@@ -59,12 +38,12 @@ export function AIPreferencesSettings() {
               value={settings.ai.defaultProvider}
               onChange={(e) => {
                 const provider = e.target.value as typeof settings.ai.defaultProvider;
-                const firstModel = MODELS[provider]?.[0]?.value || '';
+                const firstModel = getModelOptions(provider as any)?.[0]?.value || '';
                 updateAI({ defaultProvider: provider, defaultModel: firstModel });
               }}
               className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
             >
-              {PROVIDERS.map((p) => (
+              {PROVIDERS.map((p: { value: string; label: string }) => (
                 <option key={p.value} value={p.value}>
                   {p.label}
                 </option>
@@ -78,7 +57,7 @@ export function AIPreferencesSettings() {
               onChange={(e) => updateAI({ defaultModel: e.target.value })}
               className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
             >
-              {models.map((m) => (
+              {models.map((m: { value: string; label: string }) => (
                 <option key={m.value} value={m.value}>
                   {m.label}
                 </option>

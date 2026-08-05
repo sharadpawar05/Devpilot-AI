@@ -4,6 +4,7 @@ import { authenticate } from '@/core/auth';
 import { aiService } from '@/core/ai/service';
 import { PromptRegistry, loadMarkdownPrompts } from '@devpilot/ai-prompts';
 import { repositoryIntelligenceService } from '@/features/repo-intelligence';
+import { getDefaultModel, type AIProviderName } from '@devpilot/config';
 
 const registry = new PromptRegistry();
 registry.registerAll(loadMarkdownPrompts());
@@ -26,13 +27,6 @@ const analyzeSchema = z.object({
   pull_number: z.number().min(1),
   provider: z.enum(['gemini', 'openai', 'anthropic', 'openrouter']).default('gemini'),
 });
-
-const DEFAULT_MODELS: Record<string, string> = {
-  gemini: 'gemini-3.6-flash',
-  openai: 'gpt-4o',
-  anthropic: 'claude-3.5-sonnet',
-  openrouter: 'gpt-4',
-};
 
 const DEPTH_MAX_TOKENS: Record<string, number> = {
   Quick: 1024,
@@ -233,9 +227,10 @@ export async function prReviewRoutes(app: FastifyInstance) {
       const effectiveMaxTokens = DEPTH_MAX_TOKENS[reviewDepth] ?? 2048;
 
       try {
+        const providerName = (provider || 'gemini') as AIProviderName;
         const result = await aiService.generate(rendered.userPrompt, rendered.systemPrompt, {
           provider,
-          model: (DEFAULT_MODELS[provider] ?? DEFAULT_MODELS.gemini) as never,
+          model: getDefaultModel(providerName) as never,
           maxTokens: effectiveMaxTokens,
         });
 
@@ -386,9 +381,10 @@ export async function prReviewRoutes(app: FastifyInstance) {
       }
 
       try {
+        const providerName = (provider || 'gemini') as AIProviderName;
         const result = await aiService.generate(rendered.userPrompt, rendered.systemPrompt, {
           provider,
-          model: (DEFAULT_MODELS[provider] ?? DEFAULT_MODELS.gemini) as never,
+          model: getDefaultModel(providerName) as never,
           maxTokens: 4096,
         });
 

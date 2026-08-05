@@ -1,5 +1,5 @@
 import { FileCode, ExternalLink } from 'lucide-react';
-import { renderMarkdown } from '@/lib/markdown';
+import { MarkdownRenderer } from '@/components/shared/MarkdownRenderer';
 
 interface ReferencedFilesPanelProps {
   files: string[];
@@ -64,10 +64,7 @@ export function ChatMessage({
           <p className="text-sm">{content}</p>
         ) : (
           <div>
-            <div
-              className="prose prose-sm dark:prose-invert max-w-none text-sm"
-              dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }}
-            />
+            <MarkdownRenderer content={content} />
             {referencedFiles && referencedFiles.length > 0 && (
               <div className="mt-3">
                 <ReferencedFilesPanel files={referencedFiles} onFileClick={onFileClick} />

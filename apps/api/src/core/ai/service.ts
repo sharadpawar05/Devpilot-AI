@@ -1,5 +1,6 @@
 import { AIService } from '@devpilot/ai-core';
 import { config } from '@devpilot/config';
+import { getDefaultModel } from '@devpilot/config';
 
 const aiService = new AIService({
   defaultProvider: 'gemini',
@@ -11,7 +12,7 @@ const aiService = new AIService({
 if (config.ai.geminiApiKey) {
   aiService.registerProvider('gemini', {
     apiKey: config.ai.geminiApiKey,
-    defaultModel: 'gemini-3.6-flash',
+    defaultModel: getDefaultModel('gemini') as any,
     timeout: 60000,
   });
 }
@@ -19,7 +20,7 @@ if (config.ai.geminiApiKey) {
 if (config.ai.openaiApiKey) {
   aiService.registerProvider('openai', {
     apiKey: config.ai.openaiApiKey,
-    defaultModel: 'gpt-4o',
+    defaultModel: getDefaultModel('openai') as any,
     timeout: 60000,
   });
 }
@@ -27,7 +28,7 @@ if (config.ai.openaiApiKey) {
 if (config.ai.anthropicApiKey) {
   aiService.registerProvider('anthropic', {
     apiKey: config.ai.anthropicApiKey,
-    defaultModel: 'claude-3.5-sonnet',
+    defaultModel: getDefaultModel('anthropic') as any,
     timeout: 60000,
   });
 }
@@ -35,7 +36,7 @@ if (config.ai.anthropicApiKey) {
 if (config.ai.openrouterApiKey) {
   aiService.registerProvider('openrouter', {
     apiKey: config.ai.openrouterApiKey,
-    defaultModel: 'gpt-4',
+    defaultModel: getDefaultModel('openrouter') as any,
     timeout: 60000,
   });
 }

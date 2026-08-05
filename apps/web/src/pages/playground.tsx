@@ -11,6 +11,7 @@ import {
   Code,
   Wand2,
   Bug,
+  RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -23,48 +24,24 @@ import { useChat, useChatHistory, type ChatResponse } from '@/hooks/use-chat';
 import { useStreamSession } from '@/hooks/use-stream';
 import { useStreamingAbort, useCopyResponse } from '@/hooks/use-keyboard-shortcuts';
 import { useUserPreferences } from '@/hooks/use-user-preferences';
-import { renderMarkdown } from '@/lib/markdown';
+import { MarkdownRenderer } from '@/components/shared/MarkdownRenderer';
 import { cn } from '@/lib/utils';
 import { WorkspaceLayout } from '@/components/workspace/WorkspaceLayout';
 import { PageHeader } from '@/components/workspace/PageHeader';
 import { StickySubmit } from '@/components/workspace/StickyFooter';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { PlaygroundLoadingSteps } from '@/components/shared/LoadingSteps';
+import { getProviderOptions, getModelOptions } from '@devpilot/config';
+import { getFriendlyError } from '@/lib/ai-errors';
 import type { AIHistorySession } from '@devpilot/types';
 
-const PROVIDERS = [
-  { value: 'gemini', label: 'Google Gemini' },
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'anthropic', label: 'Anthropic' },
-  { value: 'openrouter', label: 'OpenRouter' },
-] as const;
+const PROVIDERS = getProviderOptions();
 
 const MODELS: Record<string, { value: string; label: string }[]> = {
-  gemini: [
-    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
-    { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
-    { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
-    { value: 'gemini-flash-latest', label: 'Gemini Flash (Latest)' },
-    { value: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash' },
-    { value: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash' },
-  ],
-  openai: [
-    { value: 'gpt-4o', label: 'GPT-4o' },
-    { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' },
-    { value: 'gpt-4', label: 'GPT-4' },
-    { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' },
-  ],
-  anthropic: [
-    { value: 'claude-3.5-sonnet', label: 'Claude 3.5 Sonnet' },
-    { value: 'claude-3-opus', label: 'Claude 3 Opus' },
-    { value: 'claude-3-sonnet', label: 'Claude 3 Sonnet' },
-    { value: 'claude-3-haiku', label: 'Claude 3 Haiku' },
-  ],
-  openrouter: [
-    { value: 'gpt-4', label: 'GPT-4' },
-    { value: 'claude-3-opus', label: 'Claude 3 Opus' },
-    { value: 'claude-3-sonnet', label: 'Claude 3 Sonnet' },
-  ],
+  gemini: getModelOptions('gemini'),
+  openai: getModelOptions('openai'),
+  anthropic: getModelOptions('anthropic'),
+  openrouter: getModelOptions('openrouter'),
 };
 
 const PROMPT_TEMPLATES = [
@@ -386,7 +363,7 @@ export function PlaygroundPage() {
                         onChange={(e) => handleProviderChange(e.target.value)}
                         className="w-full appearance-none rounded-md border border-input bg-background px-2.5 py-1.5 pr-7 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       >
-                        {PROVIDERS.map((p) => (
+                        {PROVIDERS.map((p: { value: string; label: string }) => (
                           <option key={p.value} value={p.value}>
                             {p.label}
                           </option>
@@ -472,12 +449,23 @@ export function PlaygroundPage() {
       {hasResponse && (
         <div ref={responseRef} className="flex-1 overflow-y-auto">
           <div className="mx-auto max-w-3xl px-6 py-6">
-            <div
-              className="prose prose-sm max-w-none dark:prose-invert"
-              dangerouslySetInnerHTML={{
-                __html: renderMarkdown(responseContent),
-              }}
-            />
+            <div className="mb-4 flex items-center justify-between">
+              <p className="text-sm font-medium text-muted-foreground">Response</p>
+              <div className="flex gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    stream.reset();
+                    setResult(null);
+                  }}
+                  className="h-7 text-xs"
+                >
+                  Clear
+                </Button>
+              </div>
+            </div>
+            <MarkdownRenderer content={responseContent} />
             {isStreaming && (
               <span className="inline-block h-4 w-0.5 animate-pulse bg-foreground/70" />
             )}
@@ -489,9 +477,32 @@ export function PlaygroundPage() {
           <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
             <div className="flex items-start gap-3">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
-              <div>
-                <p className="text-sm font-medium text-destructive">Stream Error</p>
-                <p className="mt-1 text-sm text-muted-foreground">{stream.error.message}</p>
+              <div className="flex-1">
+                {(() => {
+                  const friendlyError = getFriendlyError(stream.error);
+                  return (
+                    <>
+                      <p className="text-sm font-medium text-destructive">{friendlyError.title}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">{friendlyError.message}</p>
+                      {friendlyError.retryable && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="mt-3"
+                          onClick={() => {
+                            stream.reset();
+                            if (prompt.trim()) {
+                              handleSubmit({ preventDefault: () => {} } as React.FormEvent);
+                            }
+                          }}
+                        >
+                          <RefreshCw className="mr-2 h-3 w-3" />
+                          Retry
+                        </Button>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             </div>
           </div>
@@ -530,12 +541,9 @@ export function PlaygroundPage() {
                   <p className="text-xs font-medium text-muted-foreground">
                     {message.role === 'user' ? 'You' : 'Assistant'}
                   </p>
-                  <div
-                    className="mt-1 prose prose-xs max-w-none text-sm"
-                    dangerouslySetInnerHTML={{
-                      __html: renderMarkdown(message.content.slice(0, 300)),
-                    }}
-                  />
+                  <div className="mt-1">
+                    <MarkdownRenderer content={message.content.slice(0, 300)} />
+                  </div>
                   {message.content.length > 300 && (
                     <p className="mt-1 text-xs text-muted-foreground">...</p>
                   )}
@@ -563,11 +571,7 @@ export function PlaygroundPage() {
           isLoading={isGenerating}
           disabled={!prompt.trim()}
           onSubmit={() => handleSubmit({ preventDefault: () => {} } as React.FormEvent)}
-          error={
-            chat.isError
-              ? (chat.error?.error?.message ?? 'An unexpected error occurred')
-              : undefined
-          }
+          error={chat.isError ? getFriendlyError(chat.error).message : undefined}
         />
       }
     />

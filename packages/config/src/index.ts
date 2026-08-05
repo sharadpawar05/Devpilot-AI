@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+// Re-export AI model configuration
+export * from './ai-models';
+
 const envSchema = z.object({
   API_PORT: z.coerce.number().default(3001),
   API_URL: z.string().default('http://localhost:3001'),
@@ -14,7 +17,7 @@ const envSchema = z.object({
   OPENAI_API_KEY: z.string().default(''),
   ANTHROPIC_API_KEY: z.string().default(''),
   OPENROUTER_API_KEY: z.string().default(''),
-  AI_DEFAULT_MODEL: z.string().default('gemini-3.5-flash'),
+  AI_DEFAULT_MODEL: z.string().default('gemini-2.5-flash'),
   AI_MAX_TOKENS: z.coerce.number().default(4096),
 });
 
