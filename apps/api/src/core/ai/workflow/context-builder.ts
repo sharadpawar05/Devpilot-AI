@@ -1,5 +1,10 @@
 import { WorkflowType, type ContextBuilderFn } from './types';
 
+const CODE_FENCE_LANGUAGE_MAP: Record<string, string> = {
+  react: 'tsx',
+  nodejs: 'javascript',
+};
+
 const contextBuilders = new Map<WorkflowType, ContextBuilderFn>();
 
 export function registerContextBuilder(
@@ -33,13 +38,14 @@ registerContextBuilder(WorkflowType.PLAYGROUND, (ctx) => ({
 
 registerContextBuilder(WorkflowType.CODE_REVIEW, (ctx) => {
   const language = (ctx.language as string) || 'unknown';
+  const codeFenceLanguage = CODE_FENCE_LANGUAGE_MAP[language] || language;
   const code = (ctx.code as string) || '';
   const reviewType = (ctx.reviewType as string) || 'Standard';
   const reviewDepth = (ctx.reviewDepth as string) || 'Standard';
   const contextStr = (ctx.context as string) || '';
 
   return {
-    language,
+    language: codeFenceLanguage,
     code,
     reviewType,
     reviewDepth,
