@@ -93,6 +93,7 @@ export function PlaygroundPage() {
   const [result, setResult] = useState<ChatResponse | null>(null);
   const [currentSession, setCurrentSession] = useState<AIHistorySession | null>(null);
   const [_isLoadingSession, setIsLoadingSession] = useState(false);
+  const lastPromptRef = useRef('');
 
   const responseRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -171,6 +172,9 @@ export function PlaygroundPage() {
       e.preventDefault();
       if (!prompt.trim() || isGenerating) return;
 
+      // Save prompt for retry
+      lastPromptRef.current = prompt.trim();
+
       addRecentPrompt(prompt.trim());
 
       stream.startStream({
@@ -204,9 +208,13 @@ export function PlaygroundPage() {
 
   async function loadRecentSession() {
     try {
-      // First try to get from backend API
+      // First try to get from backend API - filter by playground workflow type
       const sessions = await import('@/lib/ai-history').then((m) =>
-        m.aiHistoryApi.listSessions(token || '', {}, { page: 1, pageSize: 1 }),
+        m.aiHistoryApi.listSessions(
+          token || '',
+          { workflowType: ['playground'] },
+          { page: 1, pageSize: 1 },
+        ),
       );
       if (sessions.sessions[0]) {
         const session = await getSession(sessions.sessions[0].id);
@@ -509,8 +517,14 @@ export function PlaygroundPage() {
                           className="mt-3"
                           onClick={() => {
                             stream.reset();
-                            if (prompt.trim()) {
-                              handleSubmit({ preventDefault: () => {} } as React.FormEvent);
+                            // Restore the last prompt for retry
+                            const retryPrompt = lastPromptRef.current;
+                            if (retryPrompt) {
+                              setPrompt(retryPrompt);
+                              // Use setTimeout to ensure state is updated before submitting
+                              setTimeout(() => {
+                                handleSubmit({ preventDefault: () => {} } as React.FormEvent);
+                              }, 0);
                             }
                           }}
                         >
