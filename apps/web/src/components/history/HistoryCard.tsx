@@ -214,14 +214,16 @@ export const HistoryCard = memo(function HistoryCard({
                     setShowMenu(false);
                   }}
                 />
-                <MenuButton
-                  icon={RotateCcw}
-                  label="Continue session"
-                  onClick={() => {
-                    onContinue(session);
-                    setShowMenu(false);
-                  }}
-                />
+                {session.workflowType !== 'playground' && (
+                  <MenuButton
+                    icon={RotateCcw}
+                    label="Continue session"
+                    onClick={() => {
+                      onContinue(session);
+                      setShowMenu(false);
+                    }}
+                  />
+                )}
                 {onDuplicate && (
                   <MenuButton
                     icon={Copy}
