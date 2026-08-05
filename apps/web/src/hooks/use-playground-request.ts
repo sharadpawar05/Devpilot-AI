@@ -2,6 +2,12 @@ import { useCallback, useRef, useReducer, useEffect } from 'react';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
 
+// Debug logging
+const DEBUG = import.meta.env.DEV;
+function log(...args: unknown[]) {
+  if (DEBUG) console.log('[PlaygroundRequest]', ...args);
+}
+
 // Request state enum
 export enum RequestState {
   Idle = 'idle',
@@ -14,11 +20,12 @@ export enum RequestState {
 // Request action types
 export enum RequestAction {
   START = 'START',
+  FIRST_TOKEN = 'FIRST_TOKEN',
   SUCCESS = 'SUCCESS',
   FAILURE = 'FAILURE',
   CANCEL = 'CANCEL',
   RESET = 'RESET',
-  CLEAR_CONTENT = 'CLEAR_CONTENT',
+  STREAM_DONE = 'STREAM_DONE',
 }
 
 export interface RequestError {
@@ -48,15 +55,17 @@ interface PlaygroundRequestState {
   content: string;
   lastRequest: RequestRecord | null;
   requestId: number;
+  hasStartedStreaming: boolean;
 }
 
 type PlaygroundRequestAction =
   | { type: RequestAction.START; payload: RequestRecord }
+  | { type: RequestAction.FIRST_TOKEN }
   | { type: RequestAction.SUCCESS; payload: { metadata: RequestMetadata; content: string } }
   | { type: RequestAction.FAILURE; payload: RequestError }
   | { type: RequestAction.CANCEL }
   | { type: RequestAction.RESET }
-  | { type: RequestAction.CLEAR_CONTENT };
+  | { type: RequestAction.STREAM_DONE };
 
 function requestReducer(
   state: PlaygroundRequestState,
@@ -64,6 +73,7 @@ function requestReducer(
 ): PlaygroundRequestState {
   switch (action.type) {
     case RequestAction.START:
+      log('REDUCER: START');
       return {
         ...state,
         status: RequestState.Generating,
@@ -72,49 +82,65 @@ function requestReducer(
         content: '',
         lastRequest: action.payload,
         requestId: state.requestId + 1,
+        hasStartedStreaming: false,
+      };
+
+    case RequestAction.FIRST_TOKEN:
+      log('REDUCER: FIRST_TOKEN');
+      return {
+        ...state,
+        hasStartedStreaming: true,
       };
 
     case RequestAction.SUCCESS:
+      log('REDUCER: SUCCESS', action.payload.metadata);
       return {
         ...state,
         status: RequestState.Success,
         error: null,
         metadata: action.payload.metadata,
         content: action.payload.content,
+        hasStartedStreaming: false,
       };
 
     case RequestAction.FAILURE:
+      log('REDUCER: FAILURE', action.payload);
       return {
         ...state,
         status: RequestState.Failed,
         error: action.payload,
         metadata: null,
         content: '',
+        hasStartedStreaming: false,
       };
 
     case RequestAction.CANCEL:
+      log('REDUCER: CANCEL');
       return {
         ...state,
         status: RequestState.Cancelled,
         error: null,
         metadata: null,
         content: '',
+        hasStartedStreaming: false,
       };
 
     case RequestAction.RESET:
+      log('REDUCER: RESET');
       return {
         ...state,
         status: RequestState.Idle,
         error: null,
         metadata: null,
         content: '',
+        hasStartedStreaming: false,
       };
 
-    case RequestAction.CLEAR_CONTENT:
+    case RequestAction.STREAM_DONE:
+      log('REDUCER: STREAM_DONE');
       return {
         ...state,
-        content: '',
-        metadata: null,
+        hasStartedStreaming: false,
       };
 
     default:
@@ -130,6 +156,7 @@ function initialState(): PlaygroundRequestState {
     content: '',
     lastRequest: null,
     requestId: 0,
+    hasStartedStreaming: false,
   };
 }
 
@@ -188,12 +215,17 @@ export function usePlaygroundRequest(
   const batchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const totalContentRef = useRef('');
   const requestIdRef = useRef(0);
+  const streamClosedRef = useRef(false);
 
   // Cleanup function - resets all stream state
   const cleanupStream = useCallback(() => {
+    log('cleanupStream');
+
     // Abort any existing stream
-    abortControllerRef.current?.abort();
-    abortControllerRef.current = null;
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
 
     // Clear all timers
     if (batchTimerRef.current) {
@@ -204,16 +236,19 @@ export function usePlaygroundRequest(
     // Clear all buffers
     contentBufferRef.current = '';
     totalContentRef.current = '';
+    streamClosedRef.current = true;
   }, []);
 
   // Cancel request
   const cancelRequest = useCallback(() => {
+    log('cancelRequest');
     cleanupStream();
     dispatch({ type: RequestAction.CANCEL });
   }, [cleanupStream]);
 
   // Reset request
   const resetRequest = useCallback(() => {
+    log('resetRequest');
     cleanupStream();
     dispatch({ type: RequestAction.RESET });
   }, [cleanupStream]);
@@ -227,8 +262,11 @@ export function usePlaygroundRequest(
       temperature: number;
       maxTokens: number;
     }) => {
+      log('startRequest', params);
+
       // CRITICAL: Always clean up previous stream first
       cleanupStream();
+      streamClosedRef.current = false;
 
       // Dispatch START to state machine (clears error, content, metadata)
       dispatch({
@@ -239,6 +277,7 @@ export function usePlaygroundRequest(
       // Generate unique request ID for this request
       requestIdRef.current += 1;
       const currentRequestId = requestIdRef.current;
+      log('requestId', currentRequestId);
 
       // Create NEW AbortController for this request
       const abortController = new AbortController();
@@ -257,6 +296,7 @@ export function usePlaygroundRequest(
         maxTokens: params.maxTokens,
       };
 
+      log('fetch starting');
       fetch(`${API_BASE_URL}/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -264,8 +304,13 @@ export function usePlaygroundRequest(
         signal: abortController.signal,
       })
         .then(async (response) => {
+          log('fetch response received', response.status);
+
           // Check if this request was superseded
-          if (currentRequestId !== requestIdRef.current) return;
+          if (currentRequestId !== requestIdRef.current) {
+            log('request superseded, aborting');
+            return;
+          }
 
           if (!response.ok) {
             const error = await response.json();
@@ -278,14 +323,22 @@ export function usePlaygroundRequest(
           const decoder = new TextDecoder();
           let buffer = '';
           let done = false;
+          let hasReceivedMetadata = false;
+          let hasReceivedError = false;
+
+          log('starting stream read loop');
 
           try {
             while (!done) {
               const result = await reader.read();
               done = result.done;
-              if (done) break;
-              const value = result.value;
 
+              if (done) {
+                log('stream reader done');
+                break;
+              }
+
+              const value = result.value;
               buffer += decoder.decode(value, { stream: true });
 
               const lines = buffer.split('\n');
@@ -294,16 +347,29 @@ export function usePlaygroundRequest(
               for (const line of lines) {
                 if (line.startsWith('data: ')) {
                   const data = line.slice(6);
-                  if (data === '[DONE]') continue;
+                  if (data === '[DONE]') {
+                    log('received [DONE]');
+                    continue;
+                  }
 
                   try {
                     const chunk: StreamChunk = JSON.parse(data);
 
                     if (chunk.type === 'token' && chunk.content) {
+                      if (!totalContentRef.current && !contentBufferRef.current) {
+                        log('first token received');
+                        dispatch({ type: RequestAction.FIRST_TOKEN });
+                      }
                       contentBufferRef.current += chunk.content;
                     } else if (chunk.type === 'metadata') {
+                      log('metadata received', chunk);
+                      hasReceivedMetadata = true;
+
                       // Check if request is still current
-                      if (currentRequestId !== requestIdRef.current) return;
+                      if (currentRequestId !== requestIdRef.current) {
+                        log('request superseded during metadata');
+                        return;
+                      }
 
                       const remainingBuffer = contentBufferRef.current;
                       contentBufferRef.current = '';
@@ -321,6 +387,8 @@ export function usePlaygroundRequest(
 
                       const fullContent = totalContentRef.current + remainingBuffer;
 
+                      log('dispatching SUCCESS', { metadata, contentLength: fullContent.length });
+
                       // Dispatch SUCCESS with content
                       dispatch({
                         type: RequestAction.SUCCESS,
@@ -329,6 +397,9 @@ export function usePlaygroundRequest(
 
                       await onComplete?.(metadata, fullContent);
                     } else if (chunk.type === 'error') {
+                      log('error chunk received', chunk.error);
+                      hasReceivedError = true;
+
                       // Check if request is still current
                       if (currentRequestId !== requestIdRef.current) return;
 
@@ -342,7 +413,8 @@ export function usePlaygroundRequest(
 
                       onError?.(error);
                     } else if (chunk.type === 'done') {
-                      // Stream completed
+                      log('done chunk received');
+                      dispatch({ type: RequestAction.STREAM_DONE });
                     }
                   } catch {
                     // Skip malformed JSON
@@ -351,13 +423,35 @@ export function usePlaygroundRequest(
               }
             }
           } finally {
+            log('releasing reader lock');
             reader.releaseLock();
+          }
+
+          // If we exit the loop without receiving metadata or error, it's an error
+          if (
+            !hasReceivedMetadata &&
+            !hasReceivedError &&
+            currentRequestId === requestIdRef.current
+          ) {
+            log('no metadata received, dispatching failure');
+            dispatch({
+              type: RequestAction.FAILURE,
+              payload: { code: 'NO_METADATA', message: 'Stream ended without completion' },
+            });
           }
         })
         .catch((error) => {
+          log('fetch error', error);
+
           // Check if request was cancelled or superseded
-          if (error.name === 'AbortError') return;
-          if (currentRequestId !== requestIdRef.current) return;
+          if (error.name === 'AbortError') {
+            log('request aborted');
+            return;
+          }
+          if (currentRequestId !== requestIdRef.current) {
+            log('request superseded');
+            return;
+          }
 
           const streamError: RequestError = error.code
             ? error
@@ -372,9 +466,12 @@ export function usePlaygroundRequest(
           onError?.(streamError);
         })
         .finally(() => {
+          log('fetch finally block', { currentRequestId, requestId: requestIdRef.current });
+
           // Always cleanup in finally
           if (currentRequestId === requestIdRef.current) {
             cleanupStream();
+            log('stream cleaned up');
           }
         });
     },
@@ -384,6 +481,7 @@ export function usePlaygroundRequest(
   // Retry uses CURRENT provider/model, NOT the failed request's
   const retryRequest = useCallback(
     (currentProvider: string, currentModel: string) => {
+      log('retryRequest', { currentProvider, currentModel });
       if (!state.lastRequest) return;
 
       // Use current provider/model and current prompt from last request
