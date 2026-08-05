@@ -253,7 +253,10 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
           setConnected(true);
           setGithubUser(data.user);
           setConnectedAt(data.connectedAt);
-          fetchRepositories();
+          // Only fetch repositories if not already loaded
+          if (repositories.length === 0) {
+            fetchRepositories();
+          }
         }
       } else {
         setConnected(false);
@@ -263,7 +266,7 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
     } catch {
       setConnected(false);
     }
-  }, [token, authHeaders, fetchRepositories]);
+  }, [token, authHeaders, fetchRepositories, repositories.length]);
 
   useEffect(() => {
     checkConnection();
