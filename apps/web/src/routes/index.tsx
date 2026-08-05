@@ -15,6 +15,7 @@ import RepositoryOverviewPage from '@/pages/repository-overview';
 import SprintSummaryPage from '@/pages/sprint-summary';
 import ReleaseNotesPage from '@/pages/release-notes';
 import EngineeringStatusPage from '@/pages/engineering-status';
+import IncidentSummaryPage from '@/pages/incident-summary';
 import { HistoryPage } from '@/pages/history';
 import AnalyticsPage from '@/pages/analytics';
 import SettingsPage from '@/pages/settings';
@@ -61,6 +62,7 @@ const routes: RouteObject[] = [
       { path: '/sprint-summary', element: <SprintSummaryPage /> },
       { path: '/release-notes', element: <ReleaseNotesPage /> },
       { path: '/engineering-status', element: <EngineeringStatusPage /> },
+      { path: '/incident-summary', element: <IncidentSummaryPage /> },
       { path: '/repository-chat', element: <RepositoryChatPage /> },
       { path: '/history', element: <HistoryPage /> },
       { path: '/analytics', element: <AnalyticsPage /> },
