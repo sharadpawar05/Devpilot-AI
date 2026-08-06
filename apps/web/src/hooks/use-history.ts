@@ -146,16 +146,14 @@ export function useHistory(
       if (!token) return false;
       setDeletingIds((prev) => new Set(prev).add(id));
       try {
-        setSessions((prev) => prev.filter((s) => s.id !== id));
         const result = await aiHistoryApi.deleteSession(token, id);
-        if (!result) {
-          await refresh();
-          return false;
+        if (result) {
+          setSessions((prev) => prev.filter((s) => s.id !== id));
+          setPagination((prev) => (prev ? { ...prev, total: prev.total - 1 } : prev));
+          return true;
         }
-        setPagination((prev) => (prev ? { ...prev, total: prev.total - 1 } : prev));
-        return true;
+        return false;
       } catch {
-        await refresh();
         return false;
       } finally {
         setDeletingIds((prev) => {
@@ -165,7 +163,7 @@ export function useHistory(
         });
       }
     },
-    [token, refresh],
+    [token],
   );
 
   const getSession = useCallback(
