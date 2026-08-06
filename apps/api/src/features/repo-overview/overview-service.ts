@@ -55,13 +55,39 @@ function mapHealthDetails(
 
 export class RepoOverviewService {
   async getOverview(userId: string, owner: string, repo: string): Promise<RepoOverviewData> {
-    const [metadata, languages, contributors, tree, health] = await Promise.all([
-      repositoryIntelligenceService.getMetadata(userId, owner, repo),
-      repositoryIntelligenceService.getLanguages(userId, owner, repo),
-      repositoryIntelligenceService.getContributors(userId, owner, repo),
-      repositoryIntelligenceService.getFileTree(userId, owner, repo),
-      repositoryIntelligenceService.getHealth(userId, owner, repo),
-    ]);
+    const [metadataResult, languagesResult, contributorsResult, treeResult, healthResult] =
+      await Promise.allSettled([
+        repositoryIntelligenceService.getMetadata(userId, owner, repo),
+        repositoryIntelligenceService.getLanguages(userId, owner, repo),
+        repositoryIntelligenceService.getContributors(userId, owner, repo),
+        repositoryIntelligenceService.getFileTree(userId, owner, repo),
+        repositoryIntelligenceService.getHealth(userId, owner, repo),
+      ]);
+
+    if (metadataResult.status === 'rejected') {
+      throw new Error(
+        `Failed to fetch repository metadata: ${metadataResult.reason instanceof Error ? metadataResult.reason.message : 'Unknown error'}`,
+      );
+    }
+
+    const metadata = metadataResult.value;
+    const languages =
+      languagesResult.status === 'fulfilled'
+        ? languagesResult.value
+        : ({} as RepoLanguageBreakdown);
+    const contributors = contributorsResult.status === 'fulfilled' ? contributorsResult.value : [];
+    const tree = treeResult.status === 'fulfilled' ? treeResult.value : [];
+    const health =
+      healthResult.status === 'fulfilled'
+        ? healthResult.value
+        : {
+            score: 0,
+            passedCount: 0,
+            failedCount: 0,
+            criticalCount: 0,
+            details: [],
+            scoreBreakdown: [],
+          };
 
     const overviewMetadata: RepoOverviewMetadata = {
       id: metadata.id,

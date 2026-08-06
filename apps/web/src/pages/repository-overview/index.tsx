@@ -129,10 +129,18 @@ export default function RepositoryOverviewPage() {
   const gh = useGitHub();
 
   const [selectedRepo, setSelectedRepo] = useState(() => {
-    return localStorage.getItem('repo-overview-selected-repo') || '';
+    try {
+      return localStorage.getItem('repo-overview-selected-repo') || '';
+    } catch {
+      return '';
+    }
   });
   const [selectedBranch, setSelectedBranch] = useState(() => {
-    return localStorage.getItem('repo-overview-selected-branch') || 'main';
+    try {
+      return localStorage.getItem('repo-overview-selected-branch') || 'main';
+    } catch {
+      return 'main';
+    }
   });
   const [overviewData, setOverviewData] = useState<RepoOverviewData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -152,11 +160,19 @@ export default function RepositoryOverviewPage() {
   const repo = selectedRepo.split('/')[1] || '';
 
   useEffect(() => {
-    if (selectedRepo) localStorage.setItem('repo-overview-selected-repo', selectedRepo);
+    try {
+      if (selectedRepo) localStorage.setItem('repo-overview-selected-repo', selectedRepo);
+    } catch {
+      // localStorage may be unavailable
+    }
   }, [selectedRepo]);
 
   useEffect(() => {
-    if (selectedBranch) localStorage.setItem('repo-overview-selected-branch', selectedBranch);
+    try {
+      if (selectedBranch) localStorage.setItem('repo-overview-selected-branch', selectedBranch);
+    } catch {
+      // localStorage may be unavailable
+    }
   }, [selectedBranch]);
 
   const fetchOverview = useCallback(async () => {
@@ -228,7 +244,7 @@ export default function RepositoryOverviewPage() {
 
   useEffect(() => {
     if (owner && repo && token) {
-      gh.fetchBranches(owner, repo);
+      gh.fetchBranches(owner, repo).catch(() => {});
     }
   }, [owner, repo, token, gh.fetchBranches]);
 
@@ -492,7 +508,15 @@ export default function RepositoryOverviewPage() {
         {summary && !isGeneratingSummary && (
           <div
             className="prose prose-sm dark:prose-invert max-w-none text-sm"
-            dangerouslySetInnerHTML={{ __html: renderMarkdown(summary) }}
+            dangerouslySetInnerHTML={{
+              __html: (() => {
+                try {
+                  return renderMarkdown(summary);
+                } catch {
+                  return '<p class="text-red-600">Failed to render summary</p>';
+                }
+              })(),
+            }}
           />
         )}
 
@@ -664,15 +688,22 @@ function FileDetailPanel({
     setError(null);
     setContent(null);
 
-    repoOverviewApi.getFileContent(owner, repo, path, token).then((result) => {
-      if (cancelled) return;
-      if (!result.success) {
-        setError(result.error || 'Failed to load file');
-      } else {
-        setContent(result.content || '');
-      }
-      setLoading(false);
-    });
+    repoOverviewApi
+      .getFileContent(owner, repo, path, token)
+      .then((result) => {
+        if (cancelled) return;
+        if (!result.success) {
+          setError(result.error || 'Failed to load file');
+        } else {
+          setContent(result.content || '');
+        }
+        setLoading(false);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : 'Failed to load file');
+        setLoading(false);
+      });
 
     return () => {
       cancelled = true;

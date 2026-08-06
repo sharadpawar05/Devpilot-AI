@@ -24,59 +24,70 @@ export async function sprintSummaryRoutes(app: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const auth = (request as { auth: { sub: string } }).auth;
-      const parsed = sprintSummarySchema.safeParse(request.body);
+      try {
+        const auth = (request as { auth: { sub: string } }).auth;
+        const parsed = sprintSummarySchema.safeParse(request.body);
 
-      if (!parsed.success) {
-        return reply.status(400).send({
+        if (!parsed.success) {
+          return reply.status(400).send({
+            success: false,
+            error: {
+              code: 'VALIDATION_ERROR',
+              message: parsed.error.errors.map((e) => e.message).join(', '),
+            },
+          });
+        }
+
+        const { owner, repo, branch, startDate, endDate, provider } = parsed.data;
+
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+
+        if (start > end) {
+          return reply.status(400).send({
+            success: false,
+            error: {
+              code: 'INVALID_DATE_RANGE',
+              message: 'Start date must be before end date',
+            },
+          });
+        }
+
+        const diffDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+        if (diffDays > 90) {
+          return reply.status(400).send({
+            success: false,
+            error: {
+              code: 'DATE_RANGE_TOO_LONG',
+              message: 'Sprint period cannot exceed 90 days',
+            },
+          });
+        }
+
+        const result = await sprintSummaryService.generateSummary(auth.sub, {
+          owner,
+          repo,
+          branch,
+          startDate,
+          endDate,
+          provider,
+        });
+
+        if (!result.success) {
+          return reply.status(500).send(result);
+        }
+
+        return reply.send(result);
+      } catch (error) {
+        console.error('Sprint summary generation error:', error);
+        return reply.status(500).send({
           success: false,
           error: {
-            code: 'VALIDATION_ERROR',
-            message: parsed.error.errors.map((e) => e.message).join(', '),
+            code: 'GENERATION_FAILED',
+            message: error instanceof Error ? error.message : 'Failed to generate sprint summary',
           },
         });
       }
-
-      const { owner, repo, branch, startDate, endDate, provider } = parsed.data;
-
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-
-      if (start > end) {
-        return reply.status(400).send({
-          success: false,
-          error: {
-            code: 'INVALID_DATE_RANGE',
-            message: 'Start date must be before end date',
-          },
-        });
-      }
-
-      const diffDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-      if (diffDays > 90) {
-        return reply.status(400).send({
-          success: false,
-          error: {
-            code: 'DATE_RANGE_TOO_LONG',
-            message: 'Sprint period cannot exceed 90 days',
-          },
-        });
-      }
-
-      const result = await sprintSummaryService.generateSummary(auth.sub, {
-        owner,
-        repo,
-        branch,
-        startDate,
-        endDate,
-        provider,
-      });
-
-      if (!result.success) {
-        return reply.status(500).send(result);
-      }
-
-      return reply.send(result);
     },
   );
 }

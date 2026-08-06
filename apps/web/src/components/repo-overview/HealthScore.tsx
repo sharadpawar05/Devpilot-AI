@@ -274,7 +274,14 @@ interface HealthScoreProps {
 }
 
 export function HealthScore({ health, onGenerate, className }: HealthScoreProps) {
-  const { score, passedCount, failedCount, criticalCount, details, scoreBreakdown } = health;
+  const {
+    score = 0,
+    passedCount = 0,
+    failedCount = 0,
+    criticalCount = 0,
+    details = [],
+    scoreBreakdown = [],
+  } = health || {};
   const circumference = 2 * Math.PI * 40;
   const offset = circumference - (score / 100) * circumference;
 

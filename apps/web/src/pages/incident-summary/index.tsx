@@ -210,6 +210,7 @@ export default function IncidentSummaryPage() {
   const [endDate, setEndDate] = useState('');
   const [provider, setProvider] = useState('gemini');
   const [result, setResult] = useState<IncidentSummaryData | null>(null);
+  const [latencyMs, setLatencyMs] = useState<number | null>(null);
 
   const gh = useGitHub();
   const generateMutation = useIncidentSummary();
@@ -248,6 +249,7 @@ export default function IncidentSummaryPage() {
 
       if (response.data) {
         setResult(response.data);
+        setLatencyMs(response.latencyMs ?? null);
       }
     } catch {
       // Error is handled by the mutation
@@ -576,7 +578,7 @@ export default function IncidentSummaryPage() {
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span className="flex items-center gap-1">
               <Clock className="h-3 w-3" />
-              Generated in {(result.generatedAt ? 0 : 0) / 1000}s
+              Generated in {latencyMs ? `${(latencyMs / 1000).toFixed(1)}s` : 'N/A'}
             </span>
             <span>
               {result.incidentPeriod.start} to {result.incidentPeriod.end}

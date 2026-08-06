@@ -292,7 +292,8 @@ Respond with JSON in this exact format:
         timeline: Array.isArray(parsed.timeline) ? parsed.timeline : [],
         recommendations: Array.isArray(parsed.recommendations) ? parsed.recommendations : [],
       };
-    } catch {
+    } catch (error) {
+      console.warn('Failed to parse AI response as JSON, returning raw text:', error);
       return {
         executiveSummary: response.slice(0, 2000),
         findings: [],
