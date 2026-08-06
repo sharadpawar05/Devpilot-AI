@@ -1,6 +1,0 @@
-{
-  "buildCommand": "cd ../.. && pnpm turbo run build --filter=@devpilot/web",
-  "outputDirectory": "dist",
-  "framework": "vite",
-  "installCommand": "pnpm install"
-}
