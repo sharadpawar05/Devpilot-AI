@@ -25,6 +25,7 @@ import { useGitHub } from '@/hooks/use-github';
 import { repoOverviewApi } from '@/lib/repo-overview/api';
 import { renderMarkdown } from '@/lib/markdown';
 import { cn } from '@/lib/utils';
+import { getErrorMessage } from '@/lib/error-messages';
 import {
   MetricCard,
   LanguageBar,
@@ -129,17 +130,27 @@ export default function RepositoryOverviewPage() {
   const gh = useGitHub();
 
   const [selectedRepo, setSelectedRepo] = useState(() => {
-    return localStorage.getItem('repo-overview-selected-repo') || '';
+    try {
+      return localStorage.getItem('repo-overview-selected-repo') || '';
+    } catch {
+      return '';
+    }
   });
   const [selectedBranch, setSelectedBranch] = useState(() => {
-    return localStorage.getItem('repo-overview-selected-branch') || 'main';
+    try {
+      return localStorage.getItem('repo-overview-selected-branch') || 'main';
+    } catch {
+      return 'main';
+    }
   });
   const [overviewData, setOverviewData] = useState<RepoOverviewData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ code?: string; message?: string } | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
-  const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [summaryError, setSummaryError] = useState<{ code?: string; message?: string } | null>(
+    null,
+  );
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [generationModal, setGenerationModal] = useState<{
     open: boolean;
@@ -152,11 +163,19 @@ export default function RepositoryOverviewPage() {
   const repo = selectedRepo.split('/')[1] || '';
 
   useEffect(() => {
-    if (selectedRepo) localStorage.setItem('repo-overview-selected-repo', selectedRepo);
+    try {
+      if (selectedRepo) localStorage.setItem('repo-overview-selected-repo', selectedRepo);
+    } catch {
+      // localStorage may be unavailable
+    }
   }, [selectedRepo]);
 
   useEffect(() => {
-    if (selectedBranch) localStorage.setItem('repo-overview-selected-branch', selectedBranch);
+    try {
+      if (selectedBranch) localStorage.setItem('repo-overview-selected-branch', selectedBranch);
+    } catch {
+      // localStorage may be unavailable
+    }
   }, [selectedBranch]);
 
   const fetchOverview = useCallback(async () => {
@@ -176,8 +195,28 @@ export default function RepositoryOverviewPage() {
 
       setOverviewData(result.data);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'An unexpected error occurred';
-      setError(message);
+      // Never expose raw error messages - use structured error codes
+      const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
+
+      // Try to parse error code from message if it's a JSON-like error
+      let errorCode: string | undefined;
+      try {
+        const parsed = JSON.parse(errorMessage);
+        if (parsed.code) errorCode = parsed.code;
+      } catch {
+        // Not JSON - check for known patterns
+        if (errorMessage.includes('not found') || errorMessage.includes('404')) {
+          errorCode = 'REPOSITORY_NOT_FOUND';
+        } else if (errorMessage.includes('authentication') || errorMessage.includes('401')) {
+          errorCode = 'GITHUB_AUTH_FAILED';
+        } else if (errorMessage.includes('rate limit') || errorMessage.includes('429')) {
+          errorCode = 'GITHUB_RATE_LIMIT';
+        } else if (errorMessage.includes('timeout')) {
+          errorCode = 'DATABASE_TIMEOUT';
+        }
+      }
+
+      setError({ code: errorCode, message: errorMessage });
     } finally {
       setIsLoading(false);
     }
@@ -196,8 +235,9 @@ export default function RepositoryOverviewPage() {
       }
       setSummary(result.summary);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to generate summary';
-      setSummaryError(message);
+      // Never expose raw error messages - use structured error codes
+      const errorMessage = err instanceof Error ? err.message : 'Failed to generate summary';
+      setSummaryError({ code: 'AI_ERROR', message: errorMessage });
     } finally {
       setIsGeneratingSummary(false);
     }
@@ -228,7 +268,7 @@ export default function RepositoryOverviewPage() {
 
   useEffect(() => {
     if (owner && repo && token) {
-      gh.fetchBranches(owner, repo);
+      gh.fetchBranches(owner, repo).catch(() => {});
     }
   }, [owner, repo, token, gh.fetchBranches]);
 
@@ -326,9 +366,16 @@ export default function RepositoryOverviewPage() {
             <AlertCircle className="mt-0.5 h-5 w-5 text-red-500 shrink-0" />
             <div className="flex-1">
               <h3 className="text-sm font-semibold text-red-800 dark:text-red-200">
-                Failed to load repository
+                {getErrorMessage(error).title}
               </h3>
-              <p className="mt-1 text-sm text-red-700 dark:text-red-300">{error}</p>
+              <p className="mt-1 text-sm text-red-700 dark:text-red-300">
+                {getErrorMessage(error).message}
+              </p>
+              {getErrorMessage(error).suggestion && (
+                <p className="mt-1 text-xs text-red-600 dark:text-red-400">
+                  {getErrorMessage(error).suggestion}
+                </p>
+              )}
               <Button variant="outline" size="sm" className="mt-3" onClick={fetchOverview}>
                 <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
                 Try Again
@@ -484,15 +531,33 @@ export default function RepositoryOverviewPage() {
         )}
 
         {summaryError && (
-          <div className="rounded-md bg-red-50 p-4 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-300">
-            {summaryError}
+          <div className="rounded-md bg-red-50 p-4 dark:bg-red-950/30">
+            <p className="text-sm font-medium text-red-800 dark:text-red-200">
+              {getErrorMessage(summaryError).title}
+            </p>
+            <p className="mt-1 text-sm text-red-700 dark:text-red-300">
+              {getErrorMessage(summaryError).message}
+            </p>
+            {getErrorMessage(summaryError).suggestion && (
+              <p className="mt-1 text-xs text-red-600 dark:text-red-400">
+                {getErrorMessage(summaryError).suggestion}
+              </p>
+            )}
           </div>
         )}
 
         {summary && !isGeneratingSummary && (
           <div
             className="prose prose-sm dark:prose-invert max-w-none text-sm"
-            dangerouslySetInnerHTML={{ __html: renderMarkdown(summary) }}
+            dangerouslySetInnerHTML={{
+              __html: (() => {
+                try {
+                  return renderMarkdown(summary);
+                } catch {
+                  return '<p class="text-red-600">Failed to render summary</p>';
+                }
+              })(),
+            }}
           />
         )}
 
@@ -656,7 +721,7 @@ function FileDetailPanel({
 }) {
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ code?: string; message?: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -664,15 +729,23 @@ function FileDetailPanel({
     setError(null);
     setContent(null);
 
-    repoOverviewApi.getFileContent(owner, repo, path, token).then((result) => {
-      if (cancelled) return;
-      if (!result.success) {
-        setError(result.error || 'Failed to load file');
-      } else {
-        setContent(result.content || '');
-      }
-      setLoading(false);
-    });
+    repoOverviewApi
+      .getFileContent(owner, repo, path, token)
+      .then((result) => {
+        if (cancelled) return;
+        if (!result.success) {
+          setError({ code: 'FILE_LOAD_FAILED', message: result.error || 'Failed to load file' });
+        } else {
+          setContent(result.content || '');
+        }
+        setLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        // Never expose raw error messages
+        setError({ code: 'FILE_LOAD_FAILED', message: 'Unable to load file content.' });
+        setLoading(false);
+      });
 
     return () => {
       cancelled = true;
@@ -697,7 +770,11 @@ function FileDetailPanel({
             <span className="text-sm">Loading file...</span>
           </div>
         )}
-        {error && <div className="py-4 text-center text-sm text-red-600">{error}</div>}
+        {error && (
+          <div className="py-4 text-center text-sm text-red-600">
+            {getErrorMessage(error).message}
+          </div>
+        )}
         {content !== null && !loading && (
           <pre className="overflow-x-auto font-mono text-xs leading-relaxed">
             <code>{content}</code>

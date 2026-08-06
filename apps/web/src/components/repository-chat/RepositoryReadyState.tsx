@@ -5,7 +5,7 @@ import { ChatInput } from './ChatInput';
 interface RepositoryReadyStateProps {
   repoFullName: string;
   isChatting: boolean;
-  onSend: (question: string, provider: string) => void;
+  onSend: (question: string, provider: string, model: string) => void;
 }
 
 export function RepositoryReadyState({
@@ -28,7 +28,10 @@ export function RepositoryReadyState({
 
           <div className="mt-8">
             <p className="mb-3 text-xs font-medium text-muted-foreground">Suggested Questions</p>
-            <SuggestedQuestions onSelect={(q) => onSend(q, 'gemini')} disabled={isChatting} />
+            <SuggestedQuestions
+              onSelect={(q) => onSend(q, 'gemini', 'gemini-3.5-flash')}
+              disabled={isChatting}
+            />
           </div>
         </div>
       </div>

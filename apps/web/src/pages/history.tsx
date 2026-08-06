@@ -20,6 +20,7 @@ import { TimeGroupHeader } from '@/components/history/TimeGroupHeader';
 import { ConversationView } from '@/components/history/ConversationView';
 import { groupSessionsByTime } from '@/lib/history-utils';
 import { aiHistoryApi } from '@/lib/ai-history';
+import { useToast } from '@/components/ui/toast';
 
 const TAB_TO_WORKFLOW: Record<FilterTab, WorkflowType[] | undefined> = {
   all: undefined,
@@ -55,13 +56,17 @@ export function HistoryPage() {
     sessions,
     pagination,
     isLoading,
+    deletingIds,
     loadMore,
     deleteSession,
+    deleteSessions,
     toggleFavorite,
     updateSession,
     getSession,
     refresh,
   } = useHistory(filters);
+
+  const { toast } = useToast();
 
   const { query, setQuery, results: searchResults, isSearching } = useHistorySearch();
 
@@ -87,22 +92,6 @@ export function HistoryPage() {
 
     return () => observerRef.current?.disconnect();
   }, [pagination?.hasMore, isLoading, loadMore]);
-
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Delete' && selectedIds.size > 0) {
-        handleBulkDelete();
-      }
-      if (e.key === 'Enter' && selectedIds.size === 1) {
-        const id = Array.from(selectedIds)[0];
-        const s = displaySessions.find((sess) => sess.id === id);
-        if (s) handleSelectSession(s);
-      }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [selectedIds]);
 
   const displaySessions = query.trim() ? searchResults : sessions;
 
@@ -152,13 +141,25 @@ export function HistoryPage() {
 
   const handleDeleteSession = useCallback(
     async (id: string) => {
-      await deleteSession(id);
+      const result = await deleteSession(id);
       if (selectedSessionId === id) {
         setSelectedSession(null);
         setSelectedSessionId(null);
       }
+      if (result) {
+        toast({
+          title: 'Conversation deleted',
+          description: 'The conversation has been permanently removed.',
+        });
+      } else {
+        toast({
+          title: 'Delete failed',
+          description: 'Failed to delete the conversation. Please try again.',
+          variant: 'destructive',
+        });
+      }
     },
-    [deleteSession, selectedSessionId],
+    [deleteSession, selectedSessionId, toast],
   );
 
   const handleToggleSelect = useCallback((id: string) => {
@@ -174,11 +175,38 @@ export function HistoryPage() {
   }, []);
 
   const handleBulkDelete = useCallback(async () => {
-    for (const id of selectedIds) {
-      await deleteSession(id);
-    }
+    const ids = Array.from(selectedIds);
     setSelectedIds(new Set());
-  }, [selectedIds, deleteSession]);
+    const deleted = await deleteSessions(ids);
+    if (deleted > 0) {
+      toast({
+        title: 'Conversations deleted',
+        description: `${deleted} conversation${deleted > 1 ? 's' : ''} have been permanently removed.`,
+      });
+    } else {
+      toast({
+        title: 'Delete failed',
+        description: 'Failed to delete conversations. Please try again.',
+        variant: 'destructive',
+      });
+    }
+  }, [selectedIds, deleteSessions, toast]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Delete' && selectedIds.size > 0) {
+        handleBulkDelete();
+      }
+      if (e.key === 'Enter' && selectedIds.size === 1) {
+        const id = Array.from(selectedIds)[0];
+        const s = displaySessions.find((sess) => sess.id === id);
+        if (s) handleSelectSession(s);
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [selectedIds, handleBulkDelete, handleSelectSession, displaySessions]);
 
   const handleBulkFavorite = useCallback(async () => {
     for (const id of selectedIds) {
@@ -303,6 +331,7 @@ export function HistoryPage() {
                       onDuplicate={handleDuplicate}
                       selected={selectedIds.has(session.id)}
                       onToggleSelect={handleToggleSelect}
+                      isDeleting={deletingIds.has(session.id)}
                     />
                   ))}
                 </div>

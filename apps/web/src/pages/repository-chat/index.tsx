@@ -98,9 +98,9 @@ export function RepositoryChatPage() {
   );
 
   const handleSend = useCallback(
-    (question: string, provider: string) => {
+    (question: string, provider: string, model: string) => {
       if (owner && repo) {
-        chat.sendMessage(owner, repo, selectedBranch, question, provider);
+        chat.sendMessage(owner, repo, selectedBranch, question, provider, model);
       }
     },
     [owner, repo, selectedBranch, chat.sendMessage],

@@ -23,6 +23,7 @@ interface UseHistoryReturn {
   pagination: AIHistoryListResult['pagination'] | null;
   isLoading: boolean;
   error: string | null;
+  deletingIds: Set<string>;
   loadMore: () => Promise<void>;
   refresh: () => Promise<void>;
   createSession: (params: {
@@ -38,6 +39,7 @@ interface UseHistoryReturn {
     updates: Partial<Pick<AIHistorySession, 'title' | 'pinned' | 'archived' | 'favorite'>>,
   ) => Promise<AIHistorySession | null>;
   deleteSession: (id: string) => Promise<boolean>;
+  deleteSessions: (ids: string[]) => Promise<number>;
   getSession: (id: string) => Promise<AIHistorySession | null>;
   addMessage: (sessionId: string, message: AIHistoryMessage) => Promise<AIHistorySession | null>;
   togglePin: (id: string) => Promise<void>;
@@ -56,6 +58,7 @@ export function useHistory(
   const [pagination, setPagination] = useState<AIHistoryListResult['pagination'] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const currentPageRef = useRef(1);
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
@@ -142,11 +145,50 @@ export function useHistory(
   const deleteSession = useCallback(
     async (id: string) => {
       if (!token) return false;
-      const result = await aiHistoryApi.deleteSession(token, id);
-      await refresh();
-      return result;
+      setDeletingIds((prev) => new Set(prev).add(id));
+      try {
+        const result = await aiHistoryApi.deleteSession(token, id);
+        if (result) {
+          setSessions((prev) => prev.filter((s) => s.id !== id));
+          setPagination((prev) => (prev ? { ...prev, total: prev.total - 1 } : prev));
+          return true;
+        }
+        return false;
+      } catch {
+        return false;
+      } finally {
+        setDeletingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+      }
     },
-    [token, refresh],
+    [token],
+  );
+
+  const deleteSessions = useCallback(
+    async (ids: string[]) => {
+      if (!token || ids.length === 0) return 0;
+      setDeletingIds((prev) => new Set([...prev, ...ids]));
+      try {
+        const deleted = await aiHistoryApi.deleteSessions(token, ids);
+        if (deleted > 0) {
+          setSessions((prev) => prev.filter((s) => !ids.includes(s.id)));
+          setPagination((prev) => (prev ? { ...prev, total: prev.total - deleted } : prev));
+        }
+        return deleted;
+      } catch {
+        return 0;
+      } finally {
+        setDeletingIds((prev) => {
+          const next = new Set(prev);
+          for (const id of ids) next.delete(id);
+          return next;
+        });
+      }
+    },
+    [token],
   );
 
   const getSession = useCallback(
@@ -202,11 +244,13 @@ export function useHistory(
     pagination,
     isLoading,
     error,
+    deletingIds,
     loadMore,
     refresh,
     createSession,
     updateSession,
     deleteSession,
+    deleteSessions,
     getSession,
     addMessage,
     togglePin,

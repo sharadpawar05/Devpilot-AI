@@ -1,3 +1,4 @@
+import { useState, useRef, useEffect } from 'react';
 import { Bell, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -13,9 +14,31 @@ import { cn } from '@/lib/utils';
 
 export function NotificationBell() {
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
+  const [open, setOpen] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (contentRef.current && !contentRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    if (open) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [open]);
+
+  const handleMarkAsRead = (id: string) => {
+    markAsRead(id);
+  };
+
+  const handleMarkAllAsRead = () => {
+    markAllAsRead();
+  };
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
@@ -31,7 +54,7 @@ export function NotificationBell() {
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80">
+      <DropdownMenuContent ref={contentRef} align="end" className="w-80">
         <DropdownMenuLabel className="flex items-center justify-between">
           <span>Notifications</span>
           {unreadCount > 0 && (
@@ -44,7 +67,7 @@ export function NotificationBell() {
         {notifications.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <Bell className="mb-2 h-8 w-8 text-muted-foreground/50" />
-            <p className="text-sm text-muted-foreground">No notifications yet</p>
+            <p className="text-sm text-muted-foreground">No notifications</p>
           </div>
         ) : (
           <>
@@ -56,7 +79,7 @@ export function NotificationBell() {
                     'flex flex-col items-start gap-1 py-3 cursor-pointer',
                     !notification.read && 'bg-accent/50',
                   )}
-                  onClick={() => markAsRead(notification.id)}
+                  onSelect={() => handleMarkAsRead(notification.id)}
                 >
                   <div className="flex w-full items-start justify-between gap-2">
                     <p className={cn('text-sm', !notification.read && 'font-medium')}>
@@ -79,7 +102,7 @@ export function NotificationBell() {
             <DropdownMenuItem
               className="flex items-center justify-center gap-2 text-sm font-medium"
               disabled={unreadCount === 0}
-              onClick={markAllAsRead}
+              onSelect={handleMarkAllAsRead}
             >
               <Check className="h-4 w-4" />
               Mark all as read

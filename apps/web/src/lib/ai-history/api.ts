@@ -8,17 +8,19 @@ import { generateId } from '@/lib/id';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
 
-function getAuthHeaders(token: string) {
-  return {
-    'Content-Type': 'application/json',
+async function apiFetch<T>(url: string, token: string, init?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = {
     Authorization: `Bearer ${token}`,
   };
-}
-
-async function apiFetch<T>(url: string, token: string, init?: RequestInit): Promise<T> {
+  if (init?.body) {
+    headers['Content-Type'] = 'application/json';
+  }
   const res = await fetch(url, {
     ...init,
-    headers: getAuthHeaders(token),
+    headers: {
+      ...headers,
+      ...(init?.headers as Record<string, string> | undefined),
+    },
     credentials: 'include',
   });
 
@@ -283,6 +285,22 @@ export const aiHistoryApi = {
       return true;
     } catch {
       return false;
+    }
+  },
+
+  async deleteSessions(token: string, ids: string[]): Promise<number> {
+    try {
+      const data = await apiFetch<{ success: boolean; deleted: number }>(
+        `${API_BASE_URL}/ai-history/sessions`,
+        token,
+        {
+          method: 'DELETE',
+          body: JSON.stringify({ ids }),
+        },
+      );
+      return data.deleted;
+    } catch {
+      return 0;
     }
   },
 

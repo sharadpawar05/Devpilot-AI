@@ -217,6 +217,7 @@ export default function SprintSummaryPage() {
   });
   const [provider, setProvider] = useState('gemini');
   const [result, setResult] = useState<SprintSummaryData | null>(null);
+  const [latencyMs, setLatencyMs] = useState<number | null>(null);
 
   const owner = selectedRepo.split('/')[0] || '';
   const repo = selectedRepo.split('/')[1] || '';
@@ -255,6 +256,7 @@ export default function SprintSummaryPage() {
 
       if (response.data) {
         setResult(response.data);
+        setLatencyMs(response.latencyMs ?? null);
       }
     } catch {
       // Error is handled by the mutation
@@ -586,7 +588,7 @@ export default function SprintSummaryPage() {
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span className="flex items-center gap-1">
               <Clock className="h-3 w-3" />
-              Generated in {(result.generatedAt ? 0 : 0) / 1000}s
+              Generated in {latencyMs ? `${(latencyMs / 1000).toFixed(1)}s` : 'N/A'}
             </span>
             <span>
               {result.sprintPeriod.start} to {result.sprintPeriod.end}

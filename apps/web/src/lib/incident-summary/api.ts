@@ -40,6 +40,10 @@ export const incidentSummaryApi = {
       method: 'POST',
       body: JSON.stringify(request),
     });
-    return res.json();
+    try {
+      return await res.json();
+    } catch {
+      throw new Error('Invalid response from server');
+    }
   },
 };

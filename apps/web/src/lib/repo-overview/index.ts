@@ -11,8 +11,12 @@ export type {
   RepoOverviewState,
   RepoOverviewError,
   HealthSeverity,
+  HealthCheckCategory,
+  HealthCheckStatus,
   HealthActionType,
   ScoreBreakdownItem,
+  HealthQualityMetrics,
+  RepositoryHealthSummary,
 } from './types';
 export type {
   GenerationResult,
