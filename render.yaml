@@ -3,7 +3,7 @@ services:
     name: devpilot-api
     runtime: node
     plan: free
-    buildCommand: pnpm install && pnpm --filter @devpilot/api... build && pnpm --filter @devpilot/api db:migrate:prod
+    buildCommand: pnpm install --no-frozen-lockfile && pnpm --filter @devpilot/api... build && pnpm --filter @devpilot/api db:migrate:prod
     startCommand: pnpm --filter @devpilot/api start
     envVars:
       - key: NODE_ENV
