@@ -8,7 +8,7 @@ import type { ChatMessage as ChatMessageType } from '@/hooks/use-repository-chat
 interface ConversationStateProps {
   messages: ChatMessageType[];
   isChatting: boolean;
-  onSend: (question: string, provider: string) => void;
+  onSend: (question: string, provider: string, model: string) => void;
   onClear: () => void;
   onFileClick?: (path: string) => void;
   error?: string | null;

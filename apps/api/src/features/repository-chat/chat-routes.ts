@@ -7,6 +7,7 @@ import { repositoryIndexer } from './indexer';
 import { repositoryStatusService } from './status';
 import { buildTreeSummary, findFilesByKeywords } from './parser';
 import { db } from '@/core/db';
+import { config } from '@devpilot/config';
 
 const MAX_FILE_SIZE = 50_000;
 const MAX_CONTEXT_FILES = 15;
@@ -273,17 +274,26 @@ export async function repositoryChatRoutes(app: FastifyInstance) {
             conversationHistory.map((m) => `${m.role}: ${m.content}`).join('\n')
           : '';
 
-      const systemPrompt = `You are an expert code assistant helping developers understand their GitHub repository.
-You have access to the repository structure, key configuration files, and relevant code files.
+      const systemPrompt = `You are a helpful code assistant chatbot, similar to GitHub Copilot Chat or ChatGPT.
 
-Always provide:
-1. A clear summary of your answer
-2. Detailed explanation with file references
-3. Specific file paths when referencing code
-4. Recommendations when applicable
+Core rules:
+- Answer the user's question directly in the first sentence.
+- Keep responses concise: 3-8 paragraphs for simple questions.
+- Only generate detailed reports when explicitly asked (e.g., "generate a report", "full architecture review").
+- Use bullet lists, numbered lists, bold text, and code blocks for clarity.
+- Use headings only for complex multi-part answers.
+- Reference repository files only when directly relevant. Say "in the indexing layer" instead of listing file paths.
+- Never invent or hallucinate file paths. Only mention files that exist in the provided context.
+- Be conversational and professional, not academic.
+- Elaborate only when the user asks for more details.
 
-When referencing files, use the exact file path from the repository tree.
-Be concise but thorough. Focus on practical, actionable information.`;
+Formatting:
+- Use markdown: bullet lists, numbered lists, bold, inline code, fenced code blocks, tables.
+- Avoid excessive horizontal rules (---).
+- No unnecessary headers for simple answers.
+
+Context:
+You have access to the repository structure and relevant code files. Use them to answer questions accurately, but don't dump file listings unless asked.`;
 
       const userPrompt = `Repository: ${owner}/${repo} (branch: ${branch})
 
@@ -299,14 +309,26 @@ ${conversationContext}
 
 Question: ${question}`;
 
-      const maxTokens = 4096;
+      const questionLower = question.toLowerCase();
+      const isReportRequest =
+        questionLower.includes('generate') &&
+        (questionLower.includes('report') ||
+          questionLower.includes('review') ||
+          questionLower.includes('analysis'));
+      const isDetailedRequest =
+        questionLower.includes('detailed') ||
+        questionLower.includes('comprehensive') ||
+        questionLower.includes('full') ||
+        questionLower.includes('complete') ||
+        questionLower.includes('in-depth');
+
+      const maxTokens = isReportRequest || isDetailedRequest ? 4096 : 1500;
+      const selectedModel = model || config.ai.defaultModel;
 
       try {
         const response = await aiService.generate(userPrompt, systemPrompt, {
           provider: provider as 'gemini' | 'openai' | 'anthropic' | 'openrouter',
-          model: model as Parameters<typeof aiService.generate>[2] extends { model?: infer M }
-            ? M
-            : undefined,
+          model: selectedModel as never,
           maxTokens,
         });
 

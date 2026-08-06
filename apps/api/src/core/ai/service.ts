@@ -1,5 +1,6 @@
 import { AIService } from '@devpilot/ai-core';
 import { config } from '@devpilot/config';
+import type { AIModel } from '@devpilot/ai-providers';
 
 const aiService = new AIService({
   defaultProvider: 'gemini',
@@ -11,7 +12,7 @@ const aiService = new AIService({
 if (config.ai.geminiApiKey) {
   aiService.registerProvider('gemini', {
     apiKey: config.ai.geminiApiKey,
-    defaultModel: 'gemini-3.5-flash',
+    defaultModel: config.ai.defaultModel as AIModel,
     timeout: 60000,
   });
 }
