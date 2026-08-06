@@ -1,39 +1,23 @@
+# Exported from Render on 2026-08-06T13:11:58Z
+version: "1"
 services:
-  - type: web
-    name: devpilot-api
-    runtime: node
-    plan: free
-    env: node
-    buildCommand: pnpm install --no-frozen-lockfile && pnpm --filter @devpilot/api db:generate
-    startCommand: pnpm --filter @devpilot/api start
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: PORT
-        value: 10000
-      - key: HOST
-        value: 0.0.0.0
-      - key: DATABASE_URL
-        sync: false
-      - key: DIRECT_URL
-        sync: false
-      - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_ANON_KEY
-        sync: false
-      - key: SUPABASE_JWT_SECRET
-        sync: false
-      - key: ENCRYPTION_SECRET
-        sync: false
-      - key: COOKIE_SECRET
-        sync: false
-      - key: GITHUB_CLIENT_ID
-        sync: false
-      - key: GITHUB_CLIENT_SECRET
-        sync: false
-      - key: GITHUB_REDIRECT_URI
-        value: https://devpilot-ai.vercel.app/github
-      - key: GEMINI_API_KEY
-        sync: false
-      - key: AI_DEFAULT_MODEL
-        value: gemini-3.6-flash
+- type: web
+  name: devpilot-api
+  runtime: node
+  repo: https://github.com/sharadpawar05/Devpilot-AI
+  plan: free
+  envVars:
+  - key: AI_DEFAULT_MODEL
+    sync: false
+  - key: GITHUB_REDIRECT_URI
+    sync: false
+  - key: HOST
+    sync: false
+  - key: PORT
+    sync: false
+  - key: NODE_ENV
+    sync: false
+  region: oregon
+  buildCommand: pnpm install --no-frozen-lockfile && pnpm --filter @devpilot/api db:generate
+  startCommand: pnpm --filter @devpilot/api start
+  autoDeployTrigger: commit
