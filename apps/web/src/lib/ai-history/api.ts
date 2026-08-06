@@ -288,6 +288,22 @@ export const aiHistoryApi = {
     }
   },
 
+  async deleteSessions(token: string, ids: string[]): Promise<number> {
+    try {
+      const data = await apiFetch<{ success: boolean; deleted: number }>(
+        `${API_BASE_URL}/ai-history/sessions`,
+        token,
+        {
+          method: 'DELETE',
+          body: JSON.stringify({ ids }),
+        },
+      );
+      return data.deleted;
+    } catch {
+      return 0;
+    }
+  },
+
   async getUniqueRepositories(token: string): Promise<string[]> {
     try {
       const data = await apiFetch<{

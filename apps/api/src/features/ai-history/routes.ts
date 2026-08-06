@@ -472,6 +472,54 @@ export async function aiHistoryRoutes(app: FastifyInstance) {
     },
   );
 
+  app.delete(
+    '/ai-history/sessions',
+    {
+      preHandler: [authenticate],
+      schema: {
+        description: 'Delete multiple AI history sessions',
+        tags: ['ai-history'],
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (request, reply) => {
+      const auth = (request as { auth: { sub: string } }).auth;
+      const { ids } = request.body as { ids: string[] };
+
+      if (!ids || !Array.isArray(ids) || ids.length === 0) {
+        return reply.status(400).send({
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: 'ids array is required' },
+        });
+      }
+
+      if (ids.length > 100) {
+        return reply.status(400).send({
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: 'Maximum 100 sessions per request' },
+        });
+      }
+
+      const user = await db.user.findUnique({
+        where: { supabaseUserId: auth.sub },
+        select: { id: true },
+      });
+
+      if (!user) {
+        return reply.status(404).send({
+          success: false,
+          error: { code: 'USER_NOT_FOUND', message: 'User not found' },
+        });
+      }
+
+      const result = await db.aIHistorySession.deleteMany({
+        where: { id: { in: ids }, userId: user.id },
+      });
+
+      return reply.send({ success: true, deleted: result.count });
+    },
+  );
+
   app.get(
     '/ai-history/repositories',
     {

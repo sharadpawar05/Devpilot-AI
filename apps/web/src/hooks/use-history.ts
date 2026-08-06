@@ -39,6 +39,7 @@ interface UseHistoryReturn {
     updates: Partial<Pick<AIHistorySession, 'title' | 'pinned' | 'archived' | 'favorite'>>,
   ) => Promise<AIHistorySession | null>;
   deleteSession: (id: string) => Promise<boolean>;
+  deleteSessions: (ids: string[]) => Promise<number>;
   getSession: (id: string) => Promise<AIHistorySession | null>;
   addMessage: (sessionId: string, message: AIHistoryMessage) => Promise<AIHistorySession | null>;
   togglePin: (id: string) => Promise<void>;
@@ -166,6 +167,30 @@ export function useHistory(
     [token],
   );
 
+  const deleteSessions = useCallback(
+    async (ids: string[]) => {
+      if (!token || ids.length === 0) return 0;
+      setDeletingIds((prev) => new Set([...prev, ...ids]));
+      try {
+        const deleted = await aiHistoryApi.deleteSessions(token, ids);
+        if (deleted > 0) {
+          setSessions((prev) => prev.filter((s) => !ids.includes(s.id)));
+          setPagination((prev) => (prev ? { ...prev, total: prev.total - deleted } : prev));
+        }
+        return deleted;
+      } catch {
+        return 0;
+      } finally {
+        setDeletingIds((prev) => {
+          const next = new Set(prev);
+          for (const id of ids) next.delete(id);
+          return next;
+        });
+      }
+    },
+    [token],
+  );
+
   const getSession = useCallback(
     async (id: string) => {
       if (!token) return null;
@@ -225,6 +250,7 @@ export function useHistory(
     createSession,
     updateSession,
     deleteSession,
+    deleteSessions,
     getSession,
     addMessage,
     togglePin,

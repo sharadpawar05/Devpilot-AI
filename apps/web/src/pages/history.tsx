@@ -59,6 +59,7 @@ export function HistoryPage() {
     deletingIds,
     loadMore,
     deleteSession,
+    deleteSessions,
     toggleFavorite,
     updateSession,
     getSession,
@@ -174,18 +175,13 @@ export function HistoryPage() {
   }, []);
 
   const handleBulkDelete = useCallback(async () => {
-    let deletedCount = 0;
-    for (const id of selectedIds) {
-      const result = await deleteSession(id);
-      if (result) {
-        deletedCount++;
-      }
-    }
+    const ids = Array.from(selectedIds);
     setSelectedIds(new Set());
-    if (deletedCount > 0) {
+    const deleted = await deleteSessions(ids);
+    if (deleted > 0) {
       toast({
         title: 'Conversations deleted',
-        description: `${deletedCount} conversation${deletedCount > 1 ? 's' : ''} have been permanently removed.`,
+        description: `${deleted} conversation${deleted > 1 ? 's' : ''} have been permanently removed.`,
       });
     } else {
       toast({
@@ -194,7 +190,7 @@ export function HistoryPage() {
         variant: 'destructive',
       });
     }
-  }, [selectedIds, deleteSession, toast]);
+  }, [selectedIds, deleteSessions, toast]);
 
   // Keyboard shortcuts
   useEffect(() => {
