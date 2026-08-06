@@ -37,10 +37,10 @@ export function deriveChatState({
   error: string | null;
 }): RepositoryChatState {
   if (!ghConnected) return RepositoryChatState.DISCONNECTED;
-  if (error) return RepositoryChatState.ERROR;
   if (isIndexing) return RepositoryChatState.INDEXING;
   if (!selectedRepoFullName) return RepositoryChatState.NO_REPOSITORY;
   if (!isTreeReady) return RepositoryChatState.NO_REPOSITORY;
   if (hasMessages) return RepositoryChatState.CHATTING;
+  if (error) return RepositoryChatState.ERROR;
   return RepositoryChatState.READY;
 }
