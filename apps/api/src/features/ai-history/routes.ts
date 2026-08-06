@@ -152,14 +152,23 @@ export async function aiHistoryRoutes(app: FastifyInstance) {
         favorite: session.favorite,
         createdAt: session.createdAt.toISOString(),
         updatedAt: session.updatedAt.toISOString(),
-        messages: session.messages.map((m) => ({
-          id: m.id,
-          role: m.role,
-          content: m.content,
-          latency: m.latency,
-          tokens: m.tokens,
-          timestamp: m.createdAt.toISOString(),
-        })),
+        messages: session.messages.map(
+          (m: {
+            id: string;
+            role: string;
+            content: string;
+            latency: number;
+            tokens: number;
+            createdAt: Date;
+          }) => ({
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            latency: m.latency,
+            tokens: m.tokens,
+            timestamp: m.createdAt.toISOString(),
+          }),
+        ),
       });
     },
   );
@@ -267,22 +276,39 @@ export async function aiHistoryRoutes(app: FastifyInstance) {
 
       return reply.send({
         success: true,
-        sessions: sessions.map((s) => ({
-          id: s.id,
-          workflowType: workflowTypeReverseMap[s.workflowType] || s.workflowType.toLowerCase(),
-          repository: s.repository,
-          title: s.title,
-          provider: s.provider,
-          model: s.model,
-          totalLatency: s.totalLatency,
-          totalTokens: s.totalTokens,
-          messageCount: s._count.messages,
-          pinned: s.pinned,
-          archived: s.archived,
-          favorite: s.favorite,
-          createdAt: s.createdAt.toISOString(),
-          updatedAt: s.updatedAt.toISOString(),
-        })),
+        sessions: sessions.map(
+          (s: {
+            id: string;
+            workflowType: string;
+            repository: string | null;
+            title: string;
+            provider: string;
+            model: string;
+            totalLatency: number;
+            totalTokens: number;
+            pinned: boolean;
+            archived: boolean;
+            favorite: boolean;
+            createdAt: Date;
+            updatedAt: Date;
+            _count: { messages: number };
+          }) => ({
+            id: s.id,
+            workflowType: workflowTypeReverseMap[s.workflowType] || s.workflowType.toLowerCase(),
+            repository: s.repository,
+            title: s.title,
+            provider: s.provider,
+            model: s.model,
+            totalLatency: s.totalLatency,
+            totalTokens: s.totalTokens,
+            messageCount: s._count.messages,
+            pinned: s.pinned,
+            archived: s.archived,
+            favorite: s.favorite,
+            createdAt: s.createdAt.toISOString(),
+            updatedAt: s.updatedAt.toISOString(),
+          }),
+        ),
         pagination: {
           page: query.page,
           pageSize: query.pageSize,
@@ -349,14 +375,23 @@ export async function aiHistoryRoutes(app: FastifyInstance) {
         favorite: session.favorite,
         createdAt: session.createdAt.toISOString(),
         updatedAt: session.updatedAt.toISOString(),
-        messages: session.messages.map((m) => ({
-          id: m.id,
-          role: m.role,
-          content: m.content,
-          latency: m.latency,
-          tokens: m.tokens,
-          timestamp: m.createdAt.toISOString(),
-        })),
+        messages: session.messages.map(
+          (m: {
+            id: string;
+            role: string;
+            content: string;
+            latency: number;
+            tokens: number;
+            createdAt: Date;
+          }) => ({
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            latency: m.latency,
+            tokens: m.tokens,
+            timestamp: m.createdAt.toISOString(),
+          }),
+        ),
       });
     },
   );
@@ -552,7 +587,9 @@ export async function aiHistoryRoutes(app: FastifyInstance) {
 
       return reply.send({
         success: true,
-        repositories: result.map((r) => r.repository).filter(Boolean),
+        repositories: result
+          .map((r: { repository: string | null }) => r.repository)
+          .filter(Boolean),
       });
     },
   );

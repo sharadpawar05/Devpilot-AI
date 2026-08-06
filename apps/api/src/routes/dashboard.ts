@@ -63,17 +63,28 @@ export async function dashboardRoutes(app: FastifyInstance) {
           avatar: user?.githubAvatar ?? null,
           connectedAt: user?.githubConnectedAt?.toISOString() ?? null,
         },
-        activity: recentActivity.map((s) => ({
-          id: s.id,
-          action: s.workflowType.toLowerCase(),
-          resourceType: 'ai_session',
-          label: s.title,
-          provider: s.provider,
-          model: s.model,
-          tokens: s.totalTokens,
-          latencyMs: s.totalLatency,
-          createdAt: s.createdAt.toISOString(),
-        })),
+        activity: recentActivity.map(
+          (s: {
+            id: string;
+            workflowType: string;
+            title: string;
+            provider: string;
+            model: string;
+            totalTokens: number;
+            totalLatency: number;
+            createdAt: Date;
+          }) => ({
+            id: s.id,
+            action: s.workflowType.toLowerCase(),
+            resourceType: 'ai_session',
+            label: s.title,
+            provider: s.provider,
+            model: s.model,
+            tokens: s.totalTokens,
+            latencyMs: s.totalLatency,
+            createdAt: s.createdAt.toISOString(),
+          }),
+        ),
       });
     },
   );
