@@ -23,6 +23,7 @@ interface UseHistoryReturn {
   pagination: AIHistoryListResult['pagination'] | null;
   isLoading: boolean;
   error: string | null;
+  deletingIds: Set<string>;
   loadMore: () => Promise<void>;
   refresh: () => Promise<void>;
   createSession: (params: {
@@ -56,6 +57,7 @@ export function useHistory(
   const [pagination, setPagination] = useState<AIHistoryListResult['pagination'] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const currentPageRef = useRef(1);
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
@@ -142,9 +144,26 @@ export function useHistory(
   const deleteSession = useCallback(
     async (id: string) => {
       if (!token) return false;
-      const result = await aiHistoryApi.deleteSession(token, id);
-      await refresh();
-      return result;
+      setDeletingIds((prev) => new Set(prev).add(id));
+      try {
+        setSessions((prev) => prev.filter((s) => s.id !== id));
+        const result = await aiHistoryApi.deleteSession(token, id);
+        if (!result) {
+          await refresh();
+          return false;
+        }
+        setPagination((prev) => (prev ? { ...prev, total: prev.total - 1 } : prev));
+        return true;
+      } catch {
+        await refresh();
+        return false;
+      } finally {
+        setDeletingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+      }
     },
     [token, refresh],
   );
@@ -202,6 +221,7 @@ export function useHistory(
     pagination,
     isLoading,
     error,
+    deletingIds,
     loadMore,
     refresh,
     createSession,

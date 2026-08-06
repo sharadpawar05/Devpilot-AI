@@ -20,6 +20,7 @@ import { TimeGroupHeader } from '@/components/history/TimeGroupHeader';
 import { ConversationView } from '@/components/history/ConversationView';
 import { groupSessionsByTime } from '@/lib/history-utils';
 import { aiHistoryApi } from '@/lib/ai-history';
+import { useToast } from '@/components/ui/toast';
 
 const TAB_TO_WORKFLOW: Record<FilterTab, WorkflowType[] | undefined> = {
   all: undefined,
@@ -55,6 +56,7 @@ export function HistoryPage() {
     sessions,
     pagination,
     isLoading,
+    deletingIds,
     loadMore,
     deleteSession,
     toggleFavorite,
@@ -62,6 +64,8 @@ export function HistoryPage() {
     getSession,
     refresh,
   } = useHistory(filters);
+
+  const { toast } = useToast();
 
   const { query, setQuery, results: searchResults, isSearching } = useHistorySearch();
 
@@ -152,13 +156,25 @@ export function HistoryPage() {
 
   const handleDeleteSession = useCallback(
     async (id: string) => {
-      await deleteSession(id);
+      const result = await deleteSession(id);
       if (selectedSessionId === id) {
         setSelectedSession(null);
         setSelectedSessionId(null);
       }
+      if (result) {
+        toast({
+          title: 'Conversation deleted',
+          description: 'The conversation has been permanently removed.',
+        });
+      } else {
+        toast({
+          title: 'Delete failed',
+          description: 'Failed to delete the conversation. Please try again.',
+          variant: 'destructive',
+        });
+      }
     },
-    [deleteSession, selectedSessionId],
+    [deleteSession, selectedSessionId, toast],
   );
 
   const handleToggleSelect = useCallback((id: string) => {
@@ -174,11 +190,16 @@ export function HistoryPage() {
   }, []);
 
   const handleBulkDelete = useCallback(async () => {
+    const count = selectedIds.size;
     for (const id of selectedIds) {
       await deleteSession(id);
     }
     setSelectedIds(new Set());
-  }, [selectedIds, deleteSession]);
+    toast({
+      title: 'Conversations deleted',
+      description: `${count} conversation${count > 1 ? 's' : ''} have been permanently removed.`,
+    });
+  }, [selectedIds, deleteSession, toast]);
 
   const handleBulkFavorite = useCallback(async () => {
     for (const id of selectedIds) {
@@ -303,6 +324,7 @@ export function HistoryPage() {
                       onDuplicate={handleDuplicate}
                       selected={selectedIds.has(session.id)}
                       onToggleSelect={handleToggleSelect}
+                      isDeleting={deletingIds.has(session.id)}
                     />
                   ))}
                 </div>

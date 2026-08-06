@@ -18,11 +18,22 @@ import {
   Zap,
   Square,
   CheckSquare,
+  Loader2,
 } from 'lucide-react';
 import type { AIHistorySessionMetadata, WorkflowType } from '@devpilot/types';
 import { WORKFLOW_TYPE_LABELS } from '@devpilot/types';
 import { cn } from '@/lib/utils';
 import { formatRelativeTime, formatLatency, formatTokens } from '@/lib/history-utils';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from '@/components/ui/alert-dialog';
 
 const workflowIcons: Record<WorkflowType, typeof MessageSquare> = {
   playground: MessageSquare,
@@ -58,6 +69,7 @@ interface HistoryCardProps {
   onCopyPrompt?: (session: AIHistorySessionMetadata) => void;
   selected?: boolean;
   onToggleSelect?: (id: string) => void;
+  isDeleting?: boolean;
 }
 
 export const HistoryCard = memo(function HistoryCard({
@@ -70,8 +82,10 @@ export const HistoryCard = memo(function HistoryCard({
   onCopyPrompt,
   selected,
   onToggleSelect,
+  isDeleting,
 }: HistoryCardProps) {
   const [showMenu, setShowMenu] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [copied, setCopied] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -255,16 +269,48 @@ export const HistoryCard = memo(function HistoryCard({
                   icon={Trash2}
                   label="Delete"
                   onClick={() => {
-                    onDelete(session.id);
+                    setShowDeleteDialog(true);
                     setShowMenu(false);
                   }}
                   destructive
+                  disabled={isDeleting}
                 />
               </div>
             )}
           </div>
         </div>
       </div>
+
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Conversation</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this conversation? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => {
+                onDelete(session.id);
+                setShowDeleteDialog(false);
+              }}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 });
@@ -274,17 +320,20 @@ function MenuButton({
   label,
   onClick,
   destructive,
+  disabled,
 }: {
   icon: typeof Trash2;
   label: string;
   onClick: () => void;
   destructive?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <button
       onClick={onClick}
+      disabled={disabled}
       className={cn(
-        'flex w-full items-center gap-2.5 px-3 py-2 text-sm transition-colors hover:bg-muted',
+        'flex w-full items-center gap-2.5 px-3 py-2 text-sm transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50',
         destructive ? 'text-destructive' : 'text-foreground',
       )}
     >
