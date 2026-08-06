@@ -24,6 +24,12 @@ const workflowPromptMap: Record<WorkflowType, string | null> = {
   [WorkflowType.ARCHITECTURE_REVIEW]: 'prompt_architecture_review',
 };
 
+const REVIEW_TYPE_PROMPT_MAP: Record<string, string> = {
+  Performance: 'prompt_performance_review',
+  Security: 'prompt_security_review',
+  Architecture: 'prompt_architecture_review',
+};
+
 export interface PromptResult {
   systemPrompt: string | undefined;
   userPrompt: string;
@@ -41,7 +47,13 @@ export function buildPrompt(
     };
   }
 
-  const templateId = workflowPromptMap[workflowType];
+  let templateId = workflowPromptMap[workflowType];
+
+  if (workflowType === WorkflowType.CODE_REVIEW) {
+    const reviewType = (context.reviewType as string) || 'Standard';
+    templateId = REVIEW_TYPE_PROMPT_MAP[reviewType] || templateId;
+  }
+
   if (!templateId) {
     return {
       systemPrompt: undefined,

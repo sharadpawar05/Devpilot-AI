@@ -1,5 +1,6 @@
-import { useState, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
+import { useState, useCallback, useMemo, useRef, useEffect, lazy, Suspense } from 'react';
 import { Send, Loader2, AlertCircle, RotateCcw } from 'lucide-react';
+import { useMonaco } from '@monaco-editor/react';
 import { Group, Panel, Separator } from 'react-resizable-panels';
 import { Button } from '@/components/ui/button';
 import { useCodeReview, type CodeReviewResponse } from '@/hooks/use-code-review';
@@ -24,6 +25,7 @@ import {
 } from '@/lib/markdown';
 import { useCopyToClipboard } from '@/lib/clipboard';
 import { useDownloadFile } from '@/lib/download';
+import { getErrorMessage } from '@/lib/error-messages';
 import { Select } from '@/components/ui/select';
 import {
   EditorToolbar,
@@ -103,6 +105,39 @@ export function CodeReviewPage() {
 
   const review = useCodeReview();
   const fixMode = useFixMode();
+  const monaco = useMonaco();
+
+  useEffect(() => {
+    if (!monaco) return;
+
+    const m = monaco as any;
+
+    if (m.languages.typescript?.typescriptDefaults) {
+      m.languages.typescript.typescriptDefaults.setCompilerOptions({
+        target: m.languages.typescript.ScriptTarget.ESNext,
+        module: m.languages.typescript.ModuleKind.ESNext,
+        moduleResolution: m.languages.typescript.ModuleResolutionKind.NodeJs,
+        jsx: m.languages.typescript.JsxEmit.React,
+        allowJs: true,
+        allowNonTsExtensions: true,
+        noEmit: true,
+        esModuleInterop: true,
+      });
+    }
+
+    if (m.languages.javascriptDefaults) {
+      m.languages.javascriptDefaults.setCompilerOptions({
+        target: m.languages.typescript.ScriptTarget.ESNext,
+        module: m.languages.typescript.ModuleKind.ESNext,
+        moduleResolution: m.languages.typescript.ModuleResolutionKind.NodeJs,
+        jsx: m.languages.typescript.JsxEmit.React,
+        allowJs: true,
+        allowNonTsExtensions: true,
+        noEmit: true,
+        esModuleInterop: true,
+      });
+    }
+  }, [monaco]);
 
   const score = useMemo(() => (result ? extractScore(result.response) : null), [result]);
   const sections = useMemo(() => (result ? extractSections(result.response) : []), [result]);
@@ -433,23 +468,37 @@ export function CodeReviewPage() {
             {/* Review Content */}
             <div className="flex-1 min-h-0 overflow-y-auto">
               {/* Error */}
-              {review.isError && (
-                <div className="m-4 rounded-lg border border-destructive/50 bg-destructive/10 p-4">
-                  <div className="flex items-start gap-3">
-                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-destructive">Review Failed</p>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {review.error?.error?.message ?? 'An unexpected error occurred'}
-                      </p>
+              {review.isError &&
+                (() => {
+                  const errorInfo = getErrorMessage(review.error?.error);
+                  return (
+                    <div className="m-4 rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+                      <div className="flex items-start gap-3">
+                        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-destructive">{errorInfo.title}</p>
+                          <p className="mt-1 text-sm text-muted-foreground">{errorInfo.message}</p>
+                          {errorInfo.suggestion && (
+                            <p className="mt-2 text-xs text-muted-foreground/80">
+                              {errorInfo.suggestion}
+                            </p>
+                          )}
+                        </div>
+                        {errorInfo.retryable && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleRetry}
+                            className="shrink-0"
+                          >
+                            <RotateCcw className="mr-1 h-3 w-3" />
+                            Retry
+                          </Button>
+                        )}
+                      </div>
                     </div>
-                    <Button variant="outline" size="sm" onClick={handleRetry}>
-                      <RotateCcw className="mr-1 h-3 w-3" />
-                      Retry
-                    </Button>
-                  </div>
-                </div>
-              )}
+                  );
+                })()}
 
               {/* Completed Review - Collapsible Cards */}
               {result && !review.isPending && (
