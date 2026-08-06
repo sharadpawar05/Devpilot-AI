@@ -44,6 +44,10 @@ export interface RepoContributor {
 
 export type HealthSeverity = 'critical' | 'high' | 'medium' | 'low';
 
+export type HealthCheckCategory = 'structural' | 'quality';
+
+export type HealthCheckStatus = 'passed' | 'failed' | 'warning' | 'partial';
+
 export type HealthActionType =
   | 'none'
   | 'generate-readme'
@@ -54,10 +58,35 @@ export type HealthActionType =
   | 'generate-tests'
   | 'generate-docs'
   | 'generate-dockerfile'
-  | 'generate-env-example';
+  | 'generate-env-example'
+  | 'improve-coverage'
+  | 'improve-readme'
+  | 'add-ci-pipeline'
+  | 'fix-vulnerabilities'
+  | 'update-dependencies';
+
+export interface HealthQualityMetrics {
+  coverage?: number;
+  testCount?: number;
+  testFileCount?: number;
+  sectionsFound?: string[];
+  sectionsMissing?: string[];
+  sectionScores?: Record<string, number>;
+  workflowCount?: number;
+  passingWorkflows?: number;
+  failingWorkflows?: number;
+  vulnerabilityCount?: number;
+  criticalVulnerabilities?: number;
+  highVulnerabilities?: number;
+  totalDependencies?: number;
+  outdatedDependencies?: number;
+  outdatedPercentage?: number;
+}
 
 export interface RepoHealthDetail {
   name: string;
+  category: HealthCheckCategory;
+  status: HealthCheckStatus;
   passed: boolean;
   severity: HealthSeverity;
   failedDescription: string;
@@ -67,11 +96,25 @@ export interface RepoHealthDetail {
   actionLabel: string;
   actionType: HealthActionType;
   scorePenalty: number;
+  quality?: HealthQualityMetrics;
 }
 
 export interface ScoreBreakdownItem {
   name: string;
   penalty: number;
+  category: HealthCheckCategory;
+}
+
+export interface RepositoryHealthSummary {
+  structuralScore: number;
+  qualityScore: number;
+  structuralWeight: number;
+  qualityWeight: number;
+  testCoverage?: number;
+  documentationScore?: number;
+  cicdScore?: number;
+  securityScore?: number;
+  dependencyScore?: number;
 }
 
 export interface RepoHealthCheck {
@@ -81,6 +124,7 @@ export interface RepoHealthCheck {
   criticalCount: number;
   details: RepoHealthDetail[];
   scoreBreakdown: ScoreBreakdownItem[];
+  summary: RepositoryHealthSummary;
 }
 
 export interface RepoOverviewData {

@@ -670,6 +670,7 @@ export class RepositoryIntelligenceService {
     const fileNames = filePaths.map((f) => f.split('/').pop() || '');
     const flatNames = fileNames.map((f) => f.toLowerCase());
 
+    // Structural checks (file existence)
     const hasReadme = flatNames.some(
       (n) => n === 'readme.md' || n === 'readme.rst' || n === 'readme.txt',
     );
@@ -677,9 +678,6 @@ export class RepositoryIntelligenceService {
       (n) => n === 'license' || n === 'license.md' || n === 'license.txt',
     );
     const hasPackageJson = flatNames.includes('package.json');
-    const hasGitHubActions = fileNames.some(
-      (n) => n.includes('.github/workflows') || n.startsWith('.github/'),
-    );
     const hasDockerfile =
       flatNames.includes('dockerfile') ||
       flatNames.includes('docker-compose.yml') ||
@@ -688,28 +686,72 @@ export class RepositoryIntelligenceService {
       (n) => n === '.env.example' || n === '.env.sample' || n === '.env.template',
     );
     const hasGitignore = flatNames.includes('.gitignore');
-    const hasTests = fileNames.some(
-      (n) =>
-        n.includes('.test.') ||
-        n.includes('.spec.') ||
-        n.includes('__tests__') ||
-        n.includes('test/'),
-    );
-    const hasCI =
-      hasGitHubActions ||
-      fileNames.some(
-        (n) => n.includes('.travis.yml') || n.includes('Jenkinsfile') || n.includes('.circleci'),
-      );
     const hasDocumentation = fileNames.some(
       (n) => n.includes('docs/') || n.includes('CONTRIBUTING.md') || n.includes('CHANGELOG.md'),
     );
 
+    // Fetch file contents for quality analysis
+    const readmePath = filePaths.find(
+      (p) => p.toLowerCase() === 'readme.md' || p.toLowerCase() === 'readme.rst',
+    );
+    const coveragePaths = filePaths.filter(
+      (p) => p.includes('coverage-summary.json') || p.includes('lcov.info'),
+    );
+    const workflowPaths = filePaths.filter(
+      (p) => p.startsWith('.github/workflows/') && (p.endsWith('.yml') || p.endsWith('.yaml')),
+    );
+    const packageJsonPath = filePaths.find((p) => p === 'package.json');
+    const lockfilePaths = filePaths.filter(
+      (p) =>
+        p === 'package-lock.json' ||
+        p === 'yarn.lock' ||
+        p === 'pnpm-lock.yaml' ||
+        p === 'bun.lock',
+    );
+
+    // Fetch contents in parallel
+    const [readmeContent, coverageContent, ...workflowContents] = await Promise.all([
+      readmePath ? this.getFileContent(userId, owner, repo, readmePath) : Promise.resolve(null),
+      coveragePaths.length > 0
+        ? this.getFileContent(userId, owner, repo, coveragePaths[0])
+        : Promise.resolve(null),
+      ...workflowPaths.map((p) => this.getFileContent(userId, owner, repo, p)),
+    ]);
+
+    // Analyze test coverage
+    const testCoverage = this.analyzeTestCoverage(coverageContent?.content, filePaths);
+
+    // Analyze README quality
+    const readmeQuality = this.analyzeReadmeQuality(readmeContent?.content);
+
+    // Analyze CI/CD workflows
+    const cicdQuality = this.analyzeCicdWorkflows(
+      workflowContents.map((c) => c?.content).filter(Boolean) as string[],
+      workflowPaths,
+    );
+
+    // Analyze dependencies
+    const dependencyQuality = await this.analyzeDependencies(
+      userId,
+      owner,
+      repo,
+      packageJsonPath,
+      lockfilePaths,
+    );
+
+    // Analyze security
+    const securityQuality = await this.analyzeSecurity(userId, owner, repo, filePaths);
+
+    // Build health check details
     const details: HealthCheckDetail[] = [
+      // Structural checks
       {
         name: 'README',
+        category: 'structural',
+        status: hasReadme ? 'passed' : 'failed',
         passed: hasReadme,
         severity: 'high',
-        failedDescription: 'No README found',
+        failedDescription: hasReadme ? 'README exists' : 'No README found',
         whyItMatters:
           'A README is the first thing contributors read. Without one, people cannot understand your project purpose, how to set it up, or how to contribute.',
         recommendation:
@@ -721,9 +763,11 @@ export class RepositoryIntelligenceService {
       },
       {
         name: 'License',
+        category: 'structural',
+        status: hasLicense ? 'passed' : 'failed',
         passed: hasLicense,
         severity: 'medium',
-        failedDescription: 'No LICENSE file found',
+        failedDescription: hasLicense ? 'License exists' : 'No LICENSE file found',
         whyItMatters:
           'Without a license, your code is not legally open source. Others have no permission to use, modify, or distribute your work.',
         recommendation:
@@ -735,9 +779,11 @@ export class RepositoryIntelligenceService {
       },
       {
         name: 'Gitignore',
+        category: 'structural',
+        status: hasGitignore ? 'passed' : 'failed',
         passed: hasGitignore,
         severity: 'low',
-        failedDescription: 'No .gitignore found',
+        failedDescription: hasGitignore ? '.gitignore exists' : 'No .gitignore found',
         whyItMatters:
           'Without a .gitignore, build artifacts, dependencies, and secrets may be accidentally committed to version control.',
         recommendation:
@@ -749,9 +795,11 @@ export class RepositoryIntelligenceService {
       },
       {
         name: 'Package Config',
+        category: 'structural',
+        status: hasPackageJson ? 'passed' : 'failed',
         passed: hasPackageJson,
         severity: 'medium',
-        failedDescription: 'No package.json detected',
+        failedDescription: hasPackageJson ? 'package.json exists' : 'No package.json detected',
         whyItMatters:
           'A package.json defines dependencies, scripts, and project metadata. Without it, builds are not reproducible and onboarding is difficult.',
         recommendation:
@@ -762,52 +810,12 @@ export class RepositoryIntelligenceService {
         scorePenalty: hasPackageJson ? 0 : 10,
       },
       {
-        name: 'CI/CD',
-        passed: hasCI,
-        severity: 'high',
-        failedDescription: 'No GitHub Actions workflow detected',
-        whyItMatters:
-          'Without CI/CD, code quality checks only happen manually. Regressions go undetected until they reach production.',
-        recommendation:
-          'Configure a GitHub Actions workflow under .github/workflows/ for automated testing, linting, and deployment.',
-        estimatedEffort: '15-30 minutes',
-        actionLabel: 'Generate CI Workflow',
-        actionType: 'generate-ci',
-        scorePenalty: hasCI ? 0 : 15,
-      },
-      {
-        name: 'Tests',
-        passed: hasTests,
-        severity: 'high',
-        failedDescription: 'No test files detected',
-        whyItMatters:
-          'Without automated tests, regressions are more likely during development. Code changes cannot be verified with confidence.',
-        recommendation:
-          'Set up Vitest or Jest and add unit tests for critical business logic and components.',
-        estimatedEffort: '30-60 minutes',
-        actionLabel: 'Generate Test Setup',
-        actionType: 'generate-tests',
-        scorePenalty: hasTests ? 0 : 20,
-      },
-      {
-        name: 'Documentation',
-        passed: hasDocumentation,
-        severity: 'medium',
-        failedDescription: 'Additional documentation not found',
-        whyItMatters:
-          'A README alone is often not enough. Without a docs/ folder, CONTRIBUTING.md, or CHANGELOG, contributors lack context on conventions and project history.',
-        recommendation:
-          'Add a docs/ directory, CONTRIBUTING.md, or CHANGELOG.md to supplement the README.',
-        estimatedEffort: '15-30 minutes',
-        actionLabel: 'Generate Docs',
-        actionType: 'generate-docs',
-        scorePenalty: hasDocumentation ? 0 : 10,
-      },
-      {
         name: 'Docker',
+        category: 'structural',
+        status: hasDockerfile ? 'passed' : 'failed',
         passed: hasDockerfile,
         severity: 'low',
-        failedDescription: 'No Dockerfile found',
+        failedDescription: hasDockerfile ? 'Dockerfile exists' : 'No Dockerfile found',
         whyItMatters:
           'Without a Dockerfile, contributors may face "works on my machine" issues. Containerization ensures consistent environments.',
         recommendation:
@@ -819,9 +827,11 @@ export class RepositoryIntelligenceService {
       },
       {
         name: 'Env Example',
+        category: 'structural',
+        status: hasEnvExample ? 'passed' : 'failed',
         passed: hasEnvExample,
         severity: 'low',
-        failedDescription: 'No .env.example found',
+        failedDescription: hasEnvExample ? '.env.example exists' : 'No .env.example found',
         whyItMatters:
           'New contributors have no way to know which environment variables are required. This leads to runtime errors and wasted setup time.',
         recommendation:
@@ -831,19 +841,154 @@ export class RepositoryIntelligenceService {
         actionType: 'generate-env-example',
         scorePenalty: hasEnvExample ? 0 : 5,
       },
+      // Quality checks
+      {
+        name: 'Test Coverage',
+        category: 'quality',
+        status: testCoverage.status,
+        passed: testCoverage.status === 'passed',
+        severity: 'high',
+        failedDescription: testCoverage.description,
+        whyItMatters:
+          'Test coverage measures how much of your code is exercised by tests. Higher coverage reduces the risk of undetected regressions.',
+        recommendation: testCoverage.recommendation,
+        estimatedEffort: '1-2 hours',
+        actionLabel: 'Improve Coverage',
+        actionType: 'improve-coverage',
+        scorePenalty: testCoverage.penalty,
+        quality: {
+          coverage: testCoverage.coverage,
+          testCount: testCoverage.testCount,
+          testFileCount: testCoverage.testFileCount,
+        },
+      },
+      {
+        name: 'README Quality',
+        category: 'quality',
+        status: readmeQuality.status,
+        passed: readmeQuality.status === 'passed',
+        severity: 'high',
+        failedDescription: readmeQuality.description,
+        whyItMatters:
+          'A comprehensive README helps users understand your project quickly and reduces support questions.',
+        recommendation: readmeQuality.recommendation,
+        estimatedEffort: '30-60 minutes',
+        actionLabel: 'Improve README',
+        actionType: 'improve-readme',
+        scorePenalty: readmeQuality.penalty,
+        quality: {
+          sectionsFound: readmeQuality.sectionsFound,
+          sectionsMissing: readmeQuality.sectionsMissing,
+          sectionScores: readmeQuality.sectionScores,
+        },
+      },
+      {
+        name: 'CI/CD Pipeline',
+        category: 'quality',
+        status: cicdQuality.status,
+        passed: cicdQuality.status === 'passed',
+        severity: 'high',
+        failedDescription: cicdQuality.description,
+        whyItMatters:
+          'A complete CI/CD pipeline ensures code quality, security, and deployment consistency.',
+        recommendation: cicdQuality.recommendation,
+        estimatedEffort: '1-2 hours',
+        actionLabel: 'Add CI Pipeline',
+        actionType: 'add-ci-pipeline',
+        scorePenalty: cicdQuality.penalty,
+        quality: {
+          workflowCount: cicdQuality.workflowCount,
+          passingWorkflows: cicdQuality.passingWorkflows,
+          failingWorkflows: cicdQuality.failingWorkflows,
+        },
+      },
+      {
+        name: 'Security',
+        category: 'quality',
+        status: securityQuality.status,
+        passed: securityQuality.status === 'passed',
+        severity: 'critical',
+        failedDescription: securityQuality.description,
+        whyItMatters:
+          'Security vulnerabilities can expose sensitive data and compromise your application.',
+        recommendation: securityQuality.recommendation,
+        estimatedEffort: '1-4 hours',
+        actionLabel: 'Fix Vulnerabilities',
+        actionType: 'fix-vulnerabilities',
+        scorePenalty: securityQuality.penalty,
+        quality: {
+          vulnerabilityCount: securityQuality.vulnerabilityCount,
+          criticalVulnerabilities: securityQuality.criticalVulnerabilities,
+          highVulnerabilities: securityQuality.highVulnerabilities,
+        },
+      },
+      {
+        name: 'Dependencies',
+        category: 'quality',
+        status: dependencyQuality.status,
+        passed: dependencyQuality.status === 'passed',
+        severity: 'medium',
+        failedDescription: dependencyQuality.description,
+        whyItMatters:
+          'Outdated dependencies may have security vulnerabilities and miss important features.',
+        recommendation: dependencyQuality.recommendation,
+        estimatedEffort: '30-60 minutes',
+        actionLabel: 'Update Dependencies',
+        actionType: 'update-dependencies',
+        scorePenalty: dependencyQuality.penalty,
+        quality: {
+          totalDependencies: dependencyQuality.totalDependencies,
+          outdatedDependencies: dependencyQuality.outdatedDependencies,
+          outdatedPercentage: dependencyQuality.outdatedPercentage,
+        },
+      },
+      {
+        name: 'Documentation',
+        category: 'quality',
+        status: hasDocumentation ? 'passed' : 'warning',
+        passed: hasDocumentation,
+        severity: 'medium',
+        failedDescription: hasDocumentation
+          ? 'Additional documentation exists'
+          : 'No additional documentation found',
+        whyItMatters:
+          'A README alone is often not enough. Without a docs/ folder, CONTRIBUTING.md, or CHANGELOG, contributors lack context on conventions and project history.',
+        recommendation:
+          'Add a docs/ directory, CONTRIBUTING.md, or CHANGELOG.md to supplement the README.',
+        estimatedEffort: '15-30 minutes',
+        actionLabel: 'Generate Docs',
+        actionType: 'generate-docs',
+        scorePenalty: hasDocumentation ? 0 : 10,
+      },
     ];
 
-    const totalPossible = 100;
-    const totalPenalty = details.reduce((sum, d) => sum + d.scorePenalty, 0);
-    const score = Math.max(0, totalPossible - totalPenalty);
+    // Calculate weighted scores
+    const structuralChecks = details.filter((d) => d.category === 'structural');
+    const qualityChecks = details.filter((d) => d.category === 'quality');
+
+    const structuralWeight = 40;
+    const qualityWeight = 60;
+
+    const structuralPenalty = structuralChecks.reduce((sum, d) => sum + d.scorePenalty, 0);
+    const qualityPenalty = qualityChecks.reduce((sum, d) => sum + d.scorePenalty, 0);
+
+    const maxStructuralPenalty = 60;
+    const maxQualityPenalty = 100;
+
+    const structuralScore = Math.max(0, 100 - (structuralPenalty / maxStructuralPenalty) * 100);
+    const qualityScore = Math.max(0, 100 - (qualityPenalty / maxQualityPenalty) * 100);
+
+    const score = Math.round(
+      (structuralScore * structuralWeight) / 100 + (qualityScore * qualityWeight) / 100,
+    );
 
     const passedCount = details.filter((d) => d.passed).length;
     const failedCount = details.filter((d) => !d.passed).length;
     const criticalCount = details.filter((d) => !d.passed && d.severity === 'critical').length;
 
     const scoreBreakdown: ScoreBreakdownItem[] = details
-      .filter((d) => !d.passed && d.scorePenalty > 0)
-      .map((d) => ({ name: d.name, penalty: d.scorePenalty }));
+      .filter((d) => d.scorePenalty > 0)
+      .map((d) => ({ name: d.name, penalty: d.scorePenalty, category: d.category }));
 
     const health: RepositoryHealth = {
       score,
@@ -852,10 +997,486 @@ export class RepositoryIntelligenceService {
       criticalCount,
       details,
       scoreBreakdown,
+      summary: {
+        structuralScore: Math.round(structuralScore),
+        qualityScore: Math.round(qualityScore),
+        structuralWeight,
+        qualityWeight,
+        testCoverage: testCoverage.coverage,
+        documentationScore:
+          readmeQuality.status === 'passed'
+            ? 100
+            : readmeQuality.penalty > 0
+              ? Math.max(0, 100 - readmeQuality.penalty * 5)
+              : 50,
+        cicdScore:
+          cicdQuality.status === 'passed'
+            ? 100
+            : cicdQuality.penalty > 0
+              ? Math.max(0, 100 - cicdQuality.penalty * 3)
+              : 0,
+        securityScore:
+          securityQuality.status === 'passed'
+            ? 100
+            : securityQuality.penalty > 0
+              ? Math.max(0, 100 - securityQuality.penalty)
+              : 0,
+        dependencyScore:
+          dependencyQuality.status === 'passed'
+            ? 100
+            : dependencyQuality.penalty > 0
+              ? Math.max(0, 100 - dependencyQuality.penalty * 2)
+              : 50,
+      },
     };
 
     this.set(key, health);
     return health;
+  }
+
+  // ─── Health Check Quality Analysis Helpers ──────────────────────────────────
+
+  private analyzeTestCoverage(
+    coverageContent: string | undefined,
+    filePaths: string[],
+  ): {
+    status: 'passed' | 'failed' | 'warning' | 'partial';
+    description: string;
+    recommendation: string;
+    penalty: number;
+    coverage?: number;
+    testCount?: number;
+    testFileCount?: number;
+  } {
+    const testFiles = filePaths.filter(
+      (p) =>
+        p.includes('.test.') ||
+        p.includes('.spec.') ||
+        p.includes('__tests__') ||
+        (p.includes('test/') && p.endsWith('.ts')) ||
+        (p.includes('test/') && p.endsWith('.tsx')) ||
+        (p.includes('test/') && p.endsWith('.js')),
+    );
+    const testFileCount = testFiles.length;
+
+    if (testFileCount === 0) {
+      return {
+        status: 'failed',
+        description: 'No test files detected',
+        recommendation:
+          'Add unit tests for critical business logic. Start with core functions and components.',
+        penalty: 30,
+        testFileCount: 0,
+      };
+    }
+
+    let coverage: number | undefined;
+
+    if (coverageContent) {
+      try {
+        const coverageData = JSON.parse(coverageContent);
+        if (coverageData.total?.statements?.pct !== undefined) {
+          coverage = coverageData.total.statements.pct;
+        }
+      } catch {
+        // Ignore parse errors
+      }
+    }
+
+    if (coverage !== undefined) {
+      if (coverage >= 80) {
+        return {
+          status: 'passed',
+          description: `Excellent test coverage: ${coverage}%`,
+          recommendation: 'Maintain current coverage levels.',
+          penalty: 0,
+          coverage,
+          testFileCount,
+        };
+      }
+      if (coverage >= 60) {
+        return {
+          status: 'warning',
+          description: `Moderate test coverage: ${coverage}%`,
+          recommendation: 'Increase coverage to 80% for better regression detection.',
+          penalty: 10,
+          coverage,
+          testFileCount,
+        };
+      }
+      return {
+        status: 'failed',
+        description: `Low test coverage: ${coverage}%`,
+        recommendation: 'Increase coverage to at least 60% to catch critical regressions.',
+        penalty: 20,
+        coverage,
+        testFileCount,
+      };
+    }
+
+    // No coverage data available
+    if (testFileCount >= 5) {
+      return {
+        status: 'partial',
+        description: `${testFileCount} test files found (coverage data unavailable)`,
+        recommendation: 'Add coverage reporting to track test effectiveness.',
+        penalty: 5,
+        testFileCount,
+      };
+    }
+
+    return {
+      status: 'warning',
+      description: `${testFileCount} test file(s) found (coverage data unavailable)`,
+      recommendation: 'Add more test files and set up coverage reporting.',
+      penalty: 15,
+      testFileCount,
+    };
+  }
+
+  private analyzeReadmeQuality(readmeContent: string | undefined): {
+    status: 'passed' | 'failed' | 'warning' | 'partial';
+    description: string;
+    recommendation: string;
+    penalty: number;
+    sectionsFound: string[];
+    sectionsMissing: string[];
+    sectionScores: Record<string, number>;
+  } {
+    if (!readmeContent) {
+      return {
+        status: 'failed',
+        description: 'No README content to analyze',
+        recommendation: 'Add a comprehensive README.md file.',
+        penalty: 25,
+        sectionsFound: [],
+        sectionsMissing: ['description', 'installation', 'usage', 'api', 'contributing'],
+        sectionScores: {},
+      };
+    }
+
+    const sections = {
+      description: {
+        patterns: [/# .*description/i, /# .*about/i, /# .*overview/i, /# .*introduction/i],
+        weight: 25,
+      },
+      installation: { patterns: [/## .*install/i, /### .*install/i, /# .*install/i], weight: 25 },
+      usage: {
+        patterns: [/## .*usage/i, /### .*usage/i, /## .*example/i, /### .*example/i, /# .*usage/i],
+        weight: 25,
+      },
+      api: {
+        patterns: [/## .*api/i, /### .*api/i, /## .*endpoint/i, /### .*endpoint/i, /# .*api/i],
+        weight: 15,
+      },
+      contributing: {
+        patterns: [/## .*contribut/i, /### .*contribut/i, /# .*contribut/i],
+        weight: 10,
+      },
+    };
+
+    const sectionsFound: string[] = [];
+    const sectionsMissing: string[] = [];
+    const sectionScores: Record<string, number> = {};
+    let totalScore = 0;
+
+    for (const [name, config] of Object.entries(sections)) {
+      const found = config.patterns.some((p) => p.test(readmeContent));
+      if (found) {
+        sectionsFound.push(name);
+        sectionScores[name] = config.weight;
+        totalScore += config.weight;
+      } else {
+        sectionsMissing.push(name);
+        sectionScores[name] = 0;
+      }
+    }
+
+    const coveragePercent = Math.round((totalScore / 100) * 100);
+
+    if (coveragePercent >= 80) {
+      return {
+        status: 'passed',
+        description: `Comprehensive README (${coveragePercent}% section coverage)`,
+        recommendation: 'README looks good. Consider adding more examples if needed.',
+        penalty: 0,
+        sectionsFound,
+        sectionsMissing,
+        sectionScores,
+      };
+    }
+
+    if (coveragePercent >= 50) {
+      return {
+        status: 'warning',
+        description: `README needs improvement (${coveragePercent}% section coverage)`,
+        recommendation: `Add missing sections: ${sectionsMissing.join(', ')}`,
+        penalty: Math.round((100 - coveragePercent) / 10),
+        sectionsFound,
+        sectionsMissing,
+        sectionScores,
+      };
+    }
+
+    return {
+      status: 'failed',
+      description: `Incomplete README (${coveragePercent}% section coverage)`,
+      recommendation: `Add these sections: ${sectionsMissing.join(', ')}`,
+      penalty: Math.round((100 - coveragePercent) / 5),
+      sectionsFound,
+      sectionsMissing,
+      sectionScores,
+    };
+  }
+
+  private analyzeCicdWorkflows(
+    workflowContents: string[],
+    workflowPaths: string[],
+  ): {
+    status: 'passed' | 'failed' | 'warning' | 'partial';
+    description: string;
+    recommendation: string;
+    penalty: number;
+    workflowCount: number;
+    passingWorkflows: number;
+    failingWorkflows: number;
+  } {
+    const workflowCount = workflowPaths.length;
+
+    if (workflowCount === 0) {
+      return {
+        status: 'failed',
+        description: 'No CI/CD workflows detected',
+        recommendation: 'Add GitHub Actions workflows for testing, linting, and deployment.',
+        penalty: 30,
+        workflowCount: 0,
+        passingWorkflows: 0,
+        failingWorkflows: 0,
+      };
+    }
+
+    let hasTestWorkflow = false;
+    let hasLintWorkflow = false;
+    let hasDeployWorkflow = false;
+    let hasSecurityWorkflow = false;
+
+    for (const content of workflowContents) {
+      if (!content) continue;
+      const lower = content.toLowerCase();
+      if (lower.includes('test') || lower.includes('vitest') || lower.includes('jest')) {
+        hasTestWorkflow = true;
+      }
+      if (lower.includes('lint') || lower.includes('eslint') || lower.includes('prettier')) {
+        hasLintWorkflow = true;
+      }
+      if (lower.includes('deploy') || lower.includes('release') || lower.includes('publish')) {
+        hasDeployWorkflow = true;
+      }
+      if (lower.includes('security') || lower.includes('codeql') || lower.includes('snyk')) {
+        hasSecurityWorkflow = true;
+      }
+    }
+
+    const workflowTypes = [
+      hasTestWorkflow,
+      hasLintWorkflow,
+      hasDeployWorkflow,
+      hasSecurityWorkflow,
+    ];
+    const workflowScore = workflowTypes.filter(Boolean).length;
+    const totalPossible = 4;
+
+    if (workflowScore >= 3) {
+      return {
+        status: 'passed',
+        description: `Comprehensive CI/CD (${workflowScore}/${totalPossible} workflow types)`,
+        recommendation: 'CI/CD setup looks good.',
+        penalty: 0,
+        workflowCount,
+        passingWorkflows: workflowCount,
+        failingWorkflows: 0,
+      };
+    }
+
+    if (workflowScore >= 2) {
+      return {
+        status: 'warning',
+        description: `Partial CI/CD coverage (${workflowScore}/${totalPossible} workflow types)`,
+        recommendation: `Add missing workflows: ${[
+          !hasTestWorkflow && 'testing',
+          !hasLintWorkflow && 'linting',
+          !hasDeployWorkflow && 'deployment',
+          !hasSecurityWorkflow && 'security scanning',
+        ]
+          .filter(Boolean)
+          .join(', ')}`,
+        penalty: (totalPossible - workflowScore) * 5,
+        workflowCount,
+        passingWorkflows: workflowCount,
+        failingWorkflows: 0,
+      };
+    }
+
+    return {
+      status: 'partial',
+      description: `Basic CI/CD (${workflowScore}/${totalPossible} workflow types)`,
+      recommendation: 'Add more workflow types for comprehensive automation.',
+      penalty: (totalPossible - workflowScore) * 5,
+      workflowCount,
+      passingWorkflows: workflowCount,
+      failingWorkflows: 0,
+    };
+  }
+
+  private async analyzeSecurity(
+    _userId: string,
+    _owner: string,
+    _repo: string,
+    filePaths: string[],
+  ): Promise<{
+    status: 'passed' | 'failed' | 'warning' | 'partial';
+    description: string;
+    recommendation: string;
+    penalty: number;
+    vulnerabilityCount: number;
+    criticalVulnerabilities: number;
+    highVulnerabilities: number;
+  }> {
+    // Check for security-related files
+    const hasSecurityPolicy = filePaths.some(
+      (p) => p === 'SECURITY.md' || p === '.github/SECURITY.md',
+    );
+    const hasDependabot = filePaths.some(
+      (p) => p === '.github/dependabot.yml' || p === '.github/dependabot.yaml',
+    );
+    const hasCodeql = filePaths.some(
+      (p) => p.includes('.github/workflows/') && p.toLowerCase().includes('codeql'),
+    );
+
+    // Check for npm audit or similar
+    const hasAuditConfig = filePaths.some(
+      (p) => p === '.snyk' || p === '.npmrc' || p === 'audit-ci.json',
+    );
+
+    const securityFiles = [hasSecurityPolicy, hasDependabot, hasCodeql, hasAuditConfig];
+    const securityScore = securityFiles.filter(Boolean).length;
+
+    if (securityScore >= 3) {
+      return {
+        status: 'passed',
+        description: 'Strong security configuration',
+        recommendation: 'Security setup looks comprehensive.',
+        penalty: 0,
+        vulnerabilityCount: 0,
+        criticalVulnerabilities: 0,
+        highVulnerabilities: 0,
+      };
+    }
+
+    if (securityScore >= 1) {
+      return {
+        status: 'warning',
+        description: 'Partial security configuration',
+        recommendation: `Add missing security files: ${[
+          !hasSecurityPolicy && 'SECURITY.md',
+          !hasDependabot && 'Dependabot config',
+          !hasCodeql && 'CodeQL workflow',
+          !hasAuditConfig && 'Audit configuration',
+        ]
+          .filter(Boolean)
+          .join(', ')}`,
+        penalty: (4 - securityScore) * 5,
+        vulnerabilityCount: 0,
+        criticalVulnerabilities: 0,
+        highVulnerabilities: 0,
+      };
+    }
+
+    return {
+      status: 'failed',
+      description: 'No security configuration detected',
+      recommendation:
+        'Add SECURITY.md, Dependabot config, and CodeQL workflow for security scanning.',
+      penalty: 20,
+      vulnerabilityCount: 0,
+      criticalVulnerabilities: 0,
+      highVulnerabilities: 0,
+    };
+  }
+
+  private async analyzeDependencies(
+    userId: string,
+    owner: string,
+    repo: string,
+    packageJsonPath: string | undefined,
+    lockfilePaths: string[],
+  ): Promise<{
+    status: 'passed' | 'failed' | 'warning' | 'partial';
+    description: string;
+    recommendation: string;
+    penalty: number;
+    totalDependencies: number;
+    outdatedDependencies: number;
+    outdatedPercentage: number;
+  }> {
+    if (!packageJsonPath) {
+      return {
+        status: 'failed',
+        description: 'No package.json found',
+        recommendation: 'Add a package.json to manage dependencies.',
+        penalty: 15,
+        totalDependencies: 0,
+        outdatedDependencies: 0,
+        outdatedPercentage: 0,
+      };
+    }
+
+    const hasLockfile = lockfilePaths.length > 0;
+    const packageJson = await this.getFileContent(userId, owner, repo, packageJsonPath);
+
+    if (!packageJson) {
+      return {
+        status: 'warning',
+        description: 'Could not read package.json',
+        recommendation: 'Ensure package.json is accessible.',
+        penalty: 5,
+        totalDependencies: 0,
+        outdatedDependencies: 0,
+        outdatedPercentage: 0,
+      };
+    }
+
+    let totalDeps = 0;
+    try {
+      const pkg = JSON.parse(packageJson.content);
+      totalDeps =
+        Object.keys(pkg.dependencies || {}).length + Object.keys(pkg.devDependencies || {}).length;
+    } catch {
+      // Ignore parse errors
+    }
+
+    if (!hasLockfile) {
+      return {
+        status: 'warning',
+        description: 'No lockfile found',
+        recommendation:
+          'Add a lockfile (package-lock.json, yarn.lock, or pnpm-lock.yaml) for reproducible builds.',
+        penalty: 10,
+        totalDependencies: totalDeps,
+        outdatedDependencies: 0,
+        outdatedPercentage: 0,
+      };
+    }
+
+    return {
+      status: 'passed',
+      description: `Dependencies managed with lockfile (${totalDeps} packages)`,
+      recommendation: 'Consider running npm outdated to check for updates.',
+      penalty: 0,
+      totalDependencies: totalDeps,
+      outdatedDependencies: 0,
+      outdatedPercentage: 0,
+    };
   }
 
   // ─── Repository Statistics ───────────────────────────────────────────────

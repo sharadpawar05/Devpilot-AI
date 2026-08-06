@@ -6,6 +6,7 @@ import { aiService } from '@/core/ai/service';
 import { repoOverviewService } from './overview-service';
 import { generatorService } from './generator-service';
 import { repositoryAnalyzer } from './analyzer-service';
+import { sanitizeError, createErrorResponse } from '@/core/errors/sanitize';
 import type { HealthActionType } from './types';
 
 const overviewQuerySchema = z.object({
@@ -45,23 +46,13 @@ export async function repoOverviewRoutes(app: FastifyInstance) {
         const data = await repoOverviewService.getOverview(auth.sub, owner, repo);
         return reply.send({ success: true, data });
       } catch (error: unknown) {
-        const err = error as { status?: number; message?: string };
-        if (err.status === 404) {
-          return reply.status(404).send({
-            success: false,
-            error: { message: 'Repository not found' },
-          });
-        }
-        if (err.status === 401) {
-          return reply.status(401).send({
-            success: false,
-            error: { message: 'GitHub authentication failed' },
-          });
-        }
-        return reply.status(500).send({
-          success: false,
-          error: { message: err.message || 'Failed to fetch repository overview' },
-        });
+        const sanitized = sanitizeError(
+          error,
+          'REPOSITORY_LOAD_FAILED',
+          'Unable to load repository information.',
+          500,
+        );
+        return reply.status(sanitized.statusCode).send(createErrorResponse(error));
       }
     },
   );
@@ -129,11 +120,13 @@ export async function repoOverviewRoutes(app: FastifyInstance) {
 
         return reply.send({ success: true, tree: filteredTree });
       } catch (error: unknown) {
-        const err = error as { status?: number; message?: string };
-        return reply.status(err.status || 500).send({
-          success: false,
-          error: { message: err.message || 'Failed to fetch repository tree' },
-        });
+        const sanitized = sanitizeError(
+          error,
+          'TREE_LOAD_FAILED',
+          'Unable to load repository structure.',
+          500,
+        );
+        return reply.status(sanitized.statusCode).send(createErrorResponse(error));
       }
     },
   );
@@ -186,11 +179,13 @@ export async function repoOverviewRoutes(app: FastifyInstance) {
           size: content.size,
         });
       } catch (error: unknown) {
-        const err = error as { status?: number; message?: string };
-        return reply.status(err.status || 500).send({
-          success: false,
-          error: { message: err.message || 'Failed to fetch file content' },
-        });
+        const sanitized = sanitizeError(
+          error,
+          'FILE_LOAD_FAILED',
+          'Unable to load file content.',
+          500,
+        );
+        return reply.status(sanitized.statusCode).send(createErrorResponse(error));
       }
     },
   );
@@ -284,12 +279,12 @@ Keep each section concise (2-4 sentences). Use markdown headers and bullet point
           summary: response.content,
         });
       } catch (error: unknown) {
-        const err = error as { status?: number; message?: string; code?: string };
-        return reply.status(err.status || 502).send({
+        const sanitized = sanitizeError(error, 'AI_ERROR', 'Failed to generate summary.', 502);
+        return reply.status(sanitized.statusCode).send({
           success: false,
           error: {
-            code: err.code || 'AI_ERROR',
-            message: err.message || 'Failed to generate summary',
+            code: sanitized.code,
+            message: sanitized.message,
           },
         });
       }
@@ -330,11 +325,13 @@ Keep each section concise (2-4 sentences). Use markdown headers and bullet point
           contributors,
         });
       } catch (error: unknown) {
-        const err = error as { message?: string };
-        return reply.status(500).send({
-          success: false,
-          error: { message: err.message || 'Failed to fetch contributors' },
-        });
+        const sanitized = sanitizeError(
+          error,
+          'CONTRIBUTORS_LOAD_FAILED',
+          'Unable to load contributors.',
+          500,
+        );
+        return reply.status(sanitized.statusCode).send(createErrorResponse(error));
       }
     },
   );
@@ -367,11 +364,13 @@ Keep each section concise (2-4 sentences). Use markdown headers and bullet point
         const stack = await repositoryAnalyzer.analyze(auth.sub, owner, repo);
         return reply.send({ success: true, stack });
       } catch (error: unknown) {
-        const err = error as { status?: number; message?: string };
-        return reply.status(err.status || 500).send({
-          success: false,
-          error: { message: err.message || 'Failed to analyze repository' },
-        });
+        const sanitized = sanitizeError(
+          error,
+          'ANALYSIS_FAILED',
+          'Unable to analyze repository.',
+          500,
+        );
+        return reply.status(sanitized.statusCode).send(createErrorResponse(error));
       }
     },
   );
@@ -426,24 +425,17 @@ Keep each section concise (2-4 sentences). Use markdown headers and bullet point
 
         return reply.send({ success: true, data: result });
       } catch (error: unknown) {
-        const err = error as { status?: number; message?: string; code?: string };
-
-        // Handle missing required files gracefully
-        if (err.message?.includes('not found') || err.status === 404) {
-          return reply.status(404).send({
-            success: false,
-            error: {
-              code: 'MISSING_FILES',
-              message: `Unable to generate artifact: ${err.message}. Select another branch or verify the repository.`,
-            },
-          });
-        }
-
-        return reply.status(err.status || 502).send({
+        const sanitized = sanitizeError(
+          error,
+          'GENERATION_ERROR',
+          'Failed to generate artifact.',
+          502,
+        );
+        return reply.status(sanitized.statusCode).send({
           success: false,
           error: {
-            code: err.code || 'GENERATION_ERROR',
-            message: err.message || 'Failed to generate artifact',
+            code: sanitized.code,
+            message: sanitized.message,
           },
         });
       }

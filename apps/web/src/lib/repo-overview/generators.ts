@@ -32,6 +32,11 @@ export const GENERATOR_LABELS: Record<HealthActionType, string> = {
   'generate-docs': 'Generate Documentation',
   'generate-dockerfile': 'Generate Dockerfile',
   'generate-env-example': 'Generate .env.example',
+  'improve-coverage': 'Improve Test Coverage',
+  'improve-readme': 'Improve README',
+  'add-ci-pipeline': 'Add CI Pipeline',
+  'fix-vulnerabilities': 'Fix Vulnerabilities',
+  'update-dependencies': 'Update Dependencies',
 };
 
 export const GENERATOR_FILE_ICONS: Record<string, string> = {
@@ -44,4 +49,9 @@ export const GENERATOR_FILE_ICONS: Record<string, string> = {
   'generate-docs': '📚',
   'generate-dockerfile': '🐳',
   'generate-env-example': '🔐',
+  'improve-coverage': '📊',
+  'improve-readme': '📝',
+  'add-ci-pipeline': '🔄',
+  'fix-vulnerabilities': '🔒',
+  'update-dependencies': '📦',
 };

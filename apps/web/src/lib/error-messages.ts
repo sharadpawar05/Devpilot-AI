@@ -95,6 +95,85 @@ const ERROR_MESSAGES: Record<string, ErrorMessageConfig> = {
     retryable: true,
     suggestion: 'Try again.',
   },
+  // Repository-specific error codes
+  REPOSITORY_LOAD_FAILED: {
+    title: 'Unable to load repository',
+    message: "We couldn't retrieve the repository information right now.",
+    retryable: true,
+    suggestion: 'Please try again in a few moments.',
+  },
+  REPOSITORY_NOT_FOUND: {
+    title: 'Repository not found',
+    message: 'The repository could not be found.',
+    retryable: false,
+    suggestion: 'Check the repository name and make sure it exists.',
+  },
+  GITHUB_AUTH_FAILED: {
+    title: 'GitHub authentication failed',
+    message: "We couldn't authenticate with GitHub.",
+    retryable: false,
+    suggestion: 'Please log in again to reconnect your GitHub account.',
+  },
+  GITHUB_RATE_LIMIT: {
+    title: 'GitHub rate limit exceeded',
+    message: 'Too many requests to GitHub.',
+    retryable: true,
+    suggestion: 'Wait a few minutes and try again.',
+  },
+  DATABASE_ERROR: {
+    title: 'Service error',
+    message: 'Unable to load repository information.',
+    retryable: true,
+    suggestion: 'Please try again in a few moments.',
+  },
+  DATABASE_TIMEOUT: {
+    title: 'Request timed out',
+    message: 'The request took too long to complete.',
+    retryable: true,
+    suggestion: 'Please try again.',
+  },
+  SERVICE_UNAVAILABLE: {
+    title: 'Service unavailable',
+    message: 'Unable to connect to the service.',
+    retryable: true,
+    suggestion: 'Please try again in a few moments.',
+  },
+  TREE_LOAD_FAILED: {
+    title: 'Unable to load file structure',
+    message: "We couldn't retrieve the repository file structure.",
+    retryable: true,
+    suggestion: 'Please try again in a few moments.',
+  },
+  FILE_LOAD_FAILED: {
+    title: 'Unable to load file',
+    message: "We couldn't retrieve the file content.",
+    retryable: true,
+    suggestion: 'Please try again in a few moments.',
+  },
+  CONTRIBUTORS_LOAD_FAILED: {
+    title: 'Unable to load contributors',
+    message: "We couldn't retrieve the contributors list.",
+    retryable: true,
+    suggestion: 'Please try again in a few moments.',
+  },
+  ANALYSIS_FAILED: {
+    title: 'Unable to analyze repository',
+    message: "We couldn't analyze the repository technology stack.",
+    retryable: true,
+    suggestion: 'Please try again in a few moments.',
+  },
+  GENERATION_ERROR: {
+    title: 'Generation failed',
+    message: 'Failed to generate the artifact.',
+    retryable: true,
+    suggestion: 'Please try again.',
+  },
+  AI_ERROR: {
+    title: 'AI error',
+    message: 'Failed to generate the AI summary.',
+    retryable: true,
+    suggestion: 'Please try again.',
+  },
 };
 
 const DEFAULT_ERROR: ErrorMessageConfig = {
@@ -118,10 +197,45 @@ function cleanErrorMessage(message: string): string {
   // Remove "For more information..." paragraphs
   cleaned = cleaned.replace(/For more information.*$/i, '');
 
+  // Remove internal error details that should never be exposed
+  // Prisma/Database errors
+  cleaned = cleaned.replace(/Invalid\s+db\.\w+\.\w+\(\)\s+invocation.*$/is, '');
+  cleaned = cleaned.replace(/PrismaClient\w*Error.*$/is, '');
+  cleaned = cleaned.replace(/connection\s+pool.*$/is, '');
+  cleaned = cleaned.replace(/timed?\s*out\s+fetching.*$/is, '');
+
+  // Stack traces with file paths
+  cleaned = cleaned.replace(/\s*at\s+\/.*$/gm, '');
+  cleaned = cleaned.replace(/\s*at\s+\w+\s+\/.*$/gm, '');
+
+  // File path references
+  cleaned = cleaned.replace(/\/[\w/.-]+\.(ts|js|tsx|jsx):\d+:\d+/g, '');
+  cleaned = cleaned.replace(/node_modules\/.*/g, '');
+
+  // SQL/Database query details
+  cleaned = cleaned.replace(/SELECT\s+.*$/is, '');
+  cleaned = cleaned.replace(/INSERT\s+.*$/is, '');
+  cleaned = cleaned.replace(/UPDATE\s+.*$/is, '');
+  cleaned = cleaned.replace(/DELETE\s+.*$/is, '');
+  cleaned = cleaned.replace(/FROM\s+[\w"']+\s+WHERE.*$/is, '');
+  cleaned = cleaned.replace(/relation\s+["']?\w+["']?\s+does\s+not\s+exist.*$/is, '');
+  cleaned = cleaned.replace(/column\s+["']?\w+["']?\s+not\s+found.*$/is, '');
+  cleaned = cleaned.replace(/foreign\s+key\s+constraint.*$/is, '');
+  cleaned = cleaned.replace(/unique\s+constraint.*$/is, '');
+
+  // Network errors with internal details
+  cleaned = cleaned.replace(/ECONNREFUSED\s+[\d:.]+/g, '');
+  cleaned = cleaned.replace(/ENOTFOUND\s+\w+/g, '');
+
   // Trim and limit length
   cleaned = cleaned.trim();
   if (cleaned.length > 200) {
     cleaned = cleaned.slice(0, 197) + '...';
+  }
+
+  // If the message is now empty or too short, return a generic message
+  if (cleaned.length < 5) {
+    return 'An unexpected error occurred.';
   }
 
   return cleaned;
