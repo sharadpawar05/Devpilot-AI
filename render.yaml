@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: devpilot-api
+    runtime: node
+    plan: free
+    buildCommand: pnpm install && pnpm --filter @devpilot/api... build && pnpm --filter @devpilot/api db:migrate:prod
+    startCommand: pnpm --filter @devpilot/api start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: HOST
+        value: 0.0.0.0
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+      - key: ENCRYPTION_SECRET
+        sync: false
+      - key: COOKIE_SECRET
+        sync: false
+      - key: GITHUB_CLIENT_ID
+        sync: false
+      - key: GITHUB_CLIENT_SECRET
+        sync: false
+      - key: GITHUB_REDIRECT_URI
+        value: https://devpilot-ai.vercel.app/github
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: AI_DEFAULT_MODEL
+        value: gemini-3.6-flash
