@@ -13,7 +13,13 @@ function loadEnv() {
     const messages = Object.entries(errors)
       .map(([key, msgs]) => `  ${key}: ${msgs?.join(', ')}`)
       .join('\n');
-    throw new Error(`Invalid environment variables:\n${messages}`);
+    console.error(
+      `Missing environment variables:\n${messages}\n\nAdd these to Vercel Dashboard → Settings → Environment Variables`,
+    );
+    return {
+      VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL || '',
+      VITE_SUPABASE_ANON_KEY: import.meta.env.VITE_SUPABASE_ANON_KEY || '',
+    };
   }
 
   return result.data;
