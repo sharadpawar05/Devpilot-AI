@@ -11,12 +11,18 @@ import type {
 } from './types';
 
 const GEMINI_COST_TABLE: Record<string, { input: number; output: number }> = {
+  'gemini-2.5-flash': { input: 0.00015, output: 0.0006 },
   'gemini-3.6-flash': { input: 0.000075, output: 0.0003 },
   'gemini-3.5-flash': { input: 0.000075, output: 0.0003 },
   'gemini-3.1-flash-lite': { input: 0.0000375, output: 0.00015 },
 };
 
-const GEMINI_MODELS: AIModel[] = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'];
+const GEMINI_MODELS: AIModel[] = [
+  'gemini-2.5-flash',
+  'gemini-3.6-flash',
+  'gemini-3.5-flash',
+  'gemini-3.1-flash-lite',
+];
 
 export class GeminiProvider implements AIProvider {
   readonly name: AIProviderName = 'gemini';

@@ -42,6 +42,97 @@ const DEPTH_MAX_TOKENS: Record<string, number> = {
 
 const MAX_DIFF_CHARS = 100_000;
 
+interface AIErrorResponse {
+  status: number;
+  code: string;
+  message: string;
+  retryable: boolean;
+}
+
+function classifyAIError(error: unknown): AIErrorResponse {
+  const rawMessage = error instanceof Error ? error.message : String(error);
+  const lowerMsg = rawMessage.toLowerCase();
+
+  // Detect rate limit errors (429, "Too Many Requests", "rate limit", "quota")
+  if (
+    lowerMsg.includes('429') ||
+    lowerMsg.includes('too many requests') ||
+    lowerMsg.includes('rate limit') ||
+    lowerMsg.includes('quota')
+  ) {
+    const retryMatch = rawMessage.match(/retry in (\d+\.?\d*)s/);
+    const retrySeconds = retryMatch ? Math.ceil(Number(retryMatch[1])) : undefined;
+    return {
+      status: 429,
+      code: 'RATE_LIMIT_EXCEEDED',
+      message: retrySeconds
+        ? `Rate limit exceeded. Please wait ${retrySeconds} seconds and try again.`
+        : 'Rate limit exceeded. Please wait a moment and try again.',
+      retryable: true,
+    };
+  }
+
+  // Detect invalid API key
+  if (lowerMsg.includes('invalid api key') || lowerMsg.includes('unauthorized')) {
+    return {
+      status: 401,
+      code: 'INVALID_API_KEY',
+      message: 'Invalid API key. Please check your provider settings.',
+      retryable: false,
+    };
+  }
+
+  // Detect model not found
+  if (lowerMsg.includes('model not found') || lowerMsg.includes('not found')) {
+    return {
+      status: 400,
+      code: 'MODEL_NOT_FOUND',
+      message: 'The selected model is not available. Please try a different provider.',
+      retryable: false,
+    };
+  }
+
+  // Detect context length exceeded
+  if (lowerMsg.includes('context length') || lowerMsg.includes('too long')) {
+    return {
+      status: 400,
+      code: 'CONTEXT_LENGTH_EXCEEDED',
+      message: 'The content is too long for the AI model. Try reviewing fewer files.',
+      retryable: false,
+    };
+  }
+
+  // Detect provider not implemented
+  if (lowerMsg.includes('not implemented')) {
+    return {
+      status: 501,
+      code: 'PROVIDER_NOT_IMPLEMENTED',
+      message: 'This provider is not yet implemented. Please try a different one.',
+      retryable: false,
+    };
+  }
+
+  // Default: return cleaned-up generic error
+  let cleanMessage = rawMessage
+    .replace(/^\[.*?\]\s*:?\s*/i, '') // Remove provider prefixes like [GoogleGenerativeAI Error]:
+    .replace(/\[\d{3}\s+.*?\]\s*/g, '') // Remove HTTP status codes
+    .replace(/https?:\/\/\S+/g, '') // Remove URLs
+    .replace(/\s*\[?\{.*$/s, '') // Remove JSON structures at the end
+    .replace(/For more information.*$/i, '') // Remove "For more information..."
+    .trim();
+
+  if (cleanMessage.length > 200) {
+    cleanMessage = cleanMessage.slice(0, 197) + '...';
+  }
+
+  return {
+    status: 502,
+    code: 'AI_ERROR',
+    message: cleanMessage || 'An error occurred with the AI provider. Please try again.',
+    retryable: true,
+  };
+}
+
 function detectFileTypes(filenames: string[]): string {
   const frontendExts = new Set(['tsx', 'jsx', 'vue', 'svelte', 'css', 'scss', 'less', 'html']);
   const backendExts = new Set(['go', 'rs', 'java', 'py', 'rb', 'php', 'sql', 'graphql']);
@@ -265,17 +356,15 @@ export async function prReviewRoutes(app: FastifyInstance) {
           },
         });
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        const code_ =
-          error && typeof error === 'object' && 'code' in error
-            ? String((error as { code: unknown }).code)
-            : 'AI_ERROR';
-
         app.log.error({ err: error, provider }, 'GitHub PR review failed');
-
-        return reply.status(502).send({
+        const errorResponse = classifyAIError(error);
+        return reply.status(errorResponse.status).send({
           success: false,
-          error: { code: code_, message },
+          error: {
+            code: errorResponse.code,
+            message: errorResponse.message,
+            retryable: errorResponse.retryable,
+          },
         });
       }
     },
@@ -418,17 +507,15 @@ export async function prReviewRoutes(app: FastifyInstance) {
           },
         });
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        const code_ =
-          error && typeof error === 'object' && 'code' in error
-            ? String((error as { code: unknown }).code)
-            : 'AI_ERROR';
-
         app.log.error({ err: error, provider }, 'GitHub PR analyze failed');
-
-        return reply.status(502).send({
+        const errorResponse = classifyAIError(error);
+        return reply.status(errorResponse.status).send({
           success: false,
-          error: { code: code_, message },
+          error: {
+            code: errorResponse.code,
+            message: errorResponse.message,
+            retryable: errorResponse.retryable,
+          },
         });
       }
     },

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Loader2, Copy, Check, Trash2 } from 'lucide-react';
+import { Loader2, Copy, Check, Trash2, AlertCircle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
@@ -11,6 +11,8 @@ interface ConversationStateProps {
   onSend: (question: string, provider: string) => void;
   onClear: () => void;
   onFileClick?: (path: string) => void;
+  error?: string | null;
+  onRetry?: () => void;
 }
 
 export function ConversationState({
@@ -19,6 +21,8 @@ export function ConversationState({
   onSend,
   onClear,
   onFileClick,
+  error,
+  onRetry,
 }: ConversationStateProps) {
   const [copied, setCopied] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -81,6 +85,24 @@ export function ConversationState({
         )}
         <div ref={messagesEndRef} />
       </div>
+
+      {error && !isChatting && (
+        <div className="flex items-center gap-3 rounded-lg border border-destructive/20 bg-destructive/5 mx-4 px-4 py-3 mb-3">
+          <AlertCircle className="h-4 w-4 shrink-0 text-destructive" />
+          <p className="flex-1 text-sm text-destructive">{error}</p>
+          {onRetry && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onRetry}
+              className="shrink-0 border-destructive/30 text-destructive hover:bg-destructive/10"
+            >
+              <RefreshCw className="mr-1.5 h-3 w-3" />
+              Retry
+            </Button>
+          )}
+        </div>
+      )}
 
       <ChatInput onSend={onSend} disabled={isChatting} placeholder="Ask a follow-up..." />
     </div>

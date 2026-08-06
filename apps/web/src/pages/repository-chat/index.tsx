@@ -199,6 +199,8 @@ export function RepositoryChatPage() {
           onSend={handleSend}
           onClear={chat.clearMessages}
           onFileClick={handleFileClick}
+          error={chat.error}
+          onRetry={chat.retryLastMessage}
         />
       )}
     </RepositoryChatLayout>

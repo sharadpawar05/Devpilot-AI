@@ -11,6 +11,8 @@ import {
   FileText,
   ClipboardCheck,
   BarChart3,
+  AlertCircle,
+  RotateCcw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -266,7 +268,7 @@ export function PullRequestAssistantPage() {
   const [reviewResult, setReviewResult] = useState<GitHubReviewResponse | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [connecting, setConnecting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ message: string; retryable?: boolean } | null>(null);
 
   const activeResponse = useMemo(() => {
     if (analysisType === 'full' && analyzeResult) return analyzeResult.response;
@@ -398,8 +400,6 @@ export function PullRequestAssistantPage() {
         if (result) {
           setAnalyzeResult(result);
           setActiveTab('overview');
-        } else {
-          setError('Analysis failed. Please try again.');
         }
       } else {
         const filesToReview = selectedFiles.size > 0 ? Array.from(selectedFiles) : undefined;
@@ -415,12 +415,10 @@ export function PullRequestAssistantPage() {
         if (result) {
           setReviewResult(result);
           setActiveTab('review');
-        } else {
-          setError('Review failed. Please try again.');
         }
       }
     } catch {
-      setError('An unexpected error occurred. Please try again.');
+      setError({ message: 'An unexpected error occurred. Please try again.', retryable: true });
     }
     setAnalyzing(false);
   }, [
@@ -749,15 +747,6 @@ export function PullRequestAssistantPage() {
               )}
             </Button>
           )}
-
-          {error && (
-            <div
-              className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive"
-              role="alert"
-            >
-              {error}
-            </div>
-          )}
         </div>
       </div>
     </>
@@ -866,7 +855,23 @@ export function PullRequestAssistantPage() {
 
       {analyzing && !hasResult && <PRLoadingSteps className="flex-1" isLoading={analyzing} />}
 
-      {!hasResult && !error && !analyzing && !gh.loading && (
+      {(error || gh.error) && !analyzing && (
+        <div className="m-4 rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-destructive">Analysis Failed</p>
+              <p className="mt-1 text-sm text-muted-foreground">{error?.message ?? gh.error}</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={handleAnalyze} className="shrink-0">
+              <RotateCcw className="mr-1 h-3 w-3" />
+              Retry
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {!hasResult && !error && !gh.error && !analyzing && !gh.loading && (
         <div className="flex flex-1 items-center justify-center p-8">
           <EmptyState
             title={gh.connected ? 'Select a repository and PR' : 'Connect your GitHub account'}
