@@ -6,8 +6,8 @@ services:
   repo: https://github.com/sharadpawar05/Devpilot-AI
   plan: free
   region: oregon
-  buildCommand: HUSKY=0 pnpm install --no-frozen-lockfile
-  startCommand: cd apps/api && pnpm db:generate && pnpm start
+  buildCommand: pnpm install --no-frozen-lockfile --ignore-scripts && pnpm --filter @devpilot/api db:generate
+  startCommand: pnpm --filter @devpilot/api start
   autoDeployTrigger: commit
   envVars:
   - key: NODE_ENV
