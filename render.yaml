@@ -1,4 +1,3 @@
-# Exported from Render on 2026-08-06T13:11:58Z
 version: "1"
 services:
 - type: web
@@ -6,18 +5,14 @@ services:
   runtime: node
   repo: https://github.com/sharadpawar05/Devpilot-AI
   plan: free
-  envVars:
-  - key: AI_DEFAULT_MODEL
-    sync: false
-  - key: GITHUB_REDIRECT_URI
-    sync: false
-  - key: HOST
-    sync: false
-  - key: PORT
-    sync: false
-  - key: NODE_ENV
-    sync: false
   region: oregon
-  buildCommand: pnpm install --no-frozen-lockfile && pnpm --filter @devpilot/api db:generate
+  buildCommand: pnpm --version && pnpm install --no-frozen-lockfile 2>&1 && pnpm --filter @devpilot/api db:generate 2>&1
   startCommand: pnpm --filter @devpilot/api start
   autoDeployTrigger: commit
+  envVars:
+  - key: NODE_ENV
+    value: production
+  - key: PORT
+    value: 10000
+  - key: HOST
+    value: 0.0.0.0
