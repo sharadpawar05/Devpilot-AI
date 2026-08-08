@@ -3,6 +3,7 @@ services:
 - type: web
   name: devpilot-api
   runtime: node
+  nodeVersion: 22.17.1
   repo: https://github.com/sharadpawar05/Devpilot-AI
   plan: free
   region: oregon
