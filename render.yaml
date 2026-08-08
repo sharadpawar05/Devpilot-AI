@@ -7,7 +7,7 @@ services:
   repo: https://github.com/sharadpawar05/Devpilot-AI
   plan: free
   region: oregon
-  buildCommand: DATABASE_URL="postgresql://user:pass@localhost:5432/db" pnpm install --no-frozen-lockfile && pnpm --filter @devpilot/api db:generate
+  buildCommand: pnpm install --no-frozen-lockfile && pnpm --filter @devpilot/api db:generate
   startCommand: pnpm --filter @devpilot/api start
   autoDeployTrigger: commit
   envVars:
