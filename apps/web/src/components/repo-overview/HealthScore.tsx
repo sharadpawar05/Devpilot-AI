@@ -15,6 +15,9 @@ import {
   GitBranch,
   Lock,
   Package,
+  Bug,
+  Layers,
+  FileWarning,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type {
@@ -406,8 +409,78 @@ function QualityMetrics({
         ) : (
           <span className="font-mono font-semibold text-red-600 dark:text-red-400">
             {quality.vulnerabilityCount} vulnerabilities
+            {quality.criticalVulnerabilities
+              ? ` (${quality.criticalVulnerabilities} critical)`
+              : ''}
+            {quality.highVulnerabilities ? ` (${quality.highVulnerabilities} high)` : ''}
           </span>
         )}
+      </div>
+    );
+  }
+
+  if (name === 'Code Complexity' && quality.complexityScore !== undefined) {
+    return (
+      <div className="flex items-center gap-2 text-xs">
+        <span
+          className={cn(
+            'font-mono font-semibold',
+            quality.complexityScore >= 70
+              ? 'text-emerald-600 dark:text-emerald-400'
+              : quality.complexityScore >= 40
+                ? 'text-amber-600 dark:text-amber-400'
+                : 'text-red-600 dark:text-red-400',
+          )}
+        >
+          {quality.complexityScore}/100
+        </span>
+        {quality.largeFiles && quality.largeFiles.length > 0 && (
+          <span className="text-muted-foreground">
+            ({quality.largeFiles.length} large file{quality.largeFiles.length !== 1 ? 's' : ''})
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  if (name === 'Technical Debt' && quality.debtItems !== undefined) {
+    const totalIndicators = quality.debtItems.reduce((sum, d) => sum + d.count, 0);
+    return (
+      <div className="flex items-center gap-2 text-xs">
+        <span
+          className={cn(
+            'font-mono font-semibold',
+            (quality.debtScore ?? 100) >= 70
+              ? 'text-emerald-600 dark:text-emerald-400'
+              : (quality.debtScore ?? 100) >= 40
+                ? 'text-amber-600 dark:text-amber-400'
+                : 'text-red-600 dark:text-red-400',
+          )}
+        >
+          {totalIndicators} indicators
+        </span>
+        <span className="text-muted-foreground">
+          ({quality.debtItems.length} pattern{quality.debtItems.length !== 1 ? 's' : ''})
+        </span>
+      </div>
+    );
+  }
+
+  if (name === 'Code Hotspots' && quality.hotspots !== undefined) {
+    return (
+      <div className="flex items-center gap-2 text-xs">
+        <span
+          className={cn(
+            'font-mono font-semibold',
+            quality.hotspots.length <= 3
+              ? 'text-emerald-600 dark:text-emerald-400'
+              : quality.hotspots.length <= 7
+                ? 'text-amber-600 dark:text-amber-400'
+                : 'text-red-600 dark:text-red-400',
+          )}
+        >
+          {quality.hotspots.length} hotspot{quality.hotspots.length !== 1 ? 's' : ''}
+        </span>
       </div>
     );
   }
@@ -701,6 +774,44 @@ export function HealthScore({ health, onGenerate, className }: HealthScoreProps)
                   summary.dependencyScore >= 80
                     ? 'emerald'
                     : summary.dependencyScore >= 60
+                      ? 'amber'
+                      : 'red'
+                }
+              />
+            )}
+            {summary.complexityScore !== undefined && (
+              <MetricBadge
+                icon={Layers}
+                label="Complexity"
+                value={`${summary.complexityScore}/100`}
+                color={
+                  summary.complexityScore >= 70
+                    ? 'emerald'
+                    : summary.complexityScore >= 40
+                      ? 'amber'
+                      : 'red'
+                }
+              />
+            )}
+            {summary.debtScore !== undefined && (
+              <MetricBadge
+                icon={FileWarning}
+                label="Debt"
+                value={`${summary.debtScore}/100`}
+                color={
+                  summary.debtScore >= 70 ? 'emerald' : summary.debtScore >= 40 ? 'amber' : 'red'
+                }
+              />
+            )}
+            {summary.hotspotCount !== undefined && summary.hotspotCount > 0 && (
+              <MetricBadge
+                icon={Bug}
+                label="Hotspots"
+                value={`${summary.hotspotCount}`}
+                color={
+                  summary.hotspotCount <= 3
+                    ? 'emerald'
+                    : summary.hotspotCount <= 7
                       ? 'amber'
                       : 'red'
                 }

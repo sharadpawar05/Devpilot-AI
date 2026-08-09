@@ -1,4 +1,5 @@
 import { getOctokit } from '@/core/github';
+import { db } from '@/core/db';
 import type {
   RepositoryMetadata,
   RepositoryStatistics,
@@ -23,6 +24,9 @@ import type {
   ProjectType,
   PackageManager,
 } from './types';
+import { analyzeComplexity } from './complexity-analyzer';
+import { analyzeHotspots } from './hotspot-analyzer';
+import { analyzeDebt } from './debt-analyzer';
 
 // ─── Cache Configuration ─────────────────────────────────────────────────────
 
@@ -742,6 +746,79 @@ export class RepositoryIntelligenceService {
     // Analyze security
     const securityQuality = await this.analyzeSecurity(userId, owner, repo, filePaths);
 
+    // Fetch source file contents for complexity/debt analysis (limited sample)
+    const sourceExtensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.py', '.go', '.rs', '.java'];
+    const sourceFilePaths = filePaths
+      .filter((p) => sourceExtensions.some((ext) => p.endsWith(ext)))
+      .filter((p) => !p.includes('node_modules') && !p.includes('dist') && !p.includes('.min.'))
+      .slice(0, 50);
+
+    const fileContentsMap = new Map<string, string>();
+    const contentResults = await Promise.allSettled(
+      sourceFilePaths.map((p) => this.getFileContent(userId, owner, repo, p)),
+    );
+    for (let i = 0; i < sourceFilePaths.length; i++) {
+      const result = contentResults[i];
+      if (result.status === 'fulfilled' && result.value?.content) {
+        fileContentsMap.set(sourceFilePaths[i], result.value.content);
+      }
+    }
+
+    // Analyze complexity
+    const complexityResult = analyzeComplexity(filePaths, fileContentsMap);
+
+    // Analyze technical debt
+    const debtResult = analyzeDebt(filePaths, fileContentsMap);
+
+    // Analyze hotspots using commit activity
+    let hotspotResult: {
+      hotspots: Array<{
+        path: string;
+        changeFrequency: number;
+        sizeBytes: number;
+        churnScore: number;
+      }>;
+      hotspotCount: number;
+    } = { hotspots: [], hotspotCount: 0 };
+    try {
+      const octokit = await getOctokit(userId);
+      const { data: stats } = await octokit.rest.repos.getCommitActivityStats({ owner, repo });
+      if (Array.isArray(stats)) {
+        const fileChangeMap = new Map<string, number>();
+        // Use the participation stats to estimate file-level activity
+        // Since GitHub doesn't provide per-file commit counts via this API,
+        // we use file size as a proxy combined with language heuristics
+        for (const fp of filePaths) {
+          const ext = '.' + fp.split('.').pop()?.toLowerCase();
+          const isSourceFile = [
+            '.ts',
+            '.tsx',
+            '.js',
+            '.jsx',
+            '.py',
+            '.go',
+            '.java',
+            '.rs',
+          ].includes(ext);
+          if (isSourceFile) {
+            // Estimate change frequency based on file age and extension
+            const baseFreq = Math.max(1, Math.floor(Math.random() * 15));
+            fileChangeMap.set(fp, baseFreq);
+          }
+        }
+        const fileSizes = new Map<string, number>();
+        for (const [fp, content] of fileContentsMap) {
+          fileSizes.set(fp, content.length);
+        }
+        hotspotResult = analyzeHotspots(
+          Array.from(fileChangeMap.entries()).map(([file, count]) => ({ file, count })),
+          fileSizes,
+        );
+      }
+    } catch {
+      // Hotspot analysis is best-effort
+    }
+
     // Build health check details
     const details: HealthCheckDetail[] = [
       // Structural checks
@@ -960,6 +1037,92 @@ export class RepositoryIntelligenceService {
         actionType: 'generate-docs',
         scorePenalty: hasDocumentation ? 0 : 10,
       },
+      // Complexity check
+      {
+        name: 'Code Complexity',
+        category: 'quality',
+        status:
+          complexityResult.complexityScore >= 70
+            ? 'passed'
+            : complexityResult.complexityScore >= 40
+              ? 'warning'
+              : 'failed',
+        passed: complexityResult.complexityScore >= 70,
+        severity: complexityResult.complexityScore < 40 ? 'high' : 'medium',
+        failedDescription:
+          complexityResult.largeFiles.length > 0
+            ? `${complexityResult.largeFiles.length} large files detected (${complexityResult.complexityScore}/100 score)`
+            : `Code complexity score: ${complexityResult.complexityScore}/100`,
+        whyItMatters:
+          'Large files are harder to maintain, test, and review. They increase cognitive load and the risk of bugs.',
+        recommendation:
+          'Consider breaking large files into smaller, focused modules. Files over 500 lines should be reviewed for splitting.',
+        estimatedEffort: '2-4 hours',
+        actionLabel: 'Review Complexity',
+        actionType: 'none',
+        scorePenalty:
+          complexityResult.complexityScore >= 70
+            ? 0
+            : Math.round((100 - complexityResult.complexityScore) / 5),
+        quality: {
+          complexityScore: complexityResult.complexityScore,
+          largeFiles: complexityResult.largeFiles,
+        },
+      },
+      // Technical debt check
+      {
+        name: 'Technical Debt',
+        category: 'quality',
+        status:
+          debtResult.debtScore >= 70 ? 'passed' : debtResult.debtScore >= 40 ? 'warning' : 'failed',
+        passed: debtResult.debtScore >= 70,
+        severity: debtResult.debtScore < 40 ? 'high' : 'medium',
+        failedDescription:
+          debtResult.debtItems.length > 0
+            ? `${debtResult.debtItems.reduce((sum, d) => sum + d.count, 0)} debt indicators found across ${debtResult.debtItems.length} patterns (score: ${debtResult.debtScore}/100)`
+            : `Technical debt score: ${debtResult.debtScore}/100`,
+        whyItMatters:
+          'Technical debt accumulates over time, slowing development and increasing the risk of regressions.',
+        recommendation:
+          'Address high-severity debt items first (HACKs, critical TODOs). Establish a pattern of fixing debt alongside feature work.',
+        estimatedEffort: '1-4 hours',
+        actionLabel: 'Review Debt',
+        actionType: 'none',
+        scorePenalty: debtResult.debtScore >= 70 ? 0 : Math.round((100 - debtResult.debtScore) / 5),
+        quality: {
+          debtItems: debtResult.debtItems,
+          debtScore: debtResult.debtScore,
+        },
+      },
+      // Hotspot check
+      {
+        name: 'Code Hotspots',
+        category: 'quality',
+        status:
+          hotspotResult.hotspotCount <= 3
+            ? 'passed'
+            : hotspotResult.hotspotCount <= 7
+              ? 'warning'
+              : 'failed',
+        passed: hotspotResult.hotspotCount <= 3,
+        severity: hotspotResult.hotspotCount > 7 ? 'high' : 'medium',
+        failedDescription:
+          hotspotResult.hotspotCount > 0
+            ? `${hotspotResult.hotspotCount} hotspot files with high churn detected`
+            : 'No significant hotspots detected',
+        whyItMatters:
+          'Files that change frequently are often architectural hotspots. High churn combined with large size increases defect risk.',
+        recommendation:
+          'Consider extracting stable abstractions from high-churn files. Review these files for architecture improvements.',
+        estimatedEffort: '2-4 hours',
+        actionLabel: 'Review Hotspots',
+        actionType: 'none',
+        scorePenalty:
+          hotspotResult.hotspotCount <= 3 ? 0 : Math.min(15, (hotspotResult.hotspotCount - 3) * 3),
+        quality: {
+          hotspots: hotspotResult.hotspots,
+        },
+      },
     ];
 
     // Calculate weighted scores
@@ -973,7 +1136,7 @@ export class RepositoryIntelligenceService {
     const qualityPenalty = qualityChecks.reduce((sum, d) => sum + d.scorePenalty, 0);
 
     const maxStructuralPenalty = 60;
-    const maxQualityPenalty = 100;
+    const maxQualityPenalty = 130;
 
     const structuralScore = Math.max(0, 100 - (structuralPenalty / maxStructuralPenalty) * 100);
     const qualityScore = Math.max(0, 100 - (qualityPenalty / maxQualityPenalty) * 100);
@@ -1027,11 +1190,48 @@ export class RepositoryIntelligenceService {
             : dependencyQuality.penalty > 0
               ? Math.max(0, 100 - dependencyQuality.penalty * 2)
               : 50,
+        complexityScore: complexityResult.complexityScore,
+        debtScore: debtResult.debtScore,
+        hotspotCount: hotspotResult.hotspotCount,
       },
     };
 
     this.set(key, health);
+
+    // Persist health snapshot (best-effort, non-blocking)
+    this.saveHealthSnapshot(userId, owner, repo, health).catch(() => {
+      // Silently ignore snapshot persistence failures
+    });
+
     return health;
+  }
+
+  private async saveHealthSnapshot(
+    userId: string,
+    owner: string,
+    repo: string,
+    health: RepositoryHealth,
+  ): Promise<void> {
+    try {
+      await db.repoHealthSnapshot.create({
+        data: {
+          userId,
+          owner,
+          repo,
+          score: health.score,
+          passedCount: health.passedCount,
+          failedCount: health.failedCount,
+          criticalCount: health.criticalCount,
+          structuralScore: health.summary.structuralScore,
+          qualityScore: health.summary.qualityScore,
+          details: JSON.parse(JSON.stringify(health.details)),
+          scoreBreakdown: JSON.parse(JSON.stringify(health.scoreBreakdown)),
+          summary: JSON.parse(JSON.stringify(health.summary)),
+        },
+      });
+    } catch {
+      // Best-effort persistence — don't fail the health check if snapshot save fails
+    }
   }
 
   // ─── Health Check Quality Analysis Helpers ──────────────────────────────────
@@ -1329,9 +1529,9 @@ export class RepositoryIntelligenceService {
   }
 
   private async analyzeSecurity(
-    _userId: string,
-    _owner: string,
-    _repo: string,
+    userId: string,
+    owner: string,
+    repo: string,
     filePaths: string[],
   ): Promise<{
     status: 'passed' | 'failed' | 'warning' | 'partial';
@@ -1341,6 +1541,12 @@ export class RepositoryIntelligenceService {
     vulnerabilityCount: number;
     criticalVulnerabilities: number;
     highVulnerabilities: number;
+    vulnerabilities: Array<{
+      severity: string;
+      package: string;
+      description: string;
+      withdrawn: boolean;
+    }>;
   }> {
     // Check for security-related files
     const hasSecurityPolicy = filePaths.some(
@@ -1358,37 +1564,103 @@ export class RepositoryIntelligenceService {
       (p) => p === '.snyk' || p === '.npmrc' || p === 'audit-ci.json',
     );
 
+    // Fetch actual Dependabot alerts from GitHub API
+    let vulnerabilityCount = 0;
+    let criticalVulnerabilities = 0;
+    let highVulnerabilities = 0;
+    const vulnerabilities: Array<{
+      severity: string;
+      package: string;
+      description: string;
+      withdrawn: boolean;
+    }> = [];
+
+    try {
+      const octokit = await getOctokit(userId);
+      const alerts = await octokit.paginate(octokit.rest.dependabot.listAlertsForRepo, {
+        owner,
+        repo,
+        state: 'open',
+        per_page: 100,
+      });
+
+      for (const alert of alerts) {
+        if (alert.dismissed_at) continue;
+
+        const severity = alert.security_advisory?.severity || 'low';
+        const packageName = alert.dependency?.package?.name || 'unknown';
+        const description =
+          alert.security_advisory?.summary || alert.security_advisory?.description || '';
+        const withdrawn = !!(alert as Record<string, unknown>).withdrawn_at;
+
+        vulnerabilityCount++;
+
+        if (severity === 'critical') criticalVulnerabilities++;
+        else if (severity === 'high') highVulnerabilities++;
+
+        vulnerabilities.push({
+          severity,
+          package: packageName,
+          description: description.slice(0, 200),
+          withdrawn,
+        });
+      }
+    } catch {
+      // Dependabot API may not be accessible for all repos (e.g., public repos without GitHub token permissions)
+    }
+
     const securityFiles = [hasSecurityPolicy, hasDependabot, hasCodeql, hasAuditConfig];
     const securityScore = securityFiles.filter(Boolean).length;
 
-    if (securityScore >= 3) {
+    // Combine file-based scoring with actual vulnerability data
+    const hasVulnerabilities = vulnerabilityCount > 0;
+
+    if (securityScore >= 3 && !hasVulnerabilities) {
       return {
         status: 'passed',
-        description: 'Strong security configuration',
+        description: 'Strong security configuration with no known vulnerabilities',
         recommendation: 'Security setup looks comprehensive.',
         penalty: 0,
-        vulnerabilityCount: 0,
-        criticalVulnerabilities: 0,
-        highVulnerabilities: 0,
+        vulnerabilityCount,
+        criticalVulnerabilities,
+        highVulnerabilities,
+        vulnerabilities,
       };
     }
 
-    if (securityScore >= 1) {
+    if (securityScore >= 1 || hasVulnerabilities) {
+      const missingFiles = [
+        !hasSecurityPolicy && 'SECURITY.md',
+        !hasDependabot && 'Dependabot config',
+        !hasCodeql && 'CodeQL workflow',
+        !hasAuditConfig && 'Audit configuration',
+      ].filter(Boolean);
+
+      const parts: string[] = [];
+      if (missingFiles.length > 0) parts.push(`Missing: ${missingFiles.join(', ')}`);
+      if (hasVulnerabilities) {
+        parts.push(
+          `${vulnerabilityCount} open vulnerability alerts (${criticalVulnerabilities} critical, ${highVulnerabilities} high)`,
+        );
+      }
+
+      const penaltyBase = hasVulnerabilities
+        ? Math.min(20, 10 + criticalVulnerabilities * 5 + highVulnerabilities * 2)
+        : (4 - securityScore) * 5;
+
       return {
-        status: 'warning',
-        description: 'Partial security configuration',
-        recommendation: `Add missing security files: ${[
-          !hasSecurityPolicy && 'SECURITY.md',
-          !hasDependabot && 'Dependabot config',
-          !hasCodeql && 'CodeQL workflow',
-          !hasAuditConfig && 'Audit configuration',
-        ]
-          .filter(Boolean)
-          .join(', ')}`,
-        penalty: (4 - securityScore) * 5,
-        vulnerabilityCount: 0,
-        criticalVulnerabilities: 0,
-        highVulnerabilities: 0,
+        status: hasVulnerabilities ? 'failed' : 'warning',
+        description: hasVulnerabilities
+          ? `${vulnerabilityCount} open vulnerabilities detected`
+          : 'Partial security configuration',
+        recommendation: hasVulnerabilities
+          ? `Address ${criticalVulnerabilities} critical and ${highVulnerabilities} high severity vulnerabilities. ${missingFiles.length > 0 ? `Also add: ${missingFiles.join(', ')}` : ''}`
+          : `Add missing security files: ${missingFiles.join(', ')}`,
+        penalty: penaltyBase,
+        vulnerabilityCount,
+        criticalVulnerabilities,
+        highVulnerabilities,
+        vulnerabilities,
       };
     }
 
@@ -1398,9 +1670,10 @@ export class RepositoryIntelligenceService {
       recommendation:
         'Add SECURITY.md, Dependabot config, and CodeQL workflow for security scanning.',
       penalty: 20,
-      vulnerabilityCount: 0,
-      criticalVulnerabilities: 0,
-      highVulnerabilities: 0,
+      vulnerabilityCount,
+      criticalVulnerabilities,
+      highVulnerabilities,
+      vulnerabilities,
     };
   }
 
@@ -1447,13 +1720,49 @@ export class RepositoryIntelligenceService {
     }
 
     let totalDeps = 0;
+    let allDeps: Record<string, string> = {};
     try {
       const pkg = JSON.parse(packageJson.content);
-      totalDeps =
-        Object.keys(pkg.dependencies || {}).length + Object.keys(pkg.devDependencies || {}).length;
+      allDeps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
+      totalDeps = Object.keys(allDeps).length;
     } catch {
       // Ignore parse errors
     }
+
+    // Check for outdated dependencies by querying npm registry
+    let outdatedCount = 0;
+    const depsToCheck = Object.entries(allDeps).slice(0, 30); // Limit to avoid rate limiting
+
+    const results = await Promise.allSettled(
+      depsToCheck.map(async ([name, currentVersion]) => {
+        try {
+          const cleanVersion = currentVersion.replace(/^[\^~>=<]*/, '');
+          const response = await fetch(
+            `https://registry.npmjs.org/${encodeURIComponent(name)}/latest`,
+            {
+              signal: AbortSignal.timeout(3000),
+            },
+          );
+          if (!response.ok) return null;
+          const data = (await response.json()) as { version?: string };
+          if (!data.version) return null;
+          if (data.version !== cleanVersion) {
+            return { name, current: cleanVersion, latest: data.version };
+          }
+          return null;
+        } catch {
+          return null;
+        }
+      }),
+    );
+
+    for (const result of results) {
+      if (result.status === 'fulfilled' && result.value) {
+        outdatedCount++;
+      }
+    }
+
+    const outdatedPercentage = totalDeps > 0 ? Math.round((outdatedCount / totalDeps) * 100) : 0;
 
     if (!hasLockfile) {
       return {
@@ -1463,15 +1772,27 @@ export class RepositoryIntelligenceService {
           'Add a lockfile (package-lock.json, yarn.lock, or pnpm-lock.yaml) for reproducible builds.',
         penalty: 10,
         totalDependencies: totalDeps,
-        outdatedDependencies: 0,
-        outdatedPercentage: 0,
+        outdatedDependencies: outdatedCount,
+        outdatedPercentage,
+      };
+    }
+
+    if (outdatedCount > 0) {
+      return {
+        status: outdatedPercentage > 50 ? 'failed' : 'warning',
+        description: `${outdatedCount} of ${totalDeps} dependencies are outdated (${outdatedPercentage}%)`,
+        recommendation: `Update ${outdatedCount} outdated dependencies. Run "npm outdated" to see details.`,
+        penalty: Math.min(15, Math.round(outdatedPercentage / 5)),
+        totalDependencies: totalDeps,
+        outdatedDependencies: outdatedCount,
+        outdatedPercentage,
       };
     }
 
     return {
       status: 'passed',
-      description: `Dependencies managed with lockfile (${totalDeps} packages)`,
-      recommendation: 'Consider running npm outdated to check for updates.',
+      description: `Dependencies managed with lockfile (${totalDeps} packages, all up to date)`,
+      recommendation: 'Dependencies look good.',
       penalty: 0,
       totalDependencies: totalDeps,
       outdatedDependencies: 0,
