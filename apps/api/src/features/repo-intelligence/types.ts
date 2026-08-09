@@ -248,6 +248,43 @@ export interface HealthQualityMetrics {
   totalDependencies?: number;
   outdatedDependencies?: number;
   outdatedPercentage?: number;
+  // Vulnerability details
+  vulnerabilities?: VulnerabilityItem[];
+  // Complexity metrics
+  complexityScore?: number;
+  largeFiles?: LargeFileItem[];
+  // Technical debt
+  debtItems?: TechDebtItem[];
+  debtScore?: number;
+  // Hotspots
+  hotspots?: HotspotItem[];
+}
+
+export interface VulnerabilityItem {
+  severity: 'critical' | 'high' | 'medium' | 'low';
+  package: string;
+  description: string;
+  withdrawn: boolean;
+}
+
+export interface LargeFileItem {
+  path: string;
+  lines: number;
+  language?: string;
+}
+
+export interface TechDebtItem {
+  pattern: string;
+  count: number;
+  files: string[];
+  severity: 'critical' | 'high' | 'medium' | 'low';
+}
+
+export interface HotspotItem {
+  path: string;
+  changeFrequency: number;
+  sizeBytes: number;
+  churnScore: number;
 }
 
 export interface ScoreBreakdownItem {
@@ -276,6 +313,9 @@ export interface RepositoryHealthSummary {
   cicdScore?: number;
   securityScore?: number;
   dependencyScore?: number;
+  complexityScore?: number;
+  debtScore?: number;
+  hotspotCount?: number;
 }
 
 // ─── Repository Intelligence (Technology Analysis) ───────────────────────────

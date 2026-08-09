@@ -6,6 +6,7 @@ import type {
   RepoContributor,
   RepoOverviewData,
   RepoHealthDetail,
+  HealthQualityMetrics,
 } from './types';
 
 function countNodes(tree: RepoFileNode[]): { files: number; directories: number } {
@@ -28,6 +29,8 @@ function countNodes(tree: RepoFileNode[]): { files: number; directories: number 
 function mapHealthDetails(
   details: Array<{
     name: string;
+    category: string;
+    status: string;
     passed: boolean;
     severity: string;
     failedDescription: string;
@@ -37,12 +40,15 @@ function mapHealthDetails(
     actionLabel: string;
     actionType: string;
     scorePenalty: number;
+    quality?: HealthQualityMetrics;
   }>,
 ): RepoHealthDetail[] {
   return details.map((d) => ({
     name: d.name,
+    category: d.category as RepoHealthDetail['category'],
+    status: d.status as RepoHealthDetail['status'],
     passed: d.passed,
-    severity: d.severity as 'critical' | 'high' | 'medium' | 'low',
+    severity: d.severity as RepoHealthDetail['severity'],
     failedDescription: d.failedDescription,
     whyItMatters: d.whyItMatters,
     recommendation: d.recommendation,
@@ -50,6 +56,7 @@ function mapHealthDetails(
     actionLabel: d.actionLabel,
     actionType: d.actionType as RepoHealthDetail['actionType'],
     scorePenalty: d.scorePenalty,
+    quality: d.quality,
   }));
 }
 
@@ -87,6 +94,12 @@ export class RepoOverviewService {
             criticalCount: 0,
             details: [],
             scoreBreakdown: [],
+            summary: {
+              structuralScore: 0,
+              qualityScore: 0,
+              structuralWeight: 40,
+              qualityWeight: 60,
+            },
           };
 
     const overviewMetadata: RepoOverviewMetadata = {
@@ -145,6 +158,7 @@ export class RepoOverviewService {
         criticalCount: health.criticalCount,
         details: mapHealthDetails(health.details),
         scoreBreakdown: health.scoreBreakdown,
+        summary: health.summary,
       },
       totalFiles,
       totalDirectories,

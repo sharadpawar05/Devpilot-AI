@@ -218,6 +218,58 @@ export interface HealthCheckDetail {
   actionLabel: string;
   actionType: HealthActionType;
   scorePenalty: number;
+  quality?: HealthQualityMetrics;
+}
+
+export interface HealthQualityMetrics {
+  coverage?: number;
+  testCount?: number;
+  testFileCount?: number;
+  sectionsFound?: string[];
+  sectionsMissing?: string[];
+  sectionScores?: Record<string, number>;
+  workflowCount?: number;
+  passingWorkflows?: number;
+  failingWorkflows?: number;
+  vulnerabilityCount?: number;
+  criticalVulnerabilities?: number;
+  highVulnerabilities?: number;
+  totalDependencies?: number;
+  outdatedDependencies?: number;
+  outdatedPercentage?: number;
+  vulnerabilities?: VulnerabilityItem[];
+  complexityScore?: number;
+  largeFiles?: LargeFileItem[];
+  debtItems?: TechDebtItem[];
+  debtScore?: number;
+  hotspots?: HotspotItem[];
+}
+
+export interface VulnerabilityItem {
+  severity: 'critical' | 'high' | 'medium' | 'low';
+  package: string;
+  description: string;
+  withdrawn: boolean;
+}
+
+export interface LargeFileItem {
+  path: string;
+  lines: number;
+  language?: string;
+}
+
+export interface TechDebtItem {
+  pattern: string;
+  count: number;
+  files: string[];
+  severity: 'critical' | 'high' | 'medium' | 'low';
+}
+
+export interface HotspotItem {
+  path: string;
+  changeFrequency: number;
+  sizeBytes: number;
+  churnScore: number;
 }
 
 export interface ScoreBreakdownItem {

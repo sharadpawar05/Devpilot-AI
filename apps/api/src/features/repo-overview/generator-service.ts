@@ -295,6 +295,69 @@ Output only the raw markdown content.`;
     filePath: 'docs.md',
     language: 'markdown',
   },
+  'improve-coverage': {
+    systemPrompt:
+      'You are a testing expert. Suggest improvements for test coverage. Output ONLY the markdown content.',
+    userPromptTemplate: (_ctx, framework) =>
+      `Analyze this ${framework} project and provide actionable recommendations to improve test coverage. Include specific test file examples and patterns to follow.
+
+Output only the raw markdown content.`,
+    fileName: 'TESTING.md',
+    filePath: 'TESTING.md',
+    language: 'markdown',
+  },
+  'improve-readme': {
+    systemPrompt:
+      'You are a technical documentation expert. Improve the existing README. Output ONLY the markdown content.',
+    userPromptTemplate: (ctx, framework, pm) => {
+      const readme = ctx.readme.slice(0, 5000);
+      return `Improve this README.md for a ${framework} project using ${pm}.
+
+Current README:\n${readme || 'No README available'}
+
+Enhance it with better structure, examples, and clarity. Output only the raw markdown content.`;
+    },
+    fileName: 'README.md',
+    filePath: 'README.md',
+    language: 'markdown',
+  },
+  'add-ci-pipeline': {
+    systemPrompt:
+      'You are a CI/CD expert. Generate GitHub Actions workflow files. Output ONLY the YAML content.',
+    userPromptTemplate: (_ctx, framework, pm) =>
+      `Generate a GitHub Actions CI/CD workflow for a ${framework} project using ${pm}.
+
+Include: lint, test, and build steps. Output only the raw YAML content.`,
+    fileName: 'ci.yml',
+    filePath: '.github/workflows/ci.yml',
+    language: 'yaml',
+  },
+  'fix-vulnerabilities': {
+    systemPrompt:
+      'You are a security expert. Provide recommendations to fix security vulnerabilities. Output ONLY the markdown content.',
+    userPromptTemplate: (_ctx, framework) =>
+      `Provide a security hardening guide for a ${framework} project. Include dependency updates, security headers, and best practices. Output only the raw markdown content.`,
+    fileName: 'SECURITY.md',
+    filePath: 'SECURITY.md',
+    language: 'markdown',
+  },
+  'update-dependencies': {
+    systemPrompt:
+      'You are a dependency management expert. Provide recommendations for updating dependencies. Output ONLY the markdown content.',
+    userPromptTemplate: (ctx, framework, pm) => {
+      const deps = ctx.packageJson
+        ? Object.keys((ctx.packageJson.dependencies as Record<string, string>) || {}).slice(0, 20)
+        : [];
+      return `Provide a dependency update guide for a ${framework} project using ${pm}.
+
+Current dependencies: ${deps.join(', ') || 'none detected'}
+
+Include update strategy, breaking change considerations, and testing recommendations. Output only the raw markdown content.`;
+    },
+    fileName: 'DEPENDENCIES.md',
+    filePath: 'DEPENDENCIES.md',
+    language: 'markdown',
+  },
   none: {
     systemPrompt: '',
     userPromptTemplate: () => '',
