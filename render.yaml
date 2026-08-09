@@ -9,7 +9,7 @@ services:
     plan: free
     region: oregon
 
-    buildCommand: HUSKY=0 pnpm install --no-frozen-lockfile && pnpm --filter @devpilot/api db:generate
+    buildCommand: pnpm install --no-frozen-lockfile --ignore-scripts && pnpm --filter @devpilot/api db:generate
 
     startCommand: pnpm --filter @devpilot/api start
 
@@ -18,15 +18,11 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-
       - key: PORT
         value: 10000
-
       - key: HOST
         value: 0.0.0.0
-
       - key: DATABASE_URL
         sync: false
-
       - key: DIRECT_URL
         sync: false
