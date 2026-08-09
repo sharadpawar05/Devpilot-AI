@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { workflowEngine } from '@/core/ai/workflow/engine';
 import { WorkflowType } from '@/core/ai/workflow/types';
+import { getEnv } from '@/config';
 
 const streamRequestSchema = z.object({
   workflowType: z.enum([
@@ -68,11 +69,28 @@ export async function streamingRoutes(app: FastifyInstance) {
       const { workflowType, provider, model, prompt, context, temperature, maxTokens, metadata } =
         parsed.data;
 
+      const env = getEnv();
+      const origin = request.headers.origin;
+      const allowedOrigins =
+        env.CORS_ORIGIN === '*' ? '*' : env.CORS_ORIGIN.split(',').map((o) => o.trim());
+
+      let accessControlOrigin = '*';
+      if (env.CORS_ORIGIN !== '*') {
+        if (origin && allowedOrigins.includes(origin)) {
+          accessControlOrigin = origin;
+        } else if (Array.isArray(allowedOrigins) && allowedOrigins.length > 0) {
+          accessControlOrigin = allowedOrigins[0];
+        }
+      }
+
       reply.raw.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         Connection: 'keep-alive',
         'X-Accel-Buffering': 'no',
+        'Access-Control-Allow-Origin': accessControlOrigin,
+        'Access-Control-Allow-Credentials': 'true',
+        'Access-Control-Expose-Headers': 'Set-Cookie',
       });
 
       const sendEvent = (data: unknown) => {
