@@ -3,6 +3,22 @@ import { z } from 'zod';
 import { authenticate } from '@/core/auth';
 import { db } from '@/core/db';
 
+async function ensureUserExists(sub: string, email?: string): Promise<void> {
+  const existing = await db.user.findUnique({
+    where: { supabaseUserId: sub },
+    select: { id: true },
+  });
+  if (!existing) {
+    await db.user.create({
+      data: {
+        supabaseUserId: sub,
+        email: email || `${sub}@placeholder.local`,
+        fullName: 'User',
+      },
+    });
+  }
+}
+
 const createSessionSchema = z.object({
   workflowType: z.enum([
     'playground',
@@ -184,7 +200,9 @@ export async function aiHistoryRoutes(app: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const auth = (request as { auth: { sub: string } }).auth;
+      const auth = (request as { auth: { sub: string; email?: string } }).auth;
+
+      await ensureUserExists(auth.sub, auth.email);
 
       const query = listQuerySchema.parse(request.query);
 
