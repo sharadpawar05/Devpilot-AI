@@ -9,7 +9,7 @@ services:
     plan: free
     region: oregon
 
-    buildCommand: pnpm install --no-frozen-lockfile --ignore-scripts && pnpm --filter @devpilot/api exec prisma generate
+    buildCommand: DATABASE_URL="postgresql://user:pass@localhost:5432/db" DIRECT_URL="postgresql://user:pass@localhost:5432/db" pnpm install --no-frozen-lockfile --ignore-scripts && pnpm --filter @devpilot/api exec prisma generate
 
     startCommand: pnpm --filter @devpilot/api start
 
