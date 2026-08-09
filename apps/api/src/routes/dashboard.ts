@@ -2,6 +2,22 @@ import type { FastifyInstance } from 'fastify';
 import { authenticate } from '@/core/auth';
 import { db } from '@/core/db';
 
+async function ensureUserExists(sub: string, email?: string): Promise<void> {
+  const existing = await db.user.findUnique({
+    where: { supabaseUserId: sub },
+    select: { id: true },
+  });
+  if (!existing) {
+    await db.user.create({
+      data: {
+        supabaseUserId: sub,
+        email: email || `${sub}@placeholder.local`,
+        fullName: 'User',
+      },
+    });
+  }
+}
+
 export async function dashboardRoutes(app: FastifyInstance) {
   app.get(
     '/dashboard',
@@ -14,7 +30,9 @@ export async function dashboardRoutes(app: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const auth = (request as { auth: { sub: string } }).auth;
+      const auth = (request as { auth: { sub: string; email?: string } }).auth;
+
+      await ensureUserExists(auth.sub, auth.email);
 
       const user = await db.user.findUnique({
         where: { supabaseUserId: auth.sub },
@@ -26,42 +44,46 @@ export async function dashboardRoutes(app: FastifyInstance) {
         },
       });
 
-      const githubConnected = !!user?.githubAccessToken;
+      if (!user) {
+        return reply.send({
+          success: true,
+          github: {
+            connected: false,
+            username: null,
+            avatar: null,
+            connectedAt: null,
+          },
+          activity: [],
+        });
+      }
 
-      const dbUser = user
-        ? await db.user.findUnique({
-            where: { supabaseUserId: auth.sub },
-            select: { id: true },
-          })
-        : null;
+      const githubConnected = !!user.githubAccessToken;
 
-      const recentActivity = dbUser
-        ? await db.aIHistorySession
-            .findMany({
-              where: { userId: dbUser.id },
-              orderBy: { createdAt: 'desc' },
-              take: 10,
-              select: {
-                id: true,
-                workflowType: true,
-                title: true,
-                provider: true,
-                model: true,
-                totalTokens: true,
-                totalLatency: true,
-                createdAt: true,
-              },
-            })
-            .catch(() => [])
-        : [];
+      const recentActivity = await db.aIHistorySession
+        .findMany({
+          where: { user: { supabaseUserId: auth.sub } },
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+          select: {
+            id: true,
+            workflowType: true,
+            title: true,
+            provider: true,
+            model: true,
+            totalTokens: true,
+            totalLatency: true,
+            createdAt: true,
+          },
+        })
+        .catch(() => []);
 
       return reply.send({
         success: true,
         github: {
           connected: githubConnected,
-          username: user?.githubUsername ?? null,
-          avatar: user?.githubAvatar ?? null,
-          connectedAt: user?.githubConnectedAt?.toISOString() ?? null,
+          username: user.githubUsername ?? null,
+          avatar: user.githubAvatar ?? null,
+          connectedAt: user.githubConnectedAt?.toISOString() ?? null,
         },
         activity: recentActivity.map(
           (s: {
