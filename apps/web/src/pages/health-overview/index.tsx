@@ -318,7 +318,10 @@ export default function HealthOverviewPage() {
       lines.push(`## Code Hotspots`, '');
       lines.push(`- ${hotspotCheck.quality.hotspots.length} hotspot files detected`);
       for (const hs of hotspotCheck.quality.hotspots.slice(0, 5)) {
-        lines.push(`  - ${hs.path} (churn: ${hs.changeFrequency}, size: ${hs.sizeBytes} bytes)`);
+        lines.push(
+          `  - ${hs.path} (score: ${hs.score}, commits: ${hs.commits}, lines: ${hs.lines})`,
+        );
+        lines.push(`    Reason: ${hs.reason}`);
       }
       lines.push('');
     }

@@ -238,8 +238,8 @@ function ScoreBreakdown({ summary }: { summary: NonNullable<RepoHealthCheck['sum
       </div>
       <div className="space-y-2.5">
         {SCORE_CATEGORIES.map(({ key, label, icon: Icon, summaryKey }) => {
-          const score = summary[summaryKey as keyof typeof summary] as number | undefined;
-          if (score === undefined) return null;
+          const score = summary[summaryKey as keyof typeof summary] as number | undefined | null;
+          if (score === undefined || score === null) return null;
           return (
             <div key={key} className="flex items-center gap-3">
               <Icon className={cn('h-4 w-4 shrink-0', getTextColor(score))} />
@@ -664,7 +664,7 @@ function QualityMetrics({
     );
   }
 
-  if (name === 'Code Complexity' && quality.complexityScore !== undefined) {
+  if (name === 'Code Complexity & File Size' && quality.complexityScore !== undefined) {
     return (
       <div className="flex items-center gap-2 text-xs">
         <span

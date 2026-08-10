@@ -774,9 +774,10 @@ export class RepositoryIntelligenceService {
     let hotspotResult: {
       hotspots: Array<{
         path: string;
-        changeFrequency: number;
-        sizeBytes: number;
-        churnScore: number;
+        score: number;
+        commits: number;
+        lines: number;
+        reason: string;
       }>;
       hotspotCount: number;
     } = { hotspots: [], hotspotCount: 0 };
@@ -943,7 +944,7 @@ export class RepositoryIntelligenceService {
       // Quality checks
       {
         id: 'test-coverage',
-        name: 'Test Coverage',
+        name: 'Testing',
         category: 'quality',
         status: testCoverage.status,
         passed: testCoverage.status === 'passed',
@@ -1112,7 +1113,7 @@ export class RepositoryIntelligenceService {
       // Complexity check
       {
         id: 'complexity',
-        name: 'Code Complexity',
+        name: 'Code Complexity & File Size',
         category: 'quality',
         status:
           complexityResult.complexityScore >= 70
@@ -1139,6 +1140,7 @@ export class RepositoryIntelligenceService {
             : Math.round((100 - complexityResult.complexityScore) / 5),
         evidence: {
           sourceFilesAnalyzed: complexityResult.sourceFilesAnalyzed,
+          method: complexityResult.method,
           largeFileThreshold: 500,
           veryLargeFileThreshold: 1000,
           largeFiles: complexityResult.largeFiles.map((f) => ({ path: f.path, lines: f.lines })),
@@ -1216,9 +1218,10 @@ export class RepositoryIntelligenceService {
           method: 'Commit activity frequency combined with file size',
           hotspots: hotspotResult.hotspots.map((h) => ({
             path: h.path,
-            changeFrequency: h.changeFrequency,
-            sizeBytes: h.sizeBytes,
-            churnScore: h.churnScore,
+            score: h.score,
+            commits: h.commits,
+            lines: h.lines,
+            reason: h.reason,
           })),
         },
         quality: {
@@ -1234,35 +1237,65 @@ export class RepositoryIntelligenceService {
     const structuralWeight = 40;
     const qualityWeight = 60;
 
-    const structuralPenalty = structuralChecks.reduce((sum, d) => sum + d.scorePenalty, 0);
-    const qualityPenalty = qualityChecks.reduce((sum, d) => sum + d.scorePenalty, 0);
+    // Only count penalties from measured dimensions (not not_measured or not_applicable)
+    const measuredStructuralChecks = structuralChecks.filter(
+      (d) => d.status !== 'not_measured' && d.status !== 'not_applicable',
+    );
+    const measuredQualityChecks = qualityChecks.filter(
+      (d) => d.status !== 'not_measured' && d.status !== 'not_applicable',
+    );
+
+    const structuralPenalty = measuredStructuralChecks.reduce((sum, d) => sum + d.scorePenalty, 0);
+    const qualityPenalty = measuredQualityChecks.reduce((sum, d) => sum + d.scorePenalty, 0);
 
     // Max penalties — must match the sum of all possible penalties per category.
     // Structural: README(20) + License(10) + Gitignore(5) + PackageConfig(10) + Docker(0=N/A) + EnvExample(5) = 50
-    // Quality: TestCoverage(30) + ReadmeQuality(25) + CI/CD(30) + Security(20) + Dependencies(15) + Documentation(10) + Complexity(20) + Debt(20) + Hotspots(15) = 185
+    // Quality: Testing(30) + ReadmeQuality(25) + CI/CD(30) + Security(20) + Dependencies(12) + Documentation(10) + Complexity(20) + Debt(20) + Hotspots(15) = 182
     const maxStructuralPenalty = 50;
-    const maxQualityPenalty = 185;
+    const maxQualityPenalty = 182;
 
     // Per-check-type max penalties for sub-category scores
-    const maxSecurityPenalty = 20;
-    const maxDependencyPenalty = 15;
     const maxHotspotPenalty = 15;
     const maxCicdPenalty = 30;
     const maxReadmeQualityPenalty = 25;
 
-    const structuralScore = Math.max(0, 100 - (structuralPenalty / maxStructuralPenalty) * 100);
-    const qualityScore = Math.max(0, 100 - (qualityPenalty / maxQualityPenalty) * 100);
+    // Calculate structural score - only from measured checks
+    const structuralScore =
+      measuredStructuralChecks.length > 0
+        ? Math.max(0, 100 - (structuralPenalty / maxStructuralPenalty) * 100)
+        : 100;
 
-    const score = Math.round(
-      (structuralScore * structuralWeight) / 100 + (qualityScore * qualityWeight) / 100,
-    );
+    // Calculate quality score - only from measured checks
+    const qualityScore =
+      measuredQualityChecks.length > 0
+        ? Math.max(0, 100 - (qualityPenalty / maxQualityPenalty) * 100)
+        : 100;
 
-    // Sub-category scores — all use the same penalty/maxPenalty formula
-    const securityScore = Math.max(0, 100 - (securityQuality.penalty / maxSecurityPenalty) * 100);
-    const dependencyScore = Math.max(
-      0,
-      100 - (dependencyQuality.penalty / maxDependencyPenalty) * 100,
-    );
+    // Calculate overall score using only measured dimensions
+    const measuredDimensions: Array<{ score: number; weight: number }> = [];
+
+    // Add structural if measured
+    if (measuredStructuralChecks.length > 0) {
+      measuredDimensions.push({ score: structuralScore, weight: structuralWeight });
+    }
+
+    // Add quality if measured
+    if (measuredQualityChecks.length > 0) {
+      measuredDimensions.push({ score: qualityScore, weight: qualityWeight });
+    }
+
+    // Calculate weighted average from measured dimensions only
+    const totalWeight = measuredDimensions.reduce((sum, d) => sum + d.weight, 0);
+    const score =
+      totalWeight > 0
+        ? Math.round(
+            measuredDimensions.reduce((sum, d) => sum + (d.score * d.weight) / totalWeight, 0),
+          )
+        : 0;
+
+    // Sub-category scores — use explicit score from analysis when available
+    const securityScore = securityQuality.score;
+    const dependencyScore = dependencyQuality.score;
     // Maintainability = average of complexity, debt, and hotspot scores
     const hotspotCheck = details.find((d) => d.id === 'hotspots');
     const hotspotScore = hotspotCheck
@@ -1314,8 +1347,8 @@ export class RepositoryIntelligenceService {
         testCoverage: testCoverage.coverage,
         documentationScore: Math.round(documentationScore),
         cicdScore: Math.round(cicdScore),
-        securityScore: Math.round(securityScore),
-        dependencyScore: Math.round(dependencyScore),
+        securityScore: securityScore,
+        dependencyScore: dependencyScore,
         complexityScore: complexityResult.complexityScore,
         debtScore: debtResult.debtScore,
         hotspotCount: hotspotResult.hotspotCount,
@@ -1371,6 +1404,7 @@ export class RepositoryIntelligenceService {
     description: string;
     recommendation: string;
     penalty: number;
+    score: number | null;
     coverage?: number;
     testCount?: number;
     testFileCount?: number;
@@ -1389,10 +1423,11 @@ export class RepositoryIntelligenceService {
     if (testFileCount === 0) {
       return {
         status: 'failed',
-        description: 'No test files detected',
+        description: 'No automated tests detected',
         recommendation:
           'Add unit tests for critical business logic. Start with core functions and components.',
         penalty: 30,
+        score: 0,
         testFileCount: 0,
       };
     }
@@ -1417,6 +1452,7 @@ export class RepositoryIntelligenceService {
           description: `Excellent test coverage: ${coverage}%`,
           recommendation: 'Maintain current coverage levels.',
           penalty: 0,
+          score: 100,
           coverage,
           testCount: testFileCount,
           testFileCount,
@@ -1428,6 +1464,7 @@ export class RepositoryIntelligenceService {
           description: `Moderate test coverage: ${coverage}%`,
           recommendation: 'Increase coverage to 80% for better regression detection.',
           penalty: 10,
+          score: 90,
           coverage,
           testCount: testFileCount,
           testFileCount,
@@ -1438,6 +1475,7 @@ export class RepositoryIntelligenceService {
         description: `Low test coverage: ${coverage}%`,
         recommendation: 'Increase coverage to at least 60% to catch critical regressions.',
         penalty: 20,
+        score: 80,
         coverage,
         testCount: testFileCount,
         testFileCount,
@@ -1451,6 +1489,7 @@ export class RepositoryIntelligenceService {
       recommendation:
         'Set up coverage reporting (e.g., vitest --coverage, jest --coverage) to measure test effectiveness.',
       penalty: 0,
+      score: null,
       testCount: testFileCount,
       testFileCount,
     };
@@ -1461,6 +1500,7 @@ export class RepositoryIntelligenceService {
     description: string;
     recommendation: string;
     penalty: number;
+    score: number;
     sectionsFound: string[];
     sectionsMissing: string[];
     sectionScores: Record<string, number>;
@@ -1471,69 +1511,113 @@ export class RepositoryIntelligenceService {
         description: 'No README content to analyze',
         recommendation: 'Add a comprehensive README.md file.',
         penalty: 25,
+        score: 0,
         sectionsFound: [],
-        sectionsMissing: ['description', 'installation', 'usage', 'api', 'contributing'],
+        sectionsMissing: [
+          'description',
+          'installation',
+          'usage',
+          'api',
+          'contributing',
+          'testing',
+          'architecture',
+          'configuration',
+        ],
         sectionScores: {},
       };
     }
 
     const sections = {
       description: {
-        patterns: [/# .*description/i, /# .*about/i, /# .*overview/i, /# .*introduction/i],
-        weight: 25,
+        patterns: [
+          /# .*description/i,
+          /# .*about/i,
+          /# .*overview/i,
+          /# .*introduction/i,
+          /^.{20,}$/m,
+        ],
+        weight: 15,
       },
-      installation: { patterns: [/## .*install/i, /### .*install/i, /# .*install/i], weight: 25 },
+      installation: { patterns: [/## .*install/i, /### .*install/i, /# .*install/i], weight: 15 },
       usage: {
         patterns: [/## .*usage/i, /### .*usage/i, /## .*example/i, /### .*example/i, /# .*usage/i],
-        weight: 25,
+        weight: 15,
       },
       api: {
         patterns: [/## .*api/i, /### .*api/i, /## .*endpoint/i, /### .*endpoint/i, /# .*api/i],
-        weight: 15,
+        weight: 10,
+      },
+      configuration: {
+        patterns: [
+          /## .*config/i,
+          /### .*config/i,
+          /## .*environment/i,
+          /### .*environment/i,
+          /# .*config/i,
+        ],
+        weight: 10,
+      },
+      architecture: {
+        patterns: [
+          /## .*architect/i,
+          /### .*architect/i,
+          /## .*structure/i,
+          /### .*structure/i,
+          /# .*architect/i,
+        ],
+        weight: 10,
       },
       contributing: {
         patterns: [/## .*contribut/i, /### .*contribut/i, /# .*contribut/i],
         weight: 10,
+      },
+      testing: {
+        patterns: [/## .*test/i, /### .*test/i, /# .*test/i, /## .*ci/i, /### .*ci/i],
+        weight: 15,
       },
     };
 
     const sectionsFound: string[] = [];
     const sectionsMissing: string[] = [];
     const sectionScores: Record<string, number> = {};
-    let totalScore = 0;
+    let totalWeight = 0;
+    let foundWeight = 0;
 
     for (const [name, config] of Object.entries(sections)) {
+      totalWeight += config.weight;
       const found = config.patterns.some((p) => p.test(readmeContent));
       if (found) {
         sectionsFound.push(name);
         sectionScores[name] = config.weight;
-        totalScore += config.weight;
+        foundWeight += config.weight;
       } else {
         sectionsMissing.push(name);
         sectionScores[name] = 0;
       }
     }
 
-    const coveragePercent = Math.round((totalScore / 100) * 100);
+    const score = Math.round((foundWeight / totalWeight) * 100);
 
-    if (coveragePercent >= 80) {
+    if (score >= 80) {
       return {
         status: 'passed',
-        description: `Comprehensive README (${coveragePercent}% section coverage)`,
+        description: `Comprehensive README (${sectionsFound.length}/${Object.keys(sections).length} sections)`,
         recommendation: 'README looks good. Consider adding more examples if needed.',
         penalty: 0,
+        score,
         sectionsFound,
         sectionsMissing,
         sectionScores,
       };
     }
 
-    if (coveragePercent >= 50) {
+    if (score >= 50) {
       return {
         status: 'warning',
-        description: `README needs improvement (${coveragePercent}% section coverage)`,
+        description: `README needs improvement (${sectionsFound.length}/${Object.keys(sections).length} sections)`,
         recommendation: `Add missing sections: ${sectionsMissing.join(', ')}`,
-        penalty: Math.round((100 - coveragePercent) / 10),
+        penalty: Math.round((100 - score) / 10),
+        score,
         sectionsFound,
         sectionsMissing,
         sectionScores,
@@ -1542,9 +1626,10 @@ export class RepositoryIntelligenceService {
 
     return {
       status: 'failed',
-      description: `Incomplete README (${coveragePercent}% section coverage)`,
+      description: `Incomplete README (${sectionsFound.length}/${Object.keys(sections).length} sections)`,
       recommendation: `Add these sections: ${sectionsMissing.join(', ')}`,
-      penalty: Math.round((100 - coveragePercent) / 5),
+      penalty: Math.round((100 - score) / 5),
+      score,
       sectionsFound,
       sectionsMissing,
       sectionScores,
@@ -1671,6 +1756,7 @@ export class RepositoryIntelligenceService {
     description: string;
     recommendation: string;
     penalty: number;
+    score: number | null;
     vulnerabilityCount: number;
     criticalVulnerabilities: number;
     highVulnerabilities: number;
@@ -1773,6 +1859,7 @@ export class RepositoryIntelligenceService {
           description: `${vulnerabilityCount} open vulnerabilities detected`,
           recommendation: `Address ${criticalVulnerabilities} critical and ${highVulnerabilities} high severity vulnerabilities. ${missingFiles.length > 0 ? `Also add: ${missingFiles.join(', ')}` : ''}`,
           penalty,
+          score: Math.max(0, 100 - penalty),
           vulnerabilityCount,
           criticalVulnerabilities,
           highVulnerabilities,
@@ -1794,6 +1881,7 @@ export class RepositoryIntelligenceService {
             ? 'Security setup looks comprehensive.'
             : 'Consider adding SECURITY.md, Dependabot config, and CodeQL workflow for defense in depth.',
         penalty: 0,
+        score: 100,
         vulnerabilityCount,
         criticalVulnerabilities,
         highVulnerabilities,
@@ -1815,6 +1903,7 @@ export class RepositoryIntelligenceService {
         recommendation:
           'Dependabot API was not accessible. Verify vulnerability scanning is working.',
         penalty: 5,
+        score: 95,
         vulnerabilityCount,
         criticalVulnerabilities,
         highVulnerabilities,
@@ -1835,6 +1924,7 @@ export class RepositoryIntelligenceService {
       recommendation:
         'Add SECURITY.md, Dependabot config, and CodeQL workflow for security scanning.',
       penalty: 0,
+      score: null,
       vulnerabilityCount,
       criticalVulnerabilities,
       highVulnerabilities,
@@ -1858,6 +1948,7 @@ export class RepositoryIntelligenceService {
     description: string;
     recommendation: string;
     penalty: number;
+    score: number;
     totalDependencies: number;
     outdatedDependencies: number;
     outdatedPercentage: number;
@@ -1870,6 +1961,7 @@ export class RepositoryIntelligenceService {
         description: 'No package.json found',
         recommendation: 'Add a package.json to manage dependencies.',
         penalty: 15,
+        score: 0,
         totalDependencies: 0,
         outdatedDependencies: 0,
         outdatedPercentage: 0,
@@ -1887,6 +1979,7 @@ export class RepositoryIntelligenceService {
         description: 'Could not read package.json',
         recommendation: 'Ensure package.json is accessible.',
         penalty: 5,
+        score: 95,
         totalDependencies: 0,
         outdatedDependencies: 0,
         outdatedPercentage: 0,
@@ -1950,6 +2043,7 @@ export class RepositoryIntelligenceService {
         recommendation:
           'Add a lockfile (package-lock.json, yarn.lock, or pnpm-lock.yaml) for reproducible builds.',
         penalty: 10,
+        score: 90,
         totalDependencies: totalDeps,
         outdatedDependencies: outdatedCount,
         outdatedPercentage,
@@ -1959,11 +2053,17 @@ export class RepositoryIntelligenceService {
     }
 
     if (outdatedCount > 0) {
+      // Gradual penalty: 0% outdated = 0 penalty, 100% outdated = 12 penalty (max)
+      // Formula: penalty = outdatedPercentage / 100 * 12, capped at 12
+      const penalty = Math.min(12, Math.round((outdatedPercentage / 100) * 12));
+      const score = Math.max(0, 100 - penalty);
+
       return {
         status: outdatedPercentage > 50 ? 'failed' : 'warning',
         description: `${outdatedCount} of ${depsToCheck.length} checked dependencies are outdated (${outdatedPercentage}%)${totalDeps > depsToCheck.length ? ` (${totalDeps} total)` : ''}`,
         recommendation: `Update ${outdatedCount} outdated dependencies. Run "npm outdated" to see details.`,
-        penalty: Math.min(15, Math.round(outdatedPercentage / 5)),
+        penalty,
+        score,
         totalDependencies: totalDeps,
         outdatedDependencies: outdatedCount,
         outdatedPercentage,
@@ -1977,6 +2077,7 @@ export class RepositoryIntelligenceService {
       description: `Dependencies managed with lockfile (${totalDeps} packages, all up to date)`,
       recommendation: 'Dependencies look good.',
       penalty: 0,
+      score: 100,
       totalDependencies: totalDeps,
       outdatedDependencies: 0,
       outdatedPercentage: 0,

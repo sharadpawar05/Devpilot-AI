@@ -120,12 +120,13 @@ function getScoreRingColor(score: number): string {
 
 interface DimensionCardProps {
   dimension: Dimension;
-  score: number | undefined;
+  score: number | undefined | null;
 }
 
 function DimensionCard({ dimension, score }: DimensionCardProps) {
   const { label, icon: Icon, color, bgColor, description } = dimension;
-  const displayScore = score ?? 0;
+  const isNotMeasured = score === null || score === undefined;
+  const displayScore = isNotMeasured ? 0 : score;
   const circumference = 2 * Math.PI * 18;
   const offset = circumference - (displayScore / 100) * circumference;
 
@@ -140,7 +141,9 @@ function DimensionCard({ dimension, score }: DimensionCardProps) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium text-foreground">{label}</span>
-            {score !== undefined ? (
+            {isNotMeasured ? (
+              <span className="text-xs text-muted-foreground">N/A</span>
+            ) : (
               <div className="flex items-center gap-2">
                 <span className={cn('text-sm font-bold tabular-nums', getScoreColor(displayScore))}>
                   {displayScore}
@@ -167,8 +170,6 @@ function DimensionCard({ dimension, score }: DimensionCardProps) {
                   />
                 </svg>
               </div>
-            ) : (
-              <span className="text-xs text-muted-foreground">N/A</span>
             )}
           </div>
           <p className="mt-1 text-xs text-muted-foreground">{description}</p>

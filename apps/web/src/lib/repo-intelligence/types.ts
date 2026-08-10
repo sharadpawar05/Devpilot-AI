@@ -267,9 +267,10 @@ export interface TechDebtItem {
 
 export interface HotspotItem {
   path: string;
-  changeFrequency: number;
-  sizeBytes: number;
-  churnScore: number;
+  score: number;
+  commits: number;
+  lines: number;
+  reason: string;
 }
 
 export interface ScoreBreakdownItem {
@@ -281,6 +282,8 @@ export interface RepositoryHealth {
   score: number;
   passedCount: number;
   failedCount: number;
+  warningCount?: number;
+  notMeasuredCount?: number;
   criticalCount: number;
   details: HealthCheckDetail[];
   scoreBreakdown: ScoreBreakdownItem[];

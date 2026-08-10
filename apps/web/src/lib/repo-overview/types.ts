@@ -116,9 +116,10 @@ export interface TechDebtItem {
 
 export interface HotspotItem {
   path: string;
-  changeFrequency: number;
-  sizeBytes: number;
-  churnScore: number;
+  score: number;
+  commits: number;
+  lines: number;
+  reason: string;
 }
 
 export interface RepoHealthDetail {
@@ -151,11 +152,11 @@ export interface RepositoryHealthSummary {
   structuralWeight: number;
   qualityWeight: number;
   testCoverage?: number;
-  documentationScore?: number;
-  cicdScore?: number;
-  securityScore?: number;
-  dependencyScore?: number;
-  complexityScore?: number;
+  documentationScore?: number | null;
+  cicdScore?: number | null;
+  securityScore?: number | null;
+  dependencyScore?: number | null;
+  complexityScore?: number | null;
   debtScore?: number;
   hotspotCount?: number;
   maintainabilityScore?: number;
