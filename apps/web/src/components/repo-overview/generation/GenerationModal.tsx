@@ -125,22 +125,16 @@ export function GenerationModal({
     <Sheet open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
       <SheetContent className="flex flex-col gap-0 p-0 sm:max-w-2xl">
         <SheetHeader className="border-b border-border/50 px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-                <Sparkles className="h-4 w-4 text-primary" />
-              </div>
-              <div>
-                <SheetTitle className="text-base">{label}</SheetTitle>
-                <SheetDescription className="mt-0.5 text-xs">
-                  {owner}/{repo} · {currentBranch}
-                </SheetDescription>
-              </div>
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+              <Sparkles className="h-4 w-4 text-primary" />
             </div>
-            <SheetClose className="rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100">
-              <X className="h-4 w-4" />
-              <span className="sr-only">Close</span>
-            </SheetClose>
+            <div>
+              <SheetTitle className="text-base">{label}</SheetTitle>
+              <SheetDescription className="mt-0.5 text-xs">
+                {owner}/{repo} · {currentBranch}
+              </SheetDescription>
+            </div>
           </div>
         </SheetHeader>
 
