@@ -1018,6 +1018,7 @@ export class RepositoryIntelligenceService {
           workflowCount: cicdQuality.workflowCount,
           passingWorkflows: cicdQuality.passingWorkflows,
           failingWorkflows: cicdQuality.failingWorkflows,
+          workflowTypes: cicdQuality.workflowTypes,
         },
       },
       {
@@ -1052,6 +1053,7 @@ export class RepositoryIntelligenceService {
           vulnerabilityCount: securityQuality.vulnerabilityCount,
           criticalVulnerabilities: securityQuality.criticalVulnerabilities,
           highVulnerabilities: securityQuality.highVulnerabilities,
+          dependabotAccessible: securityQuality.dependabotAccessible,
           vulnerabilities: securityQuality.vulnerabilities.map((v) => ({
             ...v,
             severity: v.severity as 'critical' | 'high' | 'medium' | 'low',
@@ -1085,6 +1087,10 @@ export class RepositoryIntelligenceService {
           totalDependencies: dependencyQuality.totalDependencies,
           outdatedDependencies: dependencyQuality.outdatedDependencies,
           outdatedPercentage: dependencyQuality.outdatedPercentage,
+          hasLockfile: dependencyQuality.hasLockfile,
+          majorOutdated: dependencyQuality.majorOutdated,
+          minorOutdated: dependencyQuality.minorOutdated,
+          patchOutdated: dependencyQuality.patchOutdated,
         },
       },
       {
@@ -1954,6 +1960,9 @@ export class RepositoryIntelligenceService {
     outdatedPercentage: number;
     hasLockfile: boolean;
     outdatedPackages: Array<{ name: string; current: string; latest: string }>;
+    majorOutdated: number;
+    minorOutdated: number;
+    patchOutdated: number;
   }> {
     if (!packageJsonPath) {
       return {
@@ -1967,6 +1976,9 @@ export class RepositoryIntelligenceService {
         outdatedPercentage: 0,
         hasLockfile: false,
         outdatedPackages: [],
+        majorOutdated: 0,
+        minorOutdated: 0,
+        patchOutdated: 0,
       };
     }
 
@@ -1985,6 +1997,9 @@ export class RepositoryIntelligenceService {
         outdatedPercentage: 0,
         hasLockfile,
         outdatedPackages: [],
+        majorOutdated: 0,
+        minorOutdated: 0,
+        patchOutdated: 0,
       };
     }
 
@@ -2033,6 +2048,24 @@ export class RepositoryIntelligenceService {
       }
     }
 
+    // Calculate major/minor/patch breakdown
+    let majorOutdated = 0;
+    let minorOutdated = 0;
+    let patchOutdated = 0;
+
+    for (const pkg of outdatedPackages) {
+      const currentParts = pkg.current.split('.').map(Number);
+      const latestParts = pkg.latest.split('.').map(Number);
+
+      if (currentParts[0] !== latestParts[0]) {
+        majorOutdated++;
+      } else if (currentParts[1] !== latestParts[1]) {
+        minorOutdated++;
+      } else {
+        patchOutdated++;
+      }
+    }
+
     const outdatedPercentage =
       depsToCheck.length > 0 ? Math.round((outdatedCount / depsToCheck.length) * 100) : 0;
 
@@ -2049,6 +2082,9 @@ export class RepositoryIntelligenceService {
         outdatedPercentage,
         hasLockfile: false,
         outdatedPackages,
+        majorOutdated,
+        minorOutdated,
+        patchOutdated,
       };
     }
 
@@ -2069,6 +2105,9 @@ export class RepositoryIntelligenceService {
         outdatedPercentage,
         hasLockfile: true,
         outdatedPackages,
+        majorOutdated,
+        minorOutdated,
+        patchOutdated,
       };
     }
 
@@ -2083,6 +2122,9 @@ export class RepositoryIntelligenceService {
       outdatedPercentage: 0,
       hasLockfile: true,
       outdatedPackages: [],
+      majorOutdated: 0,
+      minorOutdated: 0,
+      patchOutdated: 0,
     };
   }
 

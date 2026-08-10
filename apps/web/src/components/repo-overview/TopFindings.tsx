@@ -81,8 +81,26 @@ function renderEvidenceValue(value: unknown): string {
   if (typeof value === 'string') return value;
   if (Array.isArray(value)) {
     if (value.length === 0) return 'None';
-    if (value.length <= 3) return value.join(', ');
-    return `${value.slice(0, 3).join(', ')} +${value.length - 3} more`;
+    // Render each element recursively to avoid [object Object]
+    const formatElement = (v: unknown): string => {
+      if (v === null || v === undefined) return '';
+      if (typeof v === 'object' && !Array.isArray(v)) {
+        const keys = Object.keys(v as Record<string, unknown>);
+        if (keys.length === 0) return '{}';
+        // For objects with known fields, show key values
+        if (keys.length <= 3) {
+          return keys
+            .map((k) => `${k}: ${renderEvidenceValue((v as Record<string, unknown>)[k])}`)
+            .join(', ');
+        }
+        return `{${keys.length} fields}`;
+      }
+      return renderEvidenceValue(v);
+    };
+    if (value.length <= 3) {
+      return value.map(formatElement).join(', ');
+    }
+    return `${value.slice(0, 3).map(formatElement).join(', ')} +${value.length - 3} more`;
   }
   if (typeof value === 'object') {
     // For nested objects, show key count or specific fields
@@ -159,7 +177,17 @@ function FindingItem({ detail }: FindingItemProps) {
                 })}
             </div>
           )}
+          {detail.whyItMatters && (
+            <p className="text-[11px] text-muted-foreground">
+              <span className="font-medium">Why it matters:</span> {detail.whyItMatters}
+            </p>
+          )}
           <p className="text-[11px] italic text-muted-foreground">{detail.recommendation}</p>
+          {detail.estimatedEffort && (
+            <p className="text-[11px] text-muted-foreground">
+              <span className="font-medium">Estimated effort:</span> {detail.estimatedEffort}
+            </p>
+          )}
         </div>
       )}
     </div>
