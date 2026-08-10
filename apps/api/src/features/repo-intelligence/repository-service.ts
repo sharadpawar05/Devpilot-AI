@@ -189,6 +189,21 @@ export class RepositoryIntelligenceService {
     return metadata.default_branch;
   }
 
+  async getLatestCommitSha(userId: string, owner: string, repo: string): Promise<string | null> {
+    try {
+      const branch = await this.getDefaultBranch(userId, owner, repo);
+      const octokit = await getOctokit(userId);
+      const { data } = await octokit.rest.repos.getCommit({
+        owner,
+        repo,
+        ref: branch,
+      });
+      return data.sha;
+    } catch {
+      return null;
+    }
+  }
+
   // ─── File Tree ───────────────────────────────────────────────────────────
 
   async getFileTree(
@@ -1377,13 +1392,16 @@ export class RepositoryIntelligenceService {
     owner: string,
     repo: string,
     health: RepositoryHealth,
+    commitSha?: string,
   ): Promise<void> {
     try {
+      const sha = commitSha || (await this.getLatestCommitSha(userId, owner, repo)) || 'unknown';
       await db.repoHealthSnapshot.create({
         data: {
           userId,
           owner,
           repo,
+          commitSha: sha,
           score: health.score,
           passedCount: health.passedCount,
           failedCount: health.failedCount,

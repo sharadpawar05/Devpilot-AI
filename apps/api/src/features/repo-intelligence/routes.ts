@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { authenticate } from '@/core/auth/middleware';
 import { repositoryIntelligenceService } from './repository-service';
+import { usageService } from '@/core/usage';
 
 const querySchema = z.object({
   owner: z.string().min(1),
@@ -539,7 +540,70 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
       const { owner, repo } = parsed.data;
 
       try {
+        // Get current commit SHA for cache key
+        const commitSha = await repositoryIntelligenceService.getLatestCommitSha(
+          auth.sub,
+          owner,
+          repo,
+        );
+
+        // Check cache first
+        if (commitSha) {
+          const cached = await usageService.getHealthCache(auth.sub, owner, repo, commitSha);
+          if (cached) {
+            return reply.send({
+              success: true,
+              data: {
+                score: cached.score,
+                passedCount: cached.passedCount,
+                failedCount: cached.failedCount,
+                criticalCount: cached.criticalCount,
+                summary: cached.summary as Record<string, unknown>,
+                scoreBreakdown: cached.scoreBreakdown as Record<string, unknown>,
+                details: cached.details as Record<string, unknown>,
+                cached: true,
+              },
+            });
+          }
+        }
+
+        // Check usage limit before running new scan
+        const limitCheck = await usageService.checkHealthScanLimit(auth.sub);
+        if (!limitCheck.allowed) {
+          return reply.status(403).send({
+            success: false,
+            error: {
+              code: 'PLAN_LIMIT_REACHED',
+              message: `Free plan allows up to ${limitCheck.limit} health scans per month. You have used ${limitCheck.used}/${limitCheck.limit}.`,
+            },
+          });
+        }
+
+        // Run health analysis
         const health = await repositoryIntelligenceService.getHealth(auth.sub, owner, repo);
+
+        // Increment usage after successful scan
+        await usageService.incrementHealthScan(auth.sub);
+
+        // Save to cache if we have commit SHA
+        if (commitSha) {
+          await usageService
+            .saveHealthCache(auth.sub, owner, repo, commitSha, {
+              score: health.score,
+              passedCount: health.passedCount,
+              failedCount: health.failedCount,
+              criticalCount: health.criticalCount,
+              structuralScore: health.summary.structuralScore,
+              qualityScore: health.summary.qualityScore,
+              details: health.details,
+              scoreBreakdown: health.scoreBreakdown,
+              summary: health.summary,
+            })
+            .catch(() => {
+              // Best-effort cache save
+            });
+        }
+
         return reply.send({ success: true, data: health });
       } catch (error: unknown) {
         const err = error as { status?: number; message?: string };
