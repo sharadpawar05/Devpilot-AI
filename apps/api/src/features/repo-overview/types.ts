@@ -45,7 +45,8 @@ export type HealthSeverity = 'critical' | 'high' | 'medium' | 'low';
 
 export type HealthCheckCategory = 'structural' | 'quality';
 
-export type HealthCheckStatus = 'passed' | 'failed' | 'warning' | 'partial';
+export type HealthCheckStatus =
+  'passed' | 'failed' | 'warning' | 'partial' | 'not_applicable' | 'not_measured';
 
 export type HealthActionType =
   | 'none'
@@ -116,6 +117,7 @@ export interface HotspotItem {
 }
 
 export interface RepoHealthDetail {
+  id: string;
   name: string;
   category: HealthCheckCategory;
   status: HealthCheckStatus;
@@ -128,6 +130,7 @@ export interface RepoHealthDetail {
   actionLabel: string;
   actionType: HealthActionType;
   scorePenalty: number;
+  evidence?: Record<string, unknown>;
   quality?: HealthQualityMetrics;
 }
 
@@ -150,6 +153,7 @@ export interface RepositoryHealthSummary {
   complexityScore?: number;
   debtScore?: number;
   hotspotCount?: number;
+  maintainabilityScore?: number;
 }
 
 export interface RepoHealthCheck {

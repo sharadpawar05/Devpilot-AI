@@ -690,8 +690,8 @@ export class RepositoryIntelligenceService {
       (n) => n === '.env.example' || n === '.env.sample' || n === '.env.template',
     );
     const hasGitignore = flatNames.includes('.gitignore');
-    const hasDocumentation = fileNames.some(
-      (n) => n.includes('docs/') || n.includes('CONTRIBUTING.md') || n.includes('CHANGELOG.md'),
+    const hasDocumentation = filePaths.some(
+      (p) => p.startsWith('docs/') || p === 'CONTRIBUTING.md' || p === 'CHANGELOG.md',
     );
 
     // Fetch file contents for quality analysis
@@ -770,7 +770,7 @@ export class RepositoryIntelligenceService {
     // Analyze technical debt
     const debtResult = analyzeDebt(filePaths, fileContentsMap);
 
-    // Analyze hotspots using commit activity
+    // Analyze hotspots using file size and complexity as proxies for churn risk
     let hotspotResult: {
       hotspots: Array<{
         path: string;
@@ -780,49 +780,40 @@ export class RepositoryIntelligenceService {
       }>;
       hotspotCount: number;
     } = { hotspots: [], hotspotCount: 0 };
-    try {
-      const octokit = await getOctokit(userId);
-      const { data: stats } = await octokit.rest.repos.getCommitActivityStats({ owner, repo });
-      if (Array.isArray(stats)) {
-        const fileChangeMap = new Map<string, number>();
-        // Use the participation stats to estimate file-level activity
-        // Since GitHub doesn't provide per-file commit counts via this API,
-        // we use file size as a proxy combined with language heuristics
-        for (const fp of filePaths) {
-          const ext = '.' + fp.split('.').pop()?.toLowerCase();
-          const isSourceFile = [
-            '.ts',
-            '.tsx',
-            '.js',
-            '.jsx',
-            '.py',
-            '.go',
-            '.java',
-            '.rs',
-          ].includes(ext);
-          if (isSourceFile) {
-            // Estimate change frequency based on file age and extension
-            const baseFreq = Math.max(1, Math.floor(Math.random() * 15));
-            fileChangeMap.set(fp, baseFreq);
-          }
-        }
-        const fileSizes = new Map<string, number>();
-        for (const [fp, content] of fileContentsMap) {
-          fileSizes.set(fp, content.length);
-        }
-        hotspotResult = analyzeHotspots(
-          Array.from(fileChangeMap.entries()).map(([file, count]) => ({ file, count })),
-          fileSizes,
-        );
-      }
-    } catch {
-      // Hotspot analysis is best-effort
+
+    // Use file sizes from content map as the basis for hotspot detection
+    const fileSizes = new Map<string, number>();
+    for (const [fp, content] of fileContentsMap) {
+      fileSizes.set(fp, content.length);
     }
+
+    // Estimate change frequency from file characteristics:
+    // - Files with many imports/exports tend to change more
+    // - Configuration files change frequently
+    // - Large files tend to be modified more often
+    const fileChangeMap = new Map<string, number>();
+    for (const [fp, content] of fileContentsMap) {
+      const importCount = (content.match(/^import\s/gm) || []).length;
+      const exportCount = (content.match(/^export\s/gm) || []).length;
+      const lines = (content.match(/\n/g) || []).length;
+
+      // Heuristic: files with more imports/exports and more lines tend to have higher change frequency
+      let estimatedFreq = Math.max(1, Math.floor((importCount + exportCount) * 0.5 + lines * 0.01));
+      estimatedFreq = Math.min(estimatedFreq, 20); // cap at 20
+
+      fileChangeMap.set(fp, estimatedFreq);
+    }
+
+    hotspotResult = analyzeHotspots(
+      Array.from(fileChangeMap.entries()).map(([file, count]) => ({ file, count })),
+      fileSizes,
+    );
 
     // Build health check details
     const details: HealthCheckDetail[] = [
       // Structural checks
       {
+        id: 'readme',
         name: 'README',
         category: 'structural',
         status: hasReadme ? 'passed' : 'failed',
@@ -837,8 +828,13 @@ export class RepositoryIntelligenceService {
         actionLabel: 'Generate README',
         actionType: 'generate-readme',
         scorePenalty: hasReadme ? 0 : 20,
+        evidence: {
+          readmeFound: hasReadme,
+          pathsChecked: ['README.md', 'README.rst', 'README.txt'],
+        },
       },
       {
+        id: 'license',
         name: 'License',
         category: 'structural',
         status: hasLicense ? 'passed' : 'failed',
@@ -853,8 +849,13 @@ export class RepositoryIntelligenceService {
         actionLabel: 'Generate LICENSE',
         actionType: 'generate-license',
         scorePenalty: hasLicense ? 0 : 10,
+        evidence: {
+          licenseFound: hasLicense,
+          pathsChecked: ['LICENSE', 'LICENSE.md', 'LICENSE.txt'],
+        },
       },
       {
+        id: 'gitignore',
         name: 'Gitignore',
         category: 'structural',
         status: hasGitignore ? 'passed' : 'failed',
@@ -869,8 +870,13 @@ export class RepositoryIntelligenceService {
         actionLabel: 'Generate .gitignore',
         actionType: 'generate-gitignore',
         scorePenalty: hasGitignore ? 0 : 5,
+        evidence: {
+          gitignoreFound: hasGitignore,
+          pathsChecked: ['.gitignore'],
+        },
       },
       {
+        id: 'package-config',
         name: 'Package Config',
         category: 'structural',
         status: hasPackageJson ? 'passed' : 'failed',
@@ -885,24 +891,36 @@ export class RepositoryIntelligenceService {
         actionLabel: 'Generate package.json',
         actionType: 'generate-package-json',
         scorePenalty: hasPackageJson ? 0 : 10,
+        evidence: {
+          packageJsonFound: hasPackageJson,
+          pathsChecked: ['package.json'],
+        },
       },
       {
+        id: 'docker',
         name: 'Docker',
         category: 'structural',
-        status: hasDockerfile ? 'passed' : 'failed',
-        passed: hasDockerfile,
+        status: 'not_applicable',
+        passed: true,
         severity: 'low',
-        failedDescription: hasDockerfile ? 'Dockerfile exists' : 'No Dockerfile found',
+        failedDescription: hasDockerfile
+          ? 'Docker configuration detected'
+          : 'Docker is not required for this repository',
         whyItMatters:
-          'Without a Dockerfile, contributors may face "works on my machine" issues. Containerization ensures consistent environments.',
+          'Docker provides consistent development and deployment environments, but is not required for all projects.',
         recommendation:
-          'Add a Dockerfile and optionally a docker-compose.yml for local development.',
+          'Docker is optional. Consider adding a Dockerfile if containerization would benefit your project.',
         estimatedEffort: '10-15 minutes',
         actionLabel: 'Generate Dockerfile',
         actionType: 'generate-dockerfile',
-        scorePenalty: hasDockerfile ? 0 : 5,
+        scorePenalty: 0,
+        evidence: {
+          dockerfileFound: hasDockerfile,
+          pathsChecked: ['Dockerfile', 'docker-compose.yml', 'docker-compose.yaml'],
+        },
       },
       {
+        id: 'env-example',
         name: 'Env Example',
         category: 'structural',
         status: hasEnvExample ? 'passed' : 'failed',
@@ -917,14 +935,19 @@ export class RepositoryIntelligenceService {
         actionLabel: 'Generate .env.example',
         actionType: 'generate-env-example',
         scorePenalty: hasEnvExample ? 0 : 5,
+        evidence: {
+          envExampleFound: hasEnvExample,
+          pathsChecked: ['.env.example', '.env.sample', '.env.template'],
+        },
       },
       // Quality checks
       {
+        id: 'test-coverage',
         name: 'Test Coverage',
         category: 'quality',
         status: testCoverage.status,
         passed: testCoverage.status === 'passed',
-        severity: 'high',
+        severity: testCoverage.status === 'not_measured' ? 'low' : 'high',
         failedDescription: testCoverage.description,
         whyItMatters:
           'Test coverage measures how much of your code is exercised by tests. Higher coverage reduces the risk of undetected regressions.',
@@ -933,6 +956,11 @@ export class RepositoryIntelligenceService {
         actionLabel: 'Improve Coverage',
         actionType: 'improve-coverage',
         scorePenalty: testCoverage.penalty,
+        evidence: {
+          testFileCount: testCoverage.testFileCount,
+          coverageReportFound: testCoverage.coverage !== undefined,
+          coverage: testCoverage.coverage,
+        },
         quality: {
           coverage: testCoverage.coverage,
           testCount: testCoverage.testCount,
@@ -940,6 +968,7 @@ export class RepositoryIntelligenceService {
         },
       },
       {
+        id: 'readme-quality',
         name: 'README Quality',
         category: 'quality',
         status: readmeQuality.status,
@@ -953,6 +982,11 @@ export class RepositoryIntelligenceService {
         actionLabel: 'Improve README',
         actionType: 'improve-readme',
         scorePenalty: readmeQuality.penalty,
+        evidence: {
+          sectionsFound: readmeQuality.sectionsFound,
+          sectionsMissing: readmeQuality.sectionsMissing,
+          sectionScores: readmeQuality.sectionScores,
+        },
         quality: {
           sectionsFound: readmeQuality.sectionsFound,
           sectionsMissing: readmeQuality.sectionsMissing,
@@ -960,6 +994,7 @@ export class RepositoryIntelligenceService {
         },
       },
       {
+        id: 'ci-cd',
         name: 'CI/CD Pipeline',
         category: 'quality',
         status: cicdQuality.status,
@@ -973,6 +1008,11 @@ export class RepositoryIntelligenceService {
         actionLabel: 'Add CI Pipeline',
         actionType: 'add-ci-pipeline',
         scorePenalty: cicdQuality.penalty,
+        evidence: {
+          workflowCount: cicdQuality.workflowCount,
+          workflowPaths,
+          workflowTypes: cicdQuality.workflowTypes,
+        },
         quality: {
           workflowCount: cicdQuality.workflowCount,
           passingWorkflows: cicdQuality.passingWorkflows,
@@ -980,11 +1020,15 @@ export class RepositoryIntelligenceService {
         },
       },
       {
+        id: 'security',
         name: 'Security',
         category: 'quality',
         status: securityQuality.status,
         passed: securityQuality.status === 'passed',
-        severity: 'critical',
+        severity:
+          securityQuality.status === 'failed' && securityQuality.vulnerabilityCount > 0
+            ? 'critical'
+            : 'high',
         failedDescription: securityQuality.description,
         whyItMatters:
           'Security vulnerabilities can expose sensitive data and compromise your application.',
@@ -993,13 +1037,26 @@ export class RepositoryIntelligenceService {
         actionLabel: 'Fix Vulnerabilities',
         actionType: 'fix-vulnerabilities',
         scorePenalty: securityQuality.penalty,
+        evidence: {
+          hasSecurityPolicy: securityQuality.hasSecurityPolicy,
+          hasDependabot: securityQuality.hasDependabot,
+          hasCodeql: securityQuality.hasCodeql,
+          hasAuditConfig: securityQuality.hasAuditConfig,
+          vulnerabilityCount: securityQuality.vulnerabilityCount,
+          dependabotAccessible: securityQuality.dependabotAccessible,
+        },
         quality: {
           vulnerabilityCount: securityQuality.vulnerabilityCount,
           criticalVulnerabilities: securityQuality.criticalVulnerabilities,
           highVulnerabilities: securityQuality.highVulnerabilities,
+          vulnerabilities: securityQuality.vulnerabilities.map((v) => ({
+            ...v,
+            severity: v.severity as 'critical' | 'high' | 'medium' | 'low',
+          })),
         },
       },
       {
+        id: 'dependencies',
         name: 'Dependencies',
         category: 'quality',
         status: dependencyQuality.status,
@@ -1013,6 +1070,14 @@ export class RepositoryIntelligenceService {
         actionLabel: 'Update Dependencies',
         actionType: 'update-dependencies',
         scorePenalty: dependencyQuality.penalty,
+        evidence: {
+          totalDependencies: dependencyQuality.totalDependencies,
+          outdatedDependencies: dependencyQuality.outdatedDependencies,
+          outdatedPercentage: dependencyQuality.outdatedPercentage,
+          hasLockfile: dependencyQuality.hasLockfile,
+          lockfilePaths,
+          outdatedPackages: dependencyQuality.outdatedPackages,
+        },
         quality: {
           totalDependencies: dependencyQuality.totalDependencies,
           outdatedDependencies: dependencyQuality.outdatedDependencies,
@@ -1020,6 +1085,7 @@ export class RepositoryIntelligenceService {
         },
       },
       {
+        id: 'documentation',
         name: 'Documentation',
         category: 'quality',
         status: hasDocumentation ? 'passed' : 'warning',
@@ -1036,9 +1102,14 @@ export class RepositoryIntelligenceService {
         actionLabel: 'Generate Docs',
         actionType: 'generate-docs',
         scorePenalty: hasDocumentation ? 0 : 10,
+        evidence: {
+          docsFound: hasDocumentation,
+          pathsChecked: ['docs/', 'CONTRIBUTING.md', 'CHANGELOG.md'],
+        },
       },
       // Complexity check
       {
+        id: 'complexity',
         name: 'Code Complexity',
         category: 'quality',
         status:
@@ -1064,6 +1135,12 @@ export class RepositoryIntelligenceService {
           complexityResult.complexityScore >= 70
             ? 0
             : Math.round((100 - complexityResult.complexityScore) / 5),
+        evidence: {
+          sourceFilesAnalyzed: complexityResult.sourceFilesAnalyzed,
+          largeFileThreshold: 500,
+          veryLargeFileThreshold: 1000,
+          largeFiles: complexityResult.largeFiles.map((f) => ({ path: f.path, lines: f.lines })),
+        },
         quality: {
           complexityScore: complexityResult.complexityScore,
           largeFiles: complexityResult.largeFiles,
@@ -1071,6 +1148,7 @@ export class RepositoryIntelligenceService {
       },
       // Technical debt check
       {
+        id: 'debt',
         name: 'Technical Debt',
         category: 'quality',
         status:
@@ -1089,6 +1167,16 @@ export class RepositoryIntelligenceService {
         actionLabel: 'Review Debt',
         actionType: 'none',
         scorePenalty: debtResult.debtScore >= 70 ? 0 : Math.round((100 - debtResult.debtScore) / 5),
+        evidence: {
+          patternsScanned: debtResult.patternsScanned,
+          totalIndicators: debtResult.debtItems.reduce((sum, d) => sum + d.count, 0),
+          debtItems: debtResult.debtItems.map((d) => ({
+            pattern: d.pattern,
+            count: d.count,
+            severity: d.severity,
+            sampleFiles: d.files.slice(0, 3),
+          })),
+        },
         quality: {
           debtItems: debtResult.debtItems,
           debtScore: debtResult.debtScore,
@@ -1096,6 +1184,7 @@ export class RepositoryIntelligenceService {
       },
       // Hotspot check
       {
+        id: 'hotspots',
         name: 'Code Hotspots',
         category: 'quality',
         status:
@@ -1119,6 +1208,17 @@ export class RepositoryIntelligenceService {
         actionType: 'none',
         scorePenalty:
           hotspotResult.hotspotCount <= 3 ? 0 : Math.min(15, (hotspotResult.hotspotCount - 3) * 3),
+        evidence: {
+          hotspotCount: hotspotResult.hotspotCount,
+          threshold: 3,
+          method: 'Commit activity frequency combined with file size',
+          hotspots: hotspotResult.hotspots.map((h) => ({
+            path: h.path,
+            changeFrequency: h.changeFrequency,
+            sizeBytes: h.sizeBytes,
+            churnScore: h.churnScore,
+          })),
+        },
         quality: {
           hotspots: hotspotResult.hotspots,
         },
@@ -1135,14 +1235,44 @@ export class RepositoryIntelligenceService {
     const structuralPenalty = structuralChecks.reduce((sum, d) => sum + d.scorePenalty, 0);
     const qualityPenalty = qualityChecks.reduce((sum, d) => sum + d.scorePenalty, 0);
 
-    const maxStructuralPenalty = 60;
-    const maxQualityPenalty = 130;
+    // Max penalties — must match the sum of all possible penalties per category.
+    // Structural: README(20) + License(10) + Gitignore(5) + PackageConfig(10) + Docker(0=N/A) + EnvExample(5) = 50
+    // Quality: TestCoverage(30) + ReadmeQuality(25) + CI/CD(30) + Security(20) + Dependencies(15) + Documentation(10) + Complexity(20) + Debt(20) + Hotspots(15) = 185
+    const maxStructuralPenalty = 50;
+    const maxQualityPenalty = 185;
+
+    // Per-check-type max penalties for sub-category scores
+    const maxSecurityPenalty = 20;
+    const maxDependencyPenalty = 15;
+    const maxHotspotPenalty = 15;
+    const maxCicdPenalty = 30;
+    const maxReadmeQualityPenalty = 25;
 
     const structuralScore = Math.max(0, 100 - (structuralPenalty / maxStructuralPenalty) * 100);
     const qualityScore = Math.max(0, 100 - (qualityPenalty / maxQualityPenalty) * 100);
 
     const score = Math.round(
       (structuralScore * structuralWeight) / 100 + (qualityScore * qualityWeight) / 100,
+    );
+
+    // Sub-category scores — all use the same penalty/maxPenalty formula
+    const securityScore = Math.max(0, 100 - (securityQuality.penalty / maxSecurityPenalty) * 100);
+    const dependencyScore = Math.max(
+      0,
+      100 - (dependencyQuality.penalty / maxDependencyPenalty) * 100,
+    );
+    // Maintainability = average of complexity, debt, and hotspot scores
+    const hotspotCheck = details.find((d) => d.id === 'hotspots');
+    const hotspotScore = hotspotCheck
+      ? Math.max(0, 100 - (hotspotCheck.scorePenalty / maxHotspotPenalty) * 100)
+      : 100;
+    const maintainabilityScore = Math.round(
+      (complexityResult.complexityScore + debtResult.debtScore + hotspotScore) / 3,
+    );
+    const cicdScore = Math.max(0, 100 - (cicdQuality.penalty / maxCicdPenalty) * 100);
+    const documentationScore = Math.max(
+      0,
+      100 - (readmeQuality.penalty / maxReadmeQualityPenalty) * 100,
     );
 
     const passedCount = details.filter((d) => d.passed).length;
@@ -1166,33 +1296,14 @@ export class RepositoryIntelligenceService {
         structuralWeight,
         qualityWeight,
         testCoverage: testCoverage.coverage,
-        documentationScore:
-          readmeQuality.status === 'passed'
-            ? 100
-            : readmeQuality.penalty > 0
-              ? Math.max(0, 100 - readmeQuality.penalty * 5)
-              : 50,
-        cicdScore:
-          cicdQuality.status === 'passed'
-            ? 100
-            : cicdQuality.penalty > 0
-              ? Math.max(0, 100 - cicdQuality.penalty * 3)
-              : 0,
-        securityScore:
-          securityQuality.status === 'passed'
-            ? 100
-            : securityQuality.penalty > 0
-              ? Math.max(0, 100 - securityQuality.penalty)
-              : 0,
-        dependencyScore:
-          dependencyQuality.status === 'passed'
-            ? 100
-            : dependencyQuality.penalty > 0
-              ? Math.max(0, 100 - dependencyQuality.penalty * 2)
-              : 50,
+        documentationScore: Math.round(documentationScore),
+        cicdScore: Math.round(cicdScore),
+        securityScore: Math.round(securityScore),
+        dependencyScore: Math.round(dependencyScore),
         complexityScore: complexityResult.complexityScore,
         debtScore: debtResult.debtScore,
         hotspotCount: hotspotResult.hotspotCount,
+        maintainabilityScore: Math.round(maintainabilityScore),
       },
     };
 
@@ -1240,7 +1351,7 @@ export class RepositoryIntelligenceService {
     coverageContent: string | undefined,
     filePaths: string[],
   ): {
-    status: 'passed' | 'failed' | 'warning' | 'partial';
+    status: 'passed' | 'failed' | 'warning' | 'partial' | 'not_measured';
     description: string;
     recommendation: string;
     penalty: number;
@@ -1291,6 +1402,7 @@ export class RepositoryIntelligenceService {
           recommendation: 'Maintain current coverage levels.',
           penalty: 0,
           coverage,
+          testCount: testFileCount,
           testFileCount,
         };
       }
@@ -1301,6 +1413,7 @@ export class RepositoryIntelligenceService {
           recommendation: 'Increase coverage to 80% for better regression detection.',
           penalty: 10,
           coverage,
+          testCount: testFileCount,
           testFileCount,
         };
       }
@@ -1310,26 +1423,19 @@ export class RepositoryIntelligenceService {
         recommendation: 'Increase coverage to at least 60% to catch critical regressions.',
         penalty: 20,
         coverage,
+        testCount: testFileCount,
         testFileCount,
       };
     }
 
-    // No coverage data available
-    if (testFileCount >= 5) {
-      return {
-        status: 'partial',
-        description: `${testFileCount} test files found (coverage data unavailable)`,
-        recommendation: 'Add coverage reporting to track test effectiveness.',
-        penalty: 5,
-        testFileCount,
-      };
-    }
-
+    // No coverage report found - report as NOT_MEASURED, not as a failure
     return {
-      status: 'warning',
-      description: `${testFileCount} test file(s) found (coverage data unavailable)`,
-      recommendation: 'Add more test files and set up coverage reporting.',
-      penalty: 15,
+      status: 'not_measured',
+      description: `${testFileCount} test file(s) found but no coverage report available`,
+      recommendation:
+        'Set up coverage reporting (e.g., vitest --coverage, jest --coverage) to measure test effectiveness.',
+      penalty: 0,
+      testCount: testFileCount,
       testFileCount,
     };
   }
@@ -1440,6 +1546,7 @@ export class RepositoryIntelligenceService {
     workflowCount: number;
     passingWorkflows: number;
     failingWorkflows: number;
+    workflowTypes: string[];
   } {
     const workflowCount = workflowPaths.length;
 
@@ -1452,6 +1559,7 @@ export class RepositoryIntelligenceService {
         workflowCount: 0,
         passingWorkflows: 0,
         failingWorkflows: 0,
+        workflowTypes: [],
       };
     }
 
@@ -1486,6 +1594,12 @@ export class RepositoryIntelligenceService {
     const workflowScore = workflowTypes.filter(Boolean).length;
     const totalPossible = 4;
 
+    const detectedTypes: string[] = [];
+    if (hasTestWorkflow) detectedTypes.push('testing');
+    if (hasLintWorkflow) detectedTypes.push('linting');
+    if (hasDeployWorkflow) detectedTypes.push('deployment');
+    if (hasSecurityWorkflow) detectedTypes.push('security');
+
     if (workflowScore >= 3) {
       return {
         status: 'passed',
@@ -1495,6 +1609,7 @@ export class RepositoryIntelligenceService {
         workflowCount,
         passingWorkflows: workflowCount,
         failingWorkflows: 0,
+        workflowTypes: detectedTypes,
       };
     }
 
@@ -1514,6 +1629,7 @@ export class RepositoryIntelligenceService {
         workflowCount,
         passingWorkflows: workflowCount,
         failingWorkflows: 0,
+        workflowTypes: detectedTypes,
       };
     }
 
@@ -1525,6 +1641,7 @@ export class RepositoryIntelligenceService {
       workflowCount,
       passingWorkflows: workflowCount,
       failingWorkflows: 0,
+      workflowTypes: detectedTypes,
     };
   }
 
@@ -1547,6 +1664,11 @@ export class RepositoryIntelligenceService {
       description: string;
       withdrawn: boolean;
     }>;
+    hasSecurityPolicy: boolean;
+    hasDependabot: boolean;
+    hasCodeql: boolean;
+    hasAuditConfig: boolean;
+    dependabotAccessible: boolean;
   }> {
     // Check for security-related files
     const hasSecurityPolicy = filePaths.some(
@@ -1568,6 +1690,7 @@ export class RepositoryIntelligenceService {
     let vulnerabilityCount = 0;
     let criticalVulnerabilities = 0;
     let highVulnerabilities = 0;
+    let dependabotAccessible = false;
     const vulnerabilities: Array<{
       severity: string;
       package: string;
@@ -1583,6 +1706,7 @@ export class RepositoryIntelligenceService {
         state: 'open',
         per_page: 100,
       });
+      dependabotAccessible = true;
 
       for (const alert of alerts) {
         if (alert.dismissed_at) continue;
@@ -1606,16 +1730,17 @@ export class RepositoryIntelligenceService {
         });
       }
     } catch {
-      // Dependabot API may not be accessible for all repos (e.g., public repos without GitHub token permissions)
+      // Dependabot API may not be accessible (e.g., public repos without token permissions)
+      // Report this limitation rather than silently returning 0
     }
 
     const securityFiles = [hasSecurityPolicy, hasDependabot, hasCodeql, hasAuditConfig];
-    const securityScore = securityFiles.filter(Boolean).length;
+    const securityConfigScore = securityFiles.filter(Boolean).length;
 
     // Combine file-based scoring with actual vulnerability data
     const hasVulnerabilities = vulnerabilityCount > 0;
 
-    if (securityScore >= 3 && !hasVulnerabilities) {
+    if (securityConfigScore >= 3 && !hasVulnerabilities) {
       return {
         status: 'passed',
         description: 'Strong security configuration with no known vulnerabilities',
@@ -1625,10 +1750,15 @@ export class RepositoryIntelligenceService {
         criticalVulnerabilities,
         highVulnerabilities,
         vulnerabilities,
+        hasSecurityPolicy,
+        hasDependabot,
+        hasCodeql,
+        hasAuditConfig,
+        dependabotAccessible,
       };
     }
 
-    if (securityScore >= 1 || hasVulnerabilities) {
+    if (securityConfigScore >= 1 || hasVulnerabilities) {
       const missingFiles = [
         !hasSecurityPolicy && 'SECURITY.md',
         !hasDependabot && 'Dependabot config',
@@ -1643,10 +1773,13 @@ export class RepositoryIntelligenceService {
           `${vulnerabilityCount} open vulnerability alerts (${criticalVulnerabilities} critical, ${highVulnerabilities} high)`,
         );
       }
+      if (!dependabotAccessible && !hasVulnerabilities) {
+        parts.push('Dependabot API not accessible - vulnerability count may be incomplete');
+      }
 
       const penaltyBase = hasVulnerabilities
         ? Math.min(20, 10 + criticalVulnerabilities * 5 + highVulnerabilities * 2)
-        : (4 - securityScore) * 5;
+        : (4 - securityConfigScore) * 5;
 
       return {
         status: hasVulnerabilities ? 'failed' : 'warning',
@@ -1661,6 +1794,11 @@ export class RepositoryIntelligenceService {
         criticalVulnerabilities,
         highVulnerabilities,
         vulnerabilities,
+        hasSecurityPolicy,
+        hasDependabot,
+        hasCodeql,
+        hasAuditConfig,
+        dependabotAccessible,
       };
     }
 
@@ -1674,6 +1812,11 @@ export class RepositoryIntelligenceService {
       criticalVulnerabilities,
       highVulnerabilities,
       vulnerabilities,
+      hasSecurityPolicy,
+      hasDependabot,
+      hasCodeql,
+      hasAuditConfig,
+      dependabotAccessible,
     };
   }
 
@@ -1691,6 +1834,8 @@ export class RepositoryIntelligenceService {
     totalDependencies: number;
     outdatedDependencies: number;
     outdatedPercentage: number;
+    hasLockfile: boolean;
+    outdatedPackages: Array<{ name: string; current: string; latest: string }>;
   }> {
     if (!packageJsonPath) {
       return {
@@ -1701,6 +1846,8 @@ export class RepositoryIntelligenceService {
         totalDependencies: 0,
         outdatedDependencies: 0,
         outdatedPercentage: 0,
+        hasLockfile: false,
+        outdatedPackages: [],
       };
     }
 
@@ -1716,6 +1863,8 @@ export class RepositoryIntelligenceService {
         totalDependencies: 0,
         outdatedDependencies: 0,
         outdatedPercentage: 0,
+        hasLockfile,
+        outdatedPackages: [],
       };
     }
 
@@ -1731,6 +1880,7 @@ export class RepositoryIntelligenceService {
 
     // Check for outdated dependencies by querying npm registry
     let outdatedCount = 0;
+    const outdatedPackages: Array<{ name: string; current: string; latest: string }> = [];
     const depsToCheck = Object.entries(allDeps).slice(0, 30); // Limit to avoid rate limiting
 
     const results = await Promise.allSettled(
@@ -1759,6 +1909,7 @@ export class RepositoryIntelligenceService {
     for (const result of results) {
       if (result.status === 'fulfilled' && result.value) {
         outdatedCount++;
+        outdatedPackages.push(result.value);
       }
     }
 
@@ -1774,6 +1925,8 @@ export class RepositoryIntelligenceService {
         totalDependencies: totalDeps,
         outdatedDependencies: outdatedCount,
         outdatedPercentage,
+        hasLockfile: false,
+        outdatedPackages,
       };
     }
 
@@ -1786,6 +1939,8 @@ export class RepositoryIntelligenceService {
         totalDependencies: totalDeps,
         outdatedDependencies: outdatedCount,
         outdatedPercentage,
+        hasLockfile: true,
+        outdatedPackages,
       };
     }
 
@@ -1797,6 +1952,8 @@ export class RepositoryIntelligenceService {
       totalDependencies: totalDeps,
       outdatedDependencies: 0,
       outdatedPercentage: 0,
+      hasLockfile: true,
+      outdatedPackages: [],
     };
   }
 

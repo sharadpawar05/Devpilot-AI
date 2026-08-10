@@ -1,6 +1,9 @@
 export { MetricCard } from './MetricCard';
 export { LanguageBar } from './LanguageBar';
 export { HealthScore } from './HealthScore';
+export { CompactHealthScore } from './CompactHealthScore';
+export { HealthDimensions } from './HealthDimensions';
+export { TopFindings } from './TopFindings';
 export { FileTree } from './FileTree';
 export { ContributorList } from './ContributorList';
 export { TechnologyStackCard } from './TechnologyStack';

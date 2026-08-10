@@ -28,6 +28,7 @@ function countNodes(tree: RepoFileNode[]): { files: number; directories: number 
 
 function mapHealthDetails(
   details: Array<{
+    id: string;
     name: string;
     category: string;
     status: string;
@@ -40,10 +41,12 @@ function mapHealthDetails(
     actionLabel: string;
     actionType: string;
     scorePenalty: number;
+    evidence?: Record<string, unknown>;
     quality?: HealthQualityMetrics;
   }>,
 ): RepoHealthDetail[] {
   return details.map((d) => ({
+    id: d.id,
     name: d.name,
     category: d.category as RepoHealthDetail['category'],
     status: d.status as RepoHealthDetail['status'],
@@ -56,6 +59,7 @@ function mapHealthDetails(
     actionLabel: d.actionLabel,
     actionType: d.actionType as RepoHealthDetail['actionType'],
     scorePenalty: d.scorePenalty,
+    evidence: d.evidence,
     quality: d.quality,
   }));
 }
