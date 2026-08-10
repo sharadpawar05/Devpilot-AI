@@ -61,6 +61,7 @@ export interface ComplexityAnalysisResult {
   complexityScore: number;
   largeFiles: LargeFileItem[];
   sourceFilesAnalyzed: number;
+  method: 'file-size-heuristic';
 }
 
 export function analyzeComplexity(
@@ -95,7 +96,12 @@ export function analyzeComplexity(
   largeFiles.sort((a, b) => b.lines - a.lines);
 
   if (totalSourceFiles === 0) {
-    return { complexityScore: 100, largeFiles: [], sourceFilesAnalyzed: 0 };
+    return {
+      complexityScore: 100,
+      largeFiles: [],
+      sourceFilesAnalyzed: 0,
+      method: 'file-size-heuristic',
+    };
   }
 
   const largeFileRatio = largeFileCount / totalSourceFiles;
@@ -109,5 +115,6 @@ export function analyzeComplexity(
     complexityScore: Math.max(0, Math.min(100, score)),
     largeFiles: largeFiles.slice(0, 15),
     sourceFilesAnalyzed: totalSourceFiles,
+    method: 'file-size-heuristic',
   };
 }
