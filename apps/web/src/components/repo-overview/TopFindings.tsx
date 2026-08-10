@@ -1,10 +1,17 @@
 import { useState } from 'react';
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, XCircle } from 'lucide-react';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Info,
+  XCircle,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { RepoHealthDetail, HealthSeverity } from '@/lib/repo-overview';
+import type { RepoHealthDetail, HealthSeverity, HealthCheckStatus } from '@/lib/repo-overview';
 
 interface SeverityGroup {
-  severity: HealthSeverity | 'passed';
+  severity: HealthSeverity | 'passed' | 'not_applicable';
   label: string;
   icon: typeof CheckCircle2;
   color: string;
@@ -38,6 +45,22 @@ const SEVERITY_GROUPS: SeverityGroup[] = [
     borderColor: 'border-amber-200 dark:border-amber-800',
   },
   {
+    severity: 'low',
+    label: 'Low',
+    icon: Info,
+    color: 'text-blue-700 dark:text-blue-300',
+    bgColor: 'bg-blue-50 dark:bg-blue-950/30',
+    borderColor: 'border-blue-200 dark:border-blue-800',
+  },
+  {
+    severity: 'not_applicable',
+    label: 'Not Applicable',
+    icon: CheckCircle2,
+    color: 'text-slate-700 dark:text-slate-300',
+    bgColor: 'bg-slate-50 dark:bg-slate-950/30',
+    borderColor: 'border-slate-200 dark:border-slate-800',
+  },
+  {
     severity: 'passed',
     label: 'Passed',
     icon: CheckCircle2,
@@ -46,6 +69,37 @@ const SEVERITY_GROUPS: SeverityGroup[] = [
     borderColor: 'border-emerald-200 dark:border-emerald-800',
   },
 ];
+
+function isNotApplicableOrMeasured(status: HealthCheckStatus): boolean {
+  return status === 'not_applicable' || status === 'not_measured';
+}
+
+function renderEvidenceValue(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (typeof value === 'number') return String(value);
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) {
+    if (value.length === 0) return 'None';
+    if (value.length <= 3) return value.join(', ');
+    return `${value.slice(0, 3).join(', ')} +${value.length - 3} more`;
+  }
+  if (typeof value === 'object') {
+    // For nested objects, show key count or specific fields
+    const keys = Object.keys(value as Record<string, unknown>);
+    if (keys.length === 0) return 'None';
+    if (keys.length <= 3) {
+      return keys
+        .map((k) => {
+          const v = (value as Record<string, unknown>)[k];
+          return `${k}: ${renderEvidenceValue(v)}`;
+        })
+        .join(', ');
+    }
+    return `${keys.length} fields`;
+  }
+  return String(value);
+}
 
 interface FindingItemProps {
   detail: RepoHealthDetail;
@@ -79,27 +133,30 @@ function FindingItem({ detail }: FindingItemProps) {
           {detail.evidence && Object.keys(detail.evidence).length > 0 && (
             <div className="flex flex-wrap gap-1">
               {Object.entries(detail.evidence)
-                .filter(([_, v]) => v != null && v !== '' && (!Array.isArray(v) || v.length > 0))
+                .filter(([_, v]) => {
+                  if (v === null || v === undefined) return false;
+                  if (typeof v === 'string' && v === '') return false;
+                  if (Array.isArray(v) && v.length === 0) return false;
+                  if (typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 0)
+                    return false;
+                  return true;
+                })
                 .slice(0, 5)
-                .map(([key, value]) => (
-                  <span
-                    key={key}
-                    className="inline-flex items-center gap-1 rounded bg-muted/50 px-1.5 py-0.5 text-[10px] text-muted-foreground"
-                  >
-                    <span className="font-medium">
-                      {key.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase())}:
+                .map(([key, value]) => {
+                  const rendered = renderEvidenceValue(value);
+                  if (!rendered) return null;
+                  return (
+                    <span
+                      key={key}
+                      className="inline-flex items-center gap-1 rounded bg-muted/50 px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                    >
+                      <span className="font-medium">
+                        {key.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase())}:
+                      </span>
+                      <span className="font-mono">{rendered}</span>
                     </span>
-                    <span className="font-mono">
-                      {typeof value === 'boolean'
-                        ? value
-                          ? 'Yes'
-                          : 'No'
-                        : Array.isArray(value)
-                          ? value.length
-                          : String(value)}
-                    </span>
-                  </span>
-                ))}
+                  );
+                })}
             </div>
           )}
           <p className="text-[11px] italic text-muted-foreground">{detail.recommendation}</p>
@@ -115,10 +172,19 @@ interface TopFindingsProps {
 
 export function TopFindings({ details }: TopFindingsProps) {
   const groupedDetails = SEVERITY_GROUPS.map((group) => {
-    const items =
-      group.severity === 'passed'
-        ? details.filter((d) => d.passed)
-        : details.filter((d) => !d.passed && d.severity === group.severity);
+    let items: RepoHealthDetail[];
+    if (group.severity === 'passed') {
+      // Only actual passed checks
+      items = details.filter((d) => d.passed && !isNotApplicableOrMeasured(d.status));
+    } else if (group.severity === 'not_applicable') {
+      // NOT_MEASURED and NOT_APPlicable checks
+      items = details.filter((d) => isNotApplicableOrMeasured(d.status));
+    } else {
+      // Failed checks with specific severity, excluding NOT_MEASURED
+      items = details.filter(
+        (d) => !d.passed && d.severity === group.severity && !isNotApplicableOrMeasured(d.status),
+      );
+    }
     return { ...group, items };
   }).filter((group) => group.items.length > 0);
 

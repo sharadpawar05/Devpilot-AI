@@ -901,7 +901,7 @@ export class RepositoryIntelligenceService {
         name: 'Docker',
         category: 'structural',
         status: 'not_applicable',
-        passed: true,
+        passed: false,
         severity: 'low',
         failedDescription: hasDockerfile
           ? 'Docker configuration detected'
@@ -1028,7 +1028,9 @@ export class RepositoryIntelligenceService {
         severity:
           securityQuality.status === 'failed' && securityQuality.vulnerabilityCount > 0
             ? 'critical'
-            : 'high',
+            : securityQuality.status === 'not_measured'
+              ? 'low'
+              : 'high',
         failedDescription: securityQuality.description,
         whyItMatters:
           'Security vulnerabilities can expose sensitive data and compromise your application.',
@@ -1276,8 +1278,20 @@ export class RepositoryIntelligenceService {
     );
 
     const passedCount = details.filter((d) => d.passed).length;
-    const failedCount = details.filter((d) => !d.passed).length;
-    const criticalCount = details.filter((d) => !d.passed && d.severity === 'critical').length;
+    const failedCount = details.filter(
+      (d) => !d.passed && d.status !== 'not_measured' && d.status !== 'not_applicable',
+    ).length;
+    const warningCount = details.filter((d) => d.status === 'warning').length;
+    const notMeasuredCount = details.filter(
+      (d) => d.status === 'not_measured' || d.status === 'not_applicable',
+    ).length;
+    const criticalCount = details.filter(
+      (d) =>
+        !d.passed &&
+        d.status !== 'not_measured' &&
+        d.status !== 'not_applicable' &&
+        d.severity === 'critical',
+    ).length;
 
     const scoreBreakdown: ScoreBreakdownItem[] = details
       .filter((d) => d.scorePenalty > 0)
@@ -1287,6 +1301,8 @@ export class RepositoryIntelligenceService {
       score,
       passedCount,
       failedCount,
+      warningCount,
+      notMeasuredCount,
       criticalCount,
       details,
       scoreBreakdown,
@@ -1651,7 +1667,7 @@ export class RepositoryIntelligenceService {
     repo: string,
     filePaths: string[],
   ): Promise<{
-    status: 'passed' | 'failed' | 'warning' | 'partial';
+    status: 'passed' | 'failed' | 'warning' | 'partial' | 'not_measured';
     description: string;
     recommendation: string;
     penalty: number;
@@ -1740,11 +1756,43 @@ export class RepositoryIntelligenceService {
     // Combine file-based scoring with actual vulnerability data
     const hasVulnerabilities = vulnerabilityCount > 0;
 
-    if (securityConfigScore >= 3 && !hasVulnerabilities) {
+    // If Dependabot was accessible, we have reliable vulnerability data
+    if (dependabotAccessible) {
+      if (hasVulnerabilities) {
+        // Vulnerabilities found → FAILED
+        const penalty = Math.min(20, 10 + criticalVulnerabilities * 5 + highVulnerabilities * 2);
+        const missingFiles = [
+          !hasSecurityPolicy && 'SECURITY.md',
+          !hasDependabot && 'Dependabot config',
+          !hasCodeql && 'CodeQL workflow',
+          !hasAuditConfig && 'Audit configuration',
+        ].filter(Boolean);
+
+        return {
+          status: 'failed',
+          description: `${vulnerabilityCount} open vulnerabilities detected`,
+          recommendation: `Address ${criticalVulnerabilities} critical and ${highVulnerabilities} high severity vulnerabilities. ${missingFiles.length > 0 ? `Also add: ${missingFiles.join(', ')}` : ''}`,
+          penalty,
+          vulnerabilityCount,
+          criticalVulnerabilities,
+          highVulnerabilities,
+          vulnerabilities,
+          hasSecurityPolicy,
+          hasDependabot,
+          hasCodeql,
+          hasAuditConfig,
+          dependabotAccessible,
+        };
+      }
+
+      // Dependabot accessible, 0 vulnerabilities → PASSED (regardless of config files)
       return {
         status: 'passed',
-        description: 'Strong security configuration with no known vulnerabilities',
-        recommendation: 'Security setup looks comprehensive.',
+        description: 'No known vulnerabilities detected',
+        recommendation:
+          securityConfigScore >= 3
+            ? 'Security setup looks comprehensive.'
+            : 'Consider adding SECURITY.md, Dependabot config, and CodeQL workflow for defense in depth.',
         penalty: 0,
         vulnerabilityCount,
         criticalVulnerabilities,
@@ -1758,38 +1806,15 @@ export class RepositoryIntelligenceService {
       };
     }
 
-    if (securityConfigScore >= 1 || hasVulnerabilities) {
-      const missingFiles = [
-        !hasSecurityPolicy && 'SECURITY.md',
-        !hasDependabot && 'Dependabot config',
-        !hasCodeql && 'CodeQL workflow',
-        !hasAuditConfig && 'Audit configuration',
-      ].filter(Boolean);
-
-      const parts: string[] = [];
-      if (missingFiles.length > 0) parts.push(`Missing: ${missingFiles.join(', ')}`);
-      if (hasVulnerabilities) {
-        parts.push(
-          `${vulnerabilityCount} open vulnerability alerts (${criticalVulnerabilities} critical, ${highVulnerabilities} high)`,
-        );
-      }
-      if (!dependabotAccessible && !hasVulnerabilities) {
-        parts.push('Dependabot API not accessible - vulnerability count may be incomplete');
-      }
-
-      const penaltyBase = hasVulnerabilities
-        ? Math.min(20, 10 + criticalVulnerabilities * 5 + highVulnerabilities * 2)
-        : (4 - securityConfigScore) * 5;
-
+    // Dependabot NOT accessible → can't confirm security status
+    if (securityConfigScore >= 3) {
+      // Has security config but can't verify vulnerabilities → WARNING (not failed)
       return {
-        status: hasVulnerabilities ? 'failed' : 'warning',
-        description: hasVulnerabilities
-          ? `${vulnerabilityCount} open vulnerabilities detected`
-          : 'Partial security configuration',
-        recommendation: hasVulnerabilities
-          ? `Address ${criticalVulnerabilities} critical and ${highVulnerabilities} high severity vulnerabilities. ${missingFiles.length > 0 ? `Also add: ${missingFiles.join(', ')}` : ''}`
-          : `Add missing security files: ${missingFiles.join(', ')}`,
-        penalty: penaltyBase,
+        status: 'warning',
+        description: 'Security configuration present but vulnerability scan could not be verified',
+        recommendation:
+          'Dependabot API was not accessible. Verify vulnerability scanning is working.',
+        penalty: 5,
         vulnerabilityCount,
         criticalVulnerabilities,
         highVulnerabilities,
@@ -1802,12 +1827,14 @@ export class RepositoryIntelligenceService {
       };
     }
 
+    // No config, no access → NOT_MEASURED (can't determine security status)
     return {
-      status: 'failed',
-      description: 'No security configuration detected',
+      status: 'not_measured',
+      description:
+        'Unable to verify security status - no security configuration and Dependabot not accessible',
       recommendation:
         'Add SECURITY.md, Dependabot config, and CodeQL workflow for security scanning.',
-      penalty: 20,
+      penalty: 0,
       vulnerabilityCount,
       criticalVulnerabilities,
       highVulnerabilities,
@@ -1913,7 +1940,8 @@ export class RepositoryIntelligenceService {
       }
     }
 
-    const outdatedPercentage = totalDeps > 0 ? Math.round((outdatedCount / totalDeps) * 100) : 0;
+    const outdatedPercentage =
+      depsToCheck.length > 0 ? Math.round((outdatedCount / depsToCheck.length) * 100) : 0;
 
     if (!hasLockfile) {
       return {
@@ -1933,7 +1961,7 @@ export class RepositoryIntelligenceService {
     if (outdatedCount > 0) {
       return {
         status: outdatedPercentage > 50 ? 'failed' : 'warning',
-        description: `${outdatedCount} of ${totalDeps} dependencies are outdated (${outdatedPercentage}%)`,
+        description: `${outdatedCount} of ${depsToCheck.length} checked dependencies are outdated (${outdatedPercentage}%)${totalDeps > depsToCheck.length ? ` (${totalDeps} total)` : ''}`,
         recommendation: `Update ${outdatedCount} outdated dependencies. Run "npm outdated" to see details.`,
         penalty: Math.min(15, Math.round(outdatedPercentage / 5)),
         totalDependencies: totalDeps,

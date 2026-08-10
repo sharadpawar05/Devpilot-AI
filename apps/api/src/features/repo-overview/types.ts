@@ -160,6 +160,8 @@ export interface RepoHealthCheck {
   score: number;
   passedCount: number;
   failedCount: number;
+  warningCount?: number;
+  notMeasuredCount?: number;
   criticalCount: number;
   details: RepoHealthDetail[];
   scoreBreakdown: ScoreBreakdownItem[];
