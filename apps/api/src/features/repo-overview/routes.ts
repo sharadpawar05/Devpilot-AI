@@ -390,6 +390,11 @@ Keep each section concise (2-4 sentences). Use markdown headers and bullet point
       'generate-docs',
       'generate-dockerfile',
       'generate-env-example',
+      'improve-coverage',
+      'improve-readme',
+      'add-ci-pipeline',
+      'fix-vulnerabilities',
+      'update-dependencies',
     ]),
   });
 
