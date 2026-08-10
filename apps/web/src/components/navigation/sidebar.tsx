@@ -14,6 +14,7 @@ import {
   Tag,
   Activity,
   AlertTriangle,
+  Shield,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -46,6 +47,7 @@ const NAV_ITEMS = [
     label: 'Integrations',
     items: [
       { label: 'Repository Overview', href: '/repository-overview', icon: FolderOpen },
+      { label: 'Health Overview', href: '/health-overview', icon: Shield },
       { label: 'Sprint Summary', href: '/sprint-summary', icon: FileText },
       { label: 'Incident Summary', href: '/incident-summary', icon: AlertTriangle },
       { label: 'Release Notes', href: '/release-notes', icon: Tag },

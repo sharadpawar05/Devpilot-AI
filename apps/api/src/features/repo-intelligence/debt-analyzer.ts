@@ -23,6 +23,7 @@ const MAX_DEBT_PATTERNS = 100;
 export interface DebtAnalysisResult {
   debtItems: TechDebtItem[];
   debtScore: number;
+  patternsScanned: number;
 }
 
 export function analyzeDebt(
@@ -99,5 +100,6 @@ export function analyzeDebt(
   return {
     debtItems: debtItems.slice(0, 20),
     debtScore: Math.max(0, Math.min(100, score)),
+    patternsScanned: DEBT_PATTERNS.length,
   };
 }

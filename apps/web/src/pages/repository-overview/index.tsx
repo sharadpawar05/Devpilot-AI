@@ -19,6 +19,7 @@ import {
   ChevronDown,
   Bot,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/auth';
 import { useGitHub } from '@/hooks/use-github';
@@ -29,15 +30,14 @@ import { getErrorMessage } from '@/lib/error-messages';
 import {
   MetricCard,
   LanguageBar,
-  HealthScore,
+  CompactHealthScore,
   FileTree,
   ContributorList,
   FullPageSkeleton,
-  GenerationModal,
   TechnologyStackCard,
 } from '@/components/repo-overview';
 import { RepositoryIntelligencePanel } from '@/components/repo-intelligence';
-import type { RepoOverviewData, HealthActionType, TechnologyStack } from '@/lib/repo-overview';
+import type { RepoOverviewData, TechnologyStack } from '@/lib/repo-overview';
 
 function formatSize(kb: number): string {
   if (kb >= 1024 * 1024) return `${(kb / (1024 * 1024)).toFixed(1)} GB`;
@@ -128,6 +128,7 @@ export default function RepositoryOverviewPage() {
   const { session } = useAuth();
   const token = session?.accessToken;
   const gh = useGitHub();
+  const navigate = useNavigate();
 
   const [selectedRepo, setSelectedRepo] = useState(() => {
     try {
@@ -152,10 +153,6 @@ export default function RepositoryOverviewPage() {
     null,
   );
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
-  const [generationModal, setGenerationModal] = useState<{
-    open: boolean;
-    actionType: HealthActionType;
-  }>({ open: false, actionType: 'none' });
   const [techStack, setTechStack] = useState<TechnologyStack | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
@@ -294,14 +291,6 @@ export default function RepositoryOverviewPage() {
     setSummary(null);
     setError(null);
     setTechStack(null);
-  }, []);
-
-  const handleGenerate = useCallback((actionType: HealthActionType) => {
-    setGenerationModal({ open: true, actionType });
-  }, []);
-
-  const handleCloseGenerationModal = useCallback(() => {
-    setGenerationModal({ open: false, actionType: 'none' });
   }, []);
 
   const metadata = overviewData?.metadata;
@@ -633,7 +622,10 @@ export default function RepositoryOverviewPage() {
               Repository Health
             </h2>
             {overviewData?.health ? (
-              <HealthScore health={overviewData.health} onGenerate={handleGenerate} />
+              <CompactHealthScore
+                health={overviewData.health}
+                onViewDetails={() => navigate('/health-overview')}
+              />
             ) : (
               <p className="text-sm text-muted-foreground text-center py-4">
                 {isLoading ? 'Loading...' : 'No health data available'}
@@ -692,16 +684,6 @@ export default function RepositoryOverviewPage() {
           onClose={() => setSelectedFile(null)}
         />
       )}
-
-      {/* Generation Modal */}
-      <GenerationModal
-        open={generationModal.open}
-        onClose={handleCloseGenerationModal}
-        owner={owner}
-        repo={repo}
-        actionType={generationModal.actionType}
-        currentBranch={selectedBranch}
-      />
     </div>
   );
 }

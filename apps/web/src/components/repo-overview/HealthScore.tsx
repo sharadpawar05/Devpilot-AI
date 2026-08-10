@@ -12,12 +12,10 @@ import {
   Trophy,
   Target,
   FileCode,
-  GitBranch,
   Lock,
   Package,
-  Bug,
   Layers,
-  FileWarning,
+  Download,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type {
@@ -26,10 +24,57 @@ import type {
   HealthSeverity,
   HealthCheckCategory,
   HealthActionType,
-  ScoreBreakdownItem,
 } from '@/lib/repo-overview';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
+
+const STATUS_CONFIG: Record<
+  string,
+  { label: string; color: string; bg: string; ring: string; icon: typeof CheckCircle2 }
+> = {
+  passed: {
+    label: 'Passed',
+    color: 'text-emerald-700 dark:text-emerald-300',
+    bg: 'bg-emerald-100 dark:bg-emerald-900/40',
+    ring: 'ring-emerald-500/30',
+    icon: CheckCircle2,
+  },
+  failed: {
+    label: 'Failed',
+    color: 'text-red-700 dark:text-red-300',
+    bg: 'bg-red-100 dark:bg-red-900/40',
+    ring: 'ring-red-500/30',
+    icon: XCircle,
+  },
+  warning: {
+    label: 'Warning',
+    color: 'text-amber-700 dark:text-amber-300',
+    bg: 'bg-amber-100 dark:bg-amber-900/40',
+    ring: 'ring-amber-500/30',
+    icon: XCircle,
+  },
+  partial: {
+    label: 'Partial',
+    color: 'text-orange-700 dark:text-orange-300',
+    bg: 'bg-orange-100 dark:bg-orange-900/40',
+    ring: 'ring-orange-500/30',
+    icon: XCircle,
+  },
+  not_applicable: {
+    label: 'N/A',
+    color: 'text-slate-700 dark:text-slate-300',
+    bg: 'bg-slate-100 dark:bg-slate-900/40',
+    ring: 'ring-slate-500/30',
+    icon: CheckCircle2,
+  },
+  not_measured: {
+    label: 'Not Measured',
+    color: 'text-slate-700 dark:text-slate-300',
+    bg: 'bg-slate-100 dark:bg-slate-900/40',
+    ring: 'ring-slate-500/30',
+    icon: CheckCircle2,
+  },
+};
 
 const SEVERITY_CONFIG: Record<
   HealthSeverity,
@@ -79,6 +124,45 @@ const CATEGORY_CONFIG: Record<
   },
 };
 
+// Score breakdown category definitions — order matches reference layout
+const SCORE_CATEGORIES = [
+  {
+    key: 'structural',
+    label: 'Structural',
+    icon: FileCode,
+    color: 'blue' as const,
+    summaryKey: 'structuralScore',
+  },
+  {
+    key: 'quality',
+    label: 'Quality',
+    icon: Target,
+    color: 'purple' as const,
+    summaryKey: 'qualityScore',
+  },
+  {
+    key: 'security',
+    label: 'Security',
+    icon: Lock,
+    color: 'emerald' as const,
+    summaryKey: 'securityScore',
+  },
+  {
+    key: 'dependencies',
+    label: 'Dependencies',
+    icon: Package,
+    color: 'amber' as const,
+    summaryKey: 'dependencyScore',
+  },
+  {
+    key: 'maintainability',
+    label: 'Maintainability',
+    icon: Layers,
+    color: 'red' as const,
+    summaryKey: 'maintainabilityScore',
+  },
+] as const;
+
 // ─── Helper functions ────────────────────────────────────────────────────────
 
 function getScoreColor(score: number): string {
@@ -113,6 +197,18 @@ function getScoreBgColor(score: number): string {
   return 'bg-red-50 dark:bg-red-950/30';
 }
 
+function getProgressBarColor(score: number): string {
+  if (score >= 80) return 'bg-emerald-500';
+  if (score >= 60) return 'bg-amber-500';
+  return 'bg-red-500';
+}
+
+function getTextColor(score: number): string {
+  if (score >= 80) return 'text-emerald-600 dark:text-emerald-400';
+  if (score >= 60) return 'text-amber-600 dark:text-amber-400';
+  return 'text-red-600 dark:text-red-400';
+}
+
 // ─── SeverityBadge ───────────────────────────────────────────────────────────
 
 function SeverityBadge({ severity }: { severity: HealthSeverity }) {
@@ -131,36 +227,42 @@ function SeverityBadge({ severity }: { severity: HealthSeverity }) {
   );
 }
 
-// ─── ScoreBreakdown ──────────────────────────────────────────────────────────
+// ─── ScoreBreakdown (category-based with progress bars) ──────────────────────
 
-function ScoreBreakdown({ breakdown }: { breakdown: ScoreBreakdownItem[] }) {
-  if (breakdown.length === 0) return null;
-
-  const totalPenalty = breakdown.reduce((sum, b) => sum + b.penalty, 0);
-
+function ScoreBreakdown({ summary }: { summary: NonNullable<RepoHealthCheck['summary']> }) {
   return (
-    <div className="mt-4 space-y-2">
+    <div className="mt-4 space-y-3 border-t border-border/50 pt-4">
       <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
         <Lightbulb className="h-3.5 w-3.5" />
         <span>Score Breakdown</span>
-        <span className="ml-auto font-mono text-red-600 dark:text-red-400">
-          -{totalPenalty} total
-        </span>
       </div>
-      <div className="space-y-1">
-        {breakdown.map((item) => (
-          <div
-            key={item.name}
-            className="flex items-center justify-between rounded-md bg-background/80 px-3 py-1.5 text-xs"
-          >
-            <span className="text-muted-foreground">
-              Missing <span className="font-medium text-foreground">{item.name}</span>
-            </span>
-            <span className="font-mono font-medium text-red-600 dark:text-red-400">
-              -{item.penalty}
-            </span>
-          </div>
-        ))}
+      <div className="space-y-2.5">
+        {SCORE_CATEGORIES.map(({ key, label, icon: Icon, summaryKey }) => {
+          const score = summary[summaryKey as keyof typeof summary] as number | undefined;
+          if (score === undefined) return null;
+          return (
+            <div key={key} className="flex items-center gap-3">
+              <Icon className={cn('h-4 w-4 shrink-0', getTextColor(score))} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-medium text-foreground">{label}</span>
+                  <span className={cn('text-xs font-semibold tabular-nums', getTextColor(score))}>
+                    {score}/100
+                  </span>
+                </div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className={cn(
+                      'h-full rounded-full transition-all duration-500',
+                      getProgressBarColor(score),
+                    )}
+                    style={{ width: `${score}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -201,6 +303,16 @@ function ExpandableRecommendation({
             </p>
             <p className="text-xs text-foreground">{detail.failedDescription}</p>
           </div>
+
+          {/* Evidence */}
+          {detail.evidence && Object.keys(detail.evidence).length > 0 && (
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                Evidence
+              </p>
+              <EvidenceDisplay evidence={detail.evidence} />
+            </div>
+          )}
 
           {/* Why it matters */}
           <div>
@@ -243,6 +355,52 @@ function ExpandableRecommendation({
   );
 }
 
+// ─── EvidenceDisplay ─────────────────────────────────────────────────────────
+
+function EvidenceDisplay({ evidence }: { evidence: Record<string, unknown> }) {
+  const entries = Object.entries(evidence).filter(([_, value]) => {
+    if (value === null || value === undefined) return false;
+    if (typeof value === 'string' && value === '') return false;
+    if (Array.isArray(value) && value.length === 0) return false;
+    return true;
+  });
+
+  if (entries.length === 0) return null;
+
+  const formatValue = (value: unknown): string => {
+    if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+    if (typeof value === 'number') return String(value);
+    if (Array.isArray(value)) {
+      if (value.length === 0) return 'None';
+      if (value.length <= 3) return value.join(', ');
+      return `${value.slice(0, 3).join(', ')} +${value.length - 3} more`;
+    }
+    if (typeof value === 'object' && value !== null) return JSON.stringify(value);
+    return String(value);
+  };
+
+  const formatKey = (key: string): string => {
+    return key
+      .replace(/([A-Z])/g, ' $1')
+      .replace(/^./, (str) => str.toUpperCase())
+      .trim();
+  };
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {entries.map(([key, value]) => (
+        <span
+          key={key}
+          className="inline-flex items-center gap-1 rounded-md bg-background/80 px-2 py-0.5 text-[10px] text-muted-foreground"
+        >
+          <span className="font-medium">{formatKey(key)}:</span>
+          <span className="font-mono">{formatValue(value)}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 // ─── HealthCard ──────────────────────────────────────────────────────────────
 
 function HealthCard({
@@ -253,6 +411,55 @@ function HealthCard({
   onGenerate?: (actionType: HealthActionType) => void;
 }) {
   const categoryConfig = CATEGORY_CONFIG[detail.category];
+  const statusConfig = STATUS_CONFIG[detail.status] || STATUS_CONFIG.failed;
+  const StatusIcon = statusConfig.icon;
+
+  if (detail.status === 'not_applicable' || detail.status === 'not_measured') {
+    return (
+      <div className="rounded-lg border border-slate-200 bg-slate-50/30 dark:border-slate-800 dark:bg-slate-950/10">
+        <div className="flex items-center gap-3 px-4 py-3">
+          <div
+            className={cn(
+              'flex h-6 w-6 shrink-0 items-center justify-center rounded-full',
+              statusConfig.bg,
+            )}
+          >
+            <StatusIcon className={cn('h-3.5 w-3.5', statusConfig.color)} />
+          </div>
+          <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
+            {detail.name}
+          </span>
+          <span
+            className={cn(
+              'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ring-1 ring-inset',
+              categoryConfig.color,
+              categoryConfig.bg,
+            )}
+          >
+            {categoryConfig.label}
+          </span>
+          <span
+            className={cn(
+              'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ring-1 ring-inset',
+              statusConfig.color,
+              statusConfig.bg,
+              statusConfig.ring,
+            )}
+          >
+            {statusConfig.label}
+          </span>
+          <span className="ml-auto text-xs text-slate-500 dark:text-slate-400">
+            {detail.scorePenalty === 0 ? 'No penalty' : `-${detail.scorePenalty}`}
+          </span>
+        </div>
+        {detail.evidence && (
+          <div className="border-t border-border/50 px-4 py-2">
+            <EvidenceDisplay evidence={detail.evidence} />
+          </div>
+        )}
+      </div>
+    );
+  }
 
   if (detail.passed) {
     return (
@@ -276,6 +483,11 @@ function HealthCard({
           {detail.quality && <QualityMetrics quality={detail.quality} name={detail.name} />}
           <span className="ml-auto text-xs text-emerald-600 dark:text-emerald-400">Passed</span>
         </div>
+        {detail.evidence && (
+          <div className="border-t border-border/50 px-4 py-2">
+            <EvidenceDisplay evidence={detail.evidence} />
+          </div>
+        )}
       </div>
     );
   }
@@ -488,101 +700,22 @@ function QualityMetrics({
   return null;
 }
 
-// ─── CategoryScore ───────────────────────────────────────────────────────────
-
-function CategoryScore({
-  label,
-  score,
-  weight,
-  icon: Icon,
-  color,
-}: {
-  label: string;
-  score: number;
-  weight: number;
-  icon: typeof Target;
-  color: 'blue' | 'purple' | 'emerald' | 'amber' | 'red';
-}) {
-  const colorClasses = {
-    blue: 'text-blue-600 dark:text-blue-400',
-    purple: 'text-purple-600 dark:text-purple-400',
-    emerald: 'text-emerald-600 dark:text-emerald-400',
-    amber: 'text-amber-600 dark:text-amber-400',
-    red: 'text-red-600 dark:text-red-400',
-  };
-
-  return (
-    <div className="flex items-center gap-3 rounded-lg bg-background/50 px-3 py-2">
-      <Icon className={cn('h-4 w-4', colorClasses[color])} />
-      <div className="flex-1">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-muted-foreground">{label}</span>
-          <span className="text-xs text-muted-foreground">({weight}%)</span>
-        </div>
-        <div className="mt-1 flex items-center gap-2">
-          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-            <div
-              className={cn('h-full rounded-full transition-all duration-500', colorClasses[color])}
-              style={{ width: `${score}%` }}
-            />
-          </div>
-          <span className={cn('text-xs font-semibold', colorClasses[color])}>{score}%</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── MetricBadge ─────────────────────────────────────────────────────────────
-
-function MetricBadge({
-  icon: Icon,
-  label,
-  value,
-  color,
-}: {
-  icon: typeof Target;
-  label: string;
-  value: string;
-  color: 'emerald' | 'amber' | 'red' | 'blue';
-}) {
-  const colorClasses = {
-    emerald: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
-    amber: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
-    red: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
-    blue: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
-  };
-
-  return (
-    <div
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium',
-        colorClasses[color],
-      )}
-    >
-      <Icon className="h-3 w-3" />
-      <span>{label}</span>
-      <span className="font-bold">{value}</span>
-    </div>
-  );
-}
-
 // ─── HealthScore (main export) ───────────────────────────────────────────────
 
 interface HealthScoreProps {
   health: RepoHealthCheck;
   onGenerate?: (actionType: HealthActionType) => void;
+  onGenerateReport?: () => void;
   className?: string;
 }
 
-export function HealthScore({ health, onGenerate, className }: HealthScoreProps) {
+export function HealthScore({ health, onGenerate, onGenerateReport, className }: HealthScoreProps) {
   const {
     score = 0,
     passedCount = 0,
     failedCount = 0,
     criticalCount = 0,
     details = [],
-    scoreBreakdown = [],
     summary,
   } = health || {};
   const circumference = 2 * Math.PI * 40;
@@ -684,139 +817,23 @@ export function HealthScore({ health, onGenerate, className }: HealthScoreProps)
                     ? 'This repository has room for improvement in several areas.'
                     : 'Several important practices are missing. Address high-severity items first.'}
             </p>
-
-            {/* Score breakdown */}
-            <ScoreBreakdown breakdown={scoreBreakdown} />
           </div>
         </div>
 
-        {/* Category breakdown */}
-        {summary && (
-          <div className="mt-4 grid grid-cols-2 gap-4 border-t border-border/50 pt-4">
-            <CategoryScore
-              label="Structural"
-              score={summary.structuralScore}
-              weight={summary.structuralWeight}
-              icon={FileCode}
-              color="blue"
-            />
-            <CategoryScore
-              label="Quality"
-              score={summary.qualityScore}
-              weight={summary.qualityWeight}
-              icon={Target}
-              color="purple"
-            />
-          </div>
-        )}
+        {/* Score Breakdown — category-based with progress bars */}
+        {summary && <ScoreBreakdown summary={summary} />}
 
-        {/* Quality metrics summary */}
-        {summary && (
-          <div className="mt-4 flex flex-wrap gap-3 border-t border-border/50 pt-4">
-            {summary.testCoverage !== undefined && (
-              <MetricBadge
-                icon={Target}
-                label="Test Coverage"
-                value={`${summary.testCoverage}%`}
-                color={
-                  summary.testCoverage >= 80
-                    ? 'emerald'
-                    : summary.testCoverage >= 60
-                      ? 'amber'
-                      : 'red'
-                }
-              />
-            )}
-            {summary.documentationScore !== undefined && (
-              <MetricBadge
-                icon={FileCode}
-                label="Documentation"
-                value={`${summary.documentationScore}%`}
-                color={
-                  summary.documentationScore >= 80
-                    ? 'emerald'
-                    : summary.documentationScore >= 60
-                      ? 'amber'
-                      : 'red'
-                }
-              />
-            )}
-            {summary.cicdScore !== undefined && (
-              <MetricBadge
-                icon={GitBranch}
-                label="CI/CD"
-                value={`${summary.cicdScore}%`}
-                color={
-                  summary.cicdScore >= 80 ? 'emerald' : summary.cicdScore >= 60 ? 'amber' : 'red'
-                }
-              />
-            )}
-            {summary.securityScore !== undefined && (
-              <MetricBadge
-                icon={Lock}
-                label="Security"
-                value={`${summary.securityScore}%`}
-                color={
-                  summary.securityScore >= 80
-                    ? 'emerald'
-                    : summary.securityScore >= 60
-                      ? 'amber'
-                      : 'red'
-                }
-              />
-            )}
-            {summary.dependencyScore !== undefined && (
-              <MetricBadge
-                icon={Package}
-                label="Dependencies"
-                value={`${summary.dependencyScore}%`}
-                color={
-                  summary.dependencyScore >= 80
-                    ? 'emerald'
-                    : summary.dependencyScore >= 60
-                      ? 'amber'
-                      : 'red'
-                }
-              />
-            )}
-            {summary.complexityScore !== undefined && (
-              <MetricBadge
-                icon={Layers}
-                label="Complexity"
-                value={`${summary.complexityScore}/100`}
-                color={
-                  summary.complexityScore >= 70
-                    ? 'emerald'
-                    : summary.complexityScore >= 40
-                      ? 'amber'
-                      : 'red'
-                }
-              />
-            )}
-            {summary.debtScore !== undefined && (
-              <MetricBadge
-                icon={FileWarning}
-                label="Debt"
-                value={`${summary.debtScore}/100`}
-                color={
-                  summary.debtScore >= 70 ? 'emerald' : summary.debtScore >= 40 ? 'amber' : 'red'
-                }
-              />
-            )}
-            {summary.hotspotCount !== undefined && summary.hotspotCount > 0 && (
-              <MetricBadge
-                icon={Bug}
-                label="Hotspots"
-                value={`${summary.hotspotCount}`}
-                color={
-                  summary.hotspotCount <= 3
-                    ? 'emerald'
-                    : summary.hotspotCount <= 7
-                      ? 'amber'
-                      : 'red'
-                }
-              />
-            )}
+        {/* Generate Report button */}
+        {onGenerateReport && (
+          <div className="mt-4 border-t border-border/50 pt-4">
+            <button
+              type="button"
+              onClick={onGenerateReport}
+              className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium transition-colors hover:bg-accent"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Generate Report
+            </button>
           </div>
         )}
       </div>
@@ -843,7 +860,7 @@ export function HealthScore({ health, onGenerate, className }: HealthScoreProps)
               </h5>
               <div className="space-y-2">
                 {structuralChecks.map((detail) => (
-                  <HealthCard key={detail.name} detail={detail} onGenerate={onGenerate} />
+                  <HealthCard key={detail.id} detail={detail} onGenerate={onGenerate} />
                 ))}
               </div>
             </div>
@@ -858,13 +875,65 @@ export function HealthScore({ health, onGenerate, className }: HealthScoreProps)
               </h5>
               <div className="space-y-2">
                 {qualityChecks.map((detail) => (
-                  <HealthCard key={detail.name} detail={detail} onGenerate={onGenerate} />
+                  <HealthCard key={detail.id} detail={detail} onGenerate={onGenerate} />
                 ))}
               </div>
             </div>
           )}
         </div>
       )}
+
+      {/* How is this calculated? */}
+      <div className="rounded-xl border border-border/50 bg-background/50 p-4">
+        <details className="group">
+          <summary className="flex cursor-pointer items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground">
+            <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
+            How is this calculated?
+          </summary>
+          <div className="mt-3 space-y-3 text-xs leading-relaxed text-muted-foreground">
+            <div>
+              <p className="font-medium text-foreground">Score Formula</p>
+              <p className="mt-1 font-mono text-[11px]">
+                finalScore = round(structuralScore × 0.4 + qualityScore × 0.6)
+              </p>
+              <p className="mt-1">
+                Each check contributes a penalty (0-30 points). The score starts at 100 and
+                penalties are deducted proportionally based on maximum possible penalties.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className="font-medium text-foreground">Structural (40% weight)</p>
+                <ul className="mt-1 space-y-0.5 text-[11px]">
+                  <li>• README — up to -20</li>
+                  <li>• License — up to -10</li>
+                  <li>• Package Config — up to -10</li>
+                  <li>• Gitignore — up to -5</li>
+                  <li>• .env.example — up to -5</li>
+                </ul>
+              </div>
+              <div>
+                <p className="font-medium text-foreground">Quality (60% weight)</p>
+                <ul className="mt-1 space-y-0.5 text-[11px]">
+                  <li>• Test Coverage — up to -30</li>
+                  <li>• CI/CD Pipeline — up to -30</li>
+                  <li>• Security — up to -20</li>
+                  <li>• Code Complexity — up to -20</li>
+                  <li>• Tech Debt — up to -20</li>
+                  <li>• Dependencies — up to -15</li>
+                  <li>• README Quality — up to -25</li>
+                  <li>• Hotspots — up to -15</li>
+                  <li>• Documentation — up to -10</li>
+                </ul>
+              </div>
+            </div>
+            <p className="text-[10px] text-muted-foreground/70">
+              Statuses <code>not_applicable</code> and <code>not_measured</code> do not reduce your
+              score.
+            </p>
+          </div>
+        </details>
+      </div>
     </div>
   );
 }

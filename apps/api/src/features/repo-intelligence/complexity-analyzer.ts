@@ -60,6 +60,7 @@ function getLanguageFromPath(filePath: string): string | undefined {
 export interface ComplexityAnalysisResult {
   complexityScore: number;
   largeFiles: LargeFileItem[];
+  sourceFilesAnalyzed: number;
 }
 
 export function analyzeComplexity(
@@ -94,7 +95,7 @@ export function analyzeComplexity(
   largeFiles.sort((a, b) => b.lines - a.lines);
 
   if (totalSourceFiles === 0) {
-    return { complexityScore: 100, largeFiles: [] };
+    return { complexityScore: 100, largeFiles: [], sourceFilesAnalyzed: 0 };
   }
 
   const largeFileRatio = largeFileCount / totalSourceFiles;
@@ -107,5 +108,6 @@ export function analyzeComplexity(
   return {
     complexityScore: Math.max(0, Math.min(100, score)),
     largeFiles: largeFiles.slice(0, 15),
+    sourceFilesAnalyzed: totalSourceFiles,
   };
 }

@@ -12,6 +12,7 @@ import { GitHubReviewPage } from '@/pages/github';
 import { PullRequestAssistantPage } from '@/pages/pull-request-assistant';
 import { RepositoryChatPage } from '@/pages/repository-chat';
 import RepositoryOverviewPage from '@/pages/repository-overview';
+import HealthOverviewPage from '@/pages/health-overview';
 import SprintSummaryPage from '@/pages/sprint-summary';
 import ReleaseNotesPage from '@/pages/release-notes';
 import EngineeringStatusPage from '@/pages/engineering-status';
@@ -59,6 +60,7 @@ const routes: RouteObject[] = [
       { path: '/github', element: <GitHubReviewPage /> },
       { path: '/pull-request-assistant', element: <PullRequestAssistantPage /> },
       { path: '/repository-overview', element: <RepositoryOverviewPage /> },
+      { path: '/health-overview', element: <HealthOverviewPage /> },
       { path: '/sprint-summary', element: <SprintSummaryPage /> },
       { path: '/release-notes', element: <ReleaseNotesPage /> },
       { path: '/engineering-status', element: <EngineeringStatusPage /> },
