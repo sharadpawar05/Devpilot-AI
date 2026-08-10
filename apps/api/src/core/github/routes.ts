@@ -36,19 +36,19 @@ export async function githubRoutes(app: FastifyInstance) {
       reply.setCookie('github_oauth_state', state, {
         path: '/',
         httpOnly: true,
-        secure: env.NODE_ENV === 'production',
+        secure: true,
         signed: true,
         maxAge: 600,
-        sameSite: 'lax',
+        sameSite: 'none',
       });
 
       reply.setCookie('github_oauth_user', auth.auth.sub, {
         path: '/',
         httpOnly: true,
-        secure: env.NODE_ENV === 'production',
+        secure: true,
         signed: true,
         maxAge: 600,
-        sameSite: 'lax',
+        sameSite: 'none',
       });
 
       const params = new URLSearchParams({
