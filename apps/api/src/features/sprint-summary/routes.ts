@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { authenticate } from '@/core/auth/middleware';
 import { sprintSummaryService } from './sprint-summary-service';
+import { usageService } from '@/core/usage';
 
 const sprintSummarySchema = z.object({
   owner: z.string().min(1),
@@ -64,6 +65,18 @@ export async function sprintSummaryRoutes(app: FastifyInstance) {
           });
         }
 
+        // Check AI report limit
+        const limitCheck = await usageService.checkAiReportLimit(auth.sub);
+        if (!limitCheck.allowed) {
+          return reply.status(403).send({
+            success: false,
+            error: {
+              code: 'PLAN_LIMIT_REACHED',
+              message: `Free plan allows up to ${limitCheck.limit} AI reports per month. You have used ${limitCheck.used}/${limitCheck.limit}.`,
+            },
+          });
+        }
+
         const result = await sprintSummaryService.generateSummary(auth.sub, {
           owner,
           repo,
@@ -76,6 +89,9 @@ export async function sprintSummaryRoutes(app: FastifyInstance) {
         if (!result.success) {
           return reply.status(500).send(result);
         }
+
+        // Increment usage after successful generation
+        await usageService.incrementAiReport(auth.sub);
 
         return reply.send(result);
       } catch (error) {

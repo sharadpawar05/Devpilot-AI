@@ -3,6 +3,7 @@ import { healthRoutes } from './health';
 import { versionRoutes } from './version';
 import { meRoutes } from './me';
 import { dashboardRoutes } from './dashboard';
+import { usageRoutes } from './usage';
 import { playgroundRoutes } from '@/features/playground';
 import { codeReviewRoutes } from '@/features/code-review';
 import { prReviewRoutes } from '@/features/pr-review';
@@ -23,6 +24,7 @@ export async function apiV1Routes(app: FastifyInstance) {
   await app.register(versionRoutes);
   await app.register(meRoutes);
   await app.register(dashboardRoutes);
+  await app.register(usageRoutes);
   await app.register(playgroundRoutes);
   await app.register(codeReviewRoutes);
   await app.register(githubRoutes);

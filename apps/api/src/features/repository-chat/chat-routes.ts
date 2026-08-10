@@ -8,6 +8,7 @@ import { repositoryStatusService } from './status';
 import { buildTreeSummary, findFilesByKeywords } from './parser';
 import { db } from '@/core/db';
 import { config } from '@devpilot/config';
+import { usageService } from '@/core/usage';
 
 const MAX_FILE_SIZE = 50_000;
 const MAX_CONTEXT_FILES = 15;
@@ -325,12 +326,27 @@ Question: ${question}`;
       const maxTokens = isReportRequest || isDetailedRequest ? 4096 : 1500;
       const selectedModel = model || config.ai.defaultModel;
 
+      // Check AI chat limit
+      const limitCheck = await usageService.checkAiChatLimit(auth.sub);
+      if (!limitCheck.allowed) {
+        return reply.status(403).send({
+          success: false,
+          error: {
+            code: 'PLAN_LIMIT_REACHED',
+            message: `Free plan allows up to ${limitCheck.limit} AI chat requests per month. You have used ${limitCheck.used}/${limitCheck.limit}.`,
+          },
+        });
+      }
+
       try {
         const response = await aiService.generate(userPrompt, systemPrompt, {
           provider: provider as 'gemini' | 'openai' | 'anthropic' | 'openrouter',
           model: selectedModel as never,
           maxTokens,
         });
+
+        // Increment usage after successful response
+        await usageService.incrementAiChat(auth.sub);
 
         return reply.send({
           success: true,

@@ -118,6 +118,7 @@ model User {
   repositoryIndexes RepositoryIndex[]
   aiHistorySessions AIHistorySession[]
   repoHealthSnapshots RepoHealthSnapshot[]
+  userUsages       UserUsage[]
 
   @@index([supabaseUserId])
   @@index([email])
@@ -270,6 +271,7 @@ model RepoHealthSnapshot {
   userId         String   @db.Uuid
   owner          String
   repo           String
+  commitSha      String
   score          Int
   passedCount    Int
   failedCount    Int
@@ -283,7 +285,25 @@ model RepoHealthSnapshot {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([userId, owner, repo, commitSha])
   @@index([userId, owner, repo])
   @@index([userId, createdAt(sort: Desc)])
   @@map("repo_health_snapshots")
+}
+
+model UserUsage {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @db.Uuid
+  period          String   // "YYYY-MM" format
+  healthScanCount Int      @default(0)
+  aiReportCount   Int      @default(0)
+  aiChatCount     Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, period])
+  @@index([userId])
+  @@map("user_usage")
 }

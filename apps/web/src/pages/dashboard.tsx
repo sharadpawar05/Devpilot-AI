@@ -6,6 +6,7 @@ import { HeroSection } from '@/components/dashboard/HeroSection';
 import { QuickActions } from '@/components/dashboard/QuickActions';
 import { GitHubWidget } from '@/components/dashboard/GitHubWidget';
 import { UsageAnalytics } from '@/components/dashboard/UsageAnalytics';
+import { UsageLimits } from '@/components/dashboard/UsageLimits';
 import { RecentActivity } from '@/components/dashboard/RecentActivity';
 import { WorkspaceStatus } from '@/components/dashboard/WorkspaceStatus';
 import { TipsCard } from '@/components/dashboard/TipsCard';
@@ -144,6 +145,7 @@ export function DashboardPage() {
         </div>
         <div className="space-y-6">
           <RecentActivity activities={dashboardData?.activity ?? []} />
+          <UsageLimits />
           <WorkspaceStatus
             pendingPRReviews={gh.pulls.length}
             githubConnected={gh.connected}

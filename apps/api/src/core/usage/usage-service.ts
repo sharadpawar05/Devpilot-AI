@@ -1,0 +1,189 @@
+import { Prisma } from '@prisma/client';
+import { db } from '@/core/db';
+import { FREE_PLAN_LIMITS, getCurrentPeriod } from './plan-limits';
+
+export interface UsageData {
+  plan: string;
+  period: string;
+  repositories: { used: number; limit: number };
+  healthScans: { used: number; limit: number };
+  aiReports: { used: number; limit: number };
+  aiChat: { used: number; limit: number };
+}
+
+export interface LimitCheckResult {
+  allowed: boolean;
+  used: number;
+  limit: number;
+}
+
+class UsageService {
+  async getUsage(userId: string): Promise<UsageData> {
+    const period = getCurrentPeriod();
+    const limits = FREE_PLAN_LIMITS;
+
+    const usage = await this.getOrCreateUsage(userId, period);
+
+    const repoCount = await this.countUserRepositories(userId);
+
+    return {
+      plan: 'free',
+      period,
+      repositories: { used: repoCount, limit: limits.repositories },
+      healthScans: { used: usage.healthScanCount, limit: limits.healthScansPerMonth },
+      aiReports: { used: usage.aiReportCount, limit: limits.aiReportsPerMonth },
+      aiChat: { used: usage.aiChatCount, limit: limits.aiChatRequestsPerMonth },
+    };
+  }
+
+  async checkHealthScanLimit(userId: string): Promise<LimitCheckResult> {
+    const period = getCurrentPeriod();
+    const limits = FREE_PLAN_LIMITS;
+    const usage = await this.getOrCreateUsage(userId, period);
+    return {
+      allowed: usage.healthScanCount < limits.healthScansPerMonth,
+      used: usage.healthScanCount,
+      limit: limits.healthScansPerMonth,
+    };
+  }
+
+  async incrementHealthScan(userId: string): Promise<void> {
+    const period = getCurrentPeriod();
+    await db.userUsage.upsert({
+      where: { userId_period: { userId, period } },
+      update: { healthScanCount: { increment: 1 } },
+      create: { userId, period, healthScanCount: 1 },
+    });
+  }
+
+  async checkAiReportLimit(userId: string): Promise<LimitCheckResult> {
+    const period = getCurrentPeriod();
+    const limits = FREE_PLAN_LIMITS;
+    const usage = await this.getOrCreateUsage(userId, period);
+    return {
+      allowed: usage.aiReportCount < limits.aiReportsPerMonth,
+      used: usage.aiReportCount,
+      limit: limits.aiReportsPerMonth,
+    };
+  }
+
+  async incrementAiReport(userId: string): Promise<void> {
+    const period = getCurrentPeriod();
+    await db.userUsage.upsert({
+      where: { userId_period: { userId, period } },
+      update: { aiReportCount: { increment: 1 } },
+      create: { userId, period, aiReportCount: 1 },
+    });
+  }
+
+  async checkAiChatLimit(userId: string): Promise<LimitCheckResult> {
+    const period = getCurrentPeriod();
+    const limits = FREE_PLAN_LIMITS;
+    const usage = await this.getOrCreateUsage(userId, period);
+    return {
+      allowed: usage.aiChatCount < limits.aiChatRequestsPerMonth,
+      used: usage.aiChatCount,
+      limit: limits.aiChatRequestsPerMonth,
+    };
+  }
+
+  async incrementAiChat(userId: string): Promise<void> {
+    const period = getCurrentPeriod();
+    await db.userUsage.upsert({
+      where: { userId_period: { userId, period } },
+      update: { aiChatCount: { increment: 1 } },
+      create: { userId, period, aiChatCount: 1 },
+    });
+  }
+
+  async checkRepositoryLimit(userId: string): Promise<LimitCheckResult> {
+    const limits = FREE_PLAN_LIMITS;
+    const count = await this.countUserRepositories(userId);
+    return {
+      allowed: count < limits.repositories,
+      used: count,
+      limit: limits.repositories,
+    };
+  }
+
+  private async countUserRepositories(userId: string): Promise<number> {
+    const result = await db.$queryRaw<[{ count: bigint }]>`
+      SELECT COUNT(DISTINCT CONCAT(owner, '/', repo)) as count
+      FROM (
+        SELECT owner, repo FROM repository_indexes WHERE "userId" = ${userId}
+        UNION
+        SELECT owner, repo FROM repo_health_snapshots WHERE "userId" = ${userId}
+        UNION
+        SELECT
+          SPLIT_PART(repository, '/', 1) as owner,
+          SPLIT_PART(repository, '/', 2) as repo
+        FROM ai_history_sessions WHERE "userId" = ${userId} AND repository IS NOT NULL
+      ) as repos
+    `;
+    return Number(result[0]?.count ?? 0);
+  }
+
+  private async getOrCreateUsage(userId: string, period: string) {
+    return db.userUsage.upsert({
+      where: { userId_period: { userId, period } },
+      update: {},
+      create: { userId, period },
+    });
+  }
+
+  async getHealthCache(userId: string, owner: string, repo: string, commitSha: string) {
+    return db.repoHealthSnapshot.findUnique({
+      where: { userId_owner_repo_commitSha: { userId, owner, repo, commitSha } },
+    });
+  }
+
+  async saveHealthCache(
+    userId: string,
+    owner: string,
+    repo: string,
+    commitSha: string,
+    health: {
+      score: number;
+      passedCount: number;
+      failedCount: number;
+      criticalCount: number;
+      structuralScore: number;
+      qualityScore: number;
+      details: unknown;
+      scoreBreakdown: unknown;
+      summary: unknown;
+    },
+  ) {
+    return db.repoHealthSnapshot.upsert({
+      where: { userId_owner_repo_commitSha: { userId, owner, repo, commitSha } },
+      update: {
+        score: health.score,
+        passedCount: health.passedCount,
+        failedCount: health.failedCount,
+        criticalCount: health.criticalCount,
+        structuralScore: health.structuralScore,
+        qualityScore: health.qualityScore,
+        details: JSON.parse(JSON.stringify(health.details)) as Prisma.InputJsonValue,
+        scoreBreakdown: JSON.parse(JSON.stringify(health.scoreBreakdown)) as Prisma.InputJsonValue,
+        summary: JSON.parse(JSON.stringify(health.summary)) as Prisma.InputJsonValue,
+      },
+      create: {
+        userId,
+        owner,
+        repo,
+        commitSha,
+        score: health.score,
+        passedCount: health.passedCount,
+        failedCount: health.failedCount,
+        criticalCount: health.criticalCount,
+        structuralScore: health.structuralScore,
+        qualityScore: health.qualityScore,
+        details: JSON.parse(JSON.stringify(health.details)) as Prisma.InputJsonValue,
+        scoreBreakdown: JSON.parse(JSON.stringify(health.scoreBreakdown)) as Prisma.InputJsonValue,
+        summary: JSON.parse(JSON.stringify(health.summary)) as Prisma.InputJsonValue,
+      },
+    });
+  }
+}
+
+export const usageService = new UsageService();
