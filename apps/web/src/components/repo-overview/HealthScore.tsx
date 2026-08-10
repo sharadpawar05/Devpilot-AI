@@ -372,32 +372,53 @@ function EvidenceDisplay({ evidence }: { evidence: Record<string, unknown> }) {
     if (typeof value === 'number') return String(value);
     if (Array.isArray(value)) {
       if (value.length === 0) return 'None';
-      if (value.length <= 3) {
-        return value
-          .map((v) => {
-            if (typeof v === 'object' && v !== null) {
-              const keys = Object.keys(v as Record<string, unknown>);
-              if (keys.length <= 2) {
-                return keys
-                  .map((k) => `${k}: ${formatValue((v as Record<string, unknown>)[k])}`)
-                  .join(', ');
-              }
-              return `{${keys.length} fields}`;
-            }
-            return formatValue(v);
-          })
-          .join(', ');
-      }
-      return `${value
-        .slice(0, 3)
-        .map((v) => {
-          if (typeof v === 'object' && v !== null) {
-            const keys = Object.keys(v as Record<string, unknown>);
-            return `{${keys.length} fields}`;
+      // Format each element recursively
+      const formatElement = (v: unknown): string => {
+        if (v === null || v === undefined) return '';
+        if (typeof v === 'object' && !Array.isArray(v)) {
+          const obj = v as Record<string, unknown>;
+          const keys = Object.keys(obj);
+          if (keys.length === 0) return '{}';
+          // Show specific fields for known object types
+          if ('path' in obj && 'lines' in obj) {
+            // LargeFileItem or HotspotItem
+            const path = String(obj.path || '');
+            const lines = obj.lines !== undefined ? ` (${obj.lines} lines)` : '';
+            const score = obj.score !== undefined ? ` [score: ${obj.score}]` : '';
+            const reason = obj.reason ? ` - ${obj.reason}` : '';
+            return `${path}${lines}${score}${reason}`;
           }
-          return formatValue(v);
-        })
-        .join(', ')} +${value.length - 3} more`;
+          if ('severity' in obj && 'package' in obj) {
+            // VulnerabilityItem
+            const severity = String(obj.severity || '');
+            const pkg = String(obj.package || '');
+            return `${severity}: ${pkg}`;
+          }
+          if ('pattern' in obj && 'count' in obj) {
+            // TechDebtItem
+            const pattern = String(obj.pattern || '');
+            const count = obj.count !== undefined ? ` (${obj.count})` : '';
+            return `${pattern}${count}`;
+          }
+          if ('name' in obj && 'current' in obj && 'latest' in obj) {
+            // OutdatedPackage
+            const name = String(obj.name || '');
+            const current = String(obj.current || '');
+            const latest = String(obj.latest || '');
+            return `${name}: ${current} → ${latest}`;
+          }
+          // Generic object with few keys
+          if (keys.length <= 3) {
+            return keys.map((k) => `${k}: ${formatValue(obj[k])}`).join(', ');
+          }
+          return `{${keys.length} fields}`;
+        }
+        return formatValue(v);
+      };
+      if (value.length <= 3) {
+        return value.map(formatElement).join(', ');
+      }
+      return `${value.slice(0, 3).map(formatElement).join(', ')} +${value.length - 3} more`;
     }
     if (typeof value === 'object' && value !== null) {
       const keys = Object.keys(value as Record<string, unknown>);
@@ -583,6 +604,19 @@ function QualityMetrics({
     );
   }
 
+  if (
+    name === 'Test Coverage' &&
+    quality.coverage === undefined &&
+    quality.testFileCount !== undefined
+  ) {
+    return (
+      <div className="flex items-center gap-2 text-xs">
+        <span className="font-mono font-semibold text-muted-foreground">No coverage data</span>
+        <span className="text-muted-foreground">({quality.testFileCount} test files found)</span>
+      </div>
+    );
+  }
+
   if (name === 'README Quality' && quality.sectionsFound && quality.sectionsMissing) {
     const found = quality.sectionsFound.length;
     const total = found + quality.sectionsMissing.length;
@@ -625,6 +659,9 @@ function QualityMetrics({
         >
           {quality.workflowCount} workflow{quality.workflowCount !== 1 ? 's' : ''}
         </span>
+        {quality.workflowTypes && quality.workflowTypes.length > 0 && (
+          <span className="text-muted-foreground">({quality.workflowTypes.join(', ')})</span>
+        )}
       </div>
     );
   }
@@ -640,6 +677,14 @@ function QualityMetrics({
             ({quality.outdatedPercentage}% outdated)
           </span>
         )}
+        {quality.hasLockfile !== undefined && (
+          <span className="text-muted-foreground">
+            {quality.hasLockfile ? '(lockfile present)' : '(no lockfile)'}
+          </span>
+        )}
+        {quality.majorOutdated !== undefined && quality.majorOutdated > 0 && (
+          <span className="text-red-600 dark:text-red-400">({quality.majorOutdated} major)</span>
+        )}
       </div>
     );
   }
@@ -649,7 +694,7 @@ function QualityMetrics({
       <div className="flex items-center gap-2 text-xs">
         {quality.vulnerabilityCount === 0 ? (
           <span className="font-mono font-semibold text-emerald-600 dark:text-emerald-400">
-            No vulnerabilities
+            {quality.dependabotAccessible ? 'No vulnerabilities (verified)' : 'No vulnerabilities'}
           </span>
         ) : (
           <span className="font-mono font-semibold text-red-600 dark:text-red-400">
@@ -658,6 +703,11 @@ function QualityMetrics({
               ? ` (${quality.criticalVulnerabilities} critical)`
               : ''}
             {quality.highVulnerabilities ? ` (${quality.highVulnerabilities} high)` : ''}
+          </span>
+        )}
+        {quality.dependabotAccessible !== undefined && (
+          <span className="text-muted-foreground">
+            {quality.dependabotAccessible ? '(Dependabot accessible)' : '(not verified)'}
           </span>
         )}
       </div>

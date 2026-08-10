@@ -245,12 +245,18 @@ export interface HealthQualityMetrics {
   workflowCount?: number;
   passingWorkflows?: number;
   failingWorkflows?: number;
+  workflowTypes?: string[];
   vulnerabilityCount?: number;
   criticalVulnerabilities?: number;
   highVulnerabilities?: number;
+  dependabotAccessible?: boolean;
   totalDependencies?: number;
   outdatedDependencies?: number;
   outdatedPercentage?: number;
+  hasLockfile?: boolean;
+  majorOutdated?: number;
+  minorOutdated?: number;
+  patchOutdated?: number;
   // Vulnerability details
   vulnerabilities?: VulnerabilityItem[];
   // Complexity metrics
