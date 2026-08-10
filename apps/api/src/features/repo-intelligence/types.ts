@@ -300,6 +300,8 @@ export interface RepositoryHealth {
   score: number;
   passedCount: number;
   failedCount: number;
+  warningCount?: number;
+  notMeasuredCount?: number;
   criticalCount: number;
   details: HealthCheckDetail[];
   scoreBreakdown: ScoreBreakdownItem[];

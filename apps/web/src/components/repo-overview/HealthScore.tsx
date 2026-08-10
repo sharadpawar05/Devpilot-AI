@@ -372,10 +372,43 @@ function EvidenceDisplay({ evidence }: { evidence: Record<string, unknown> }) {
     if (typeof value === 'number') return String(value);
     if (Array.isArray(value)) {
       if (value.length === 0) return 'None';
-      if (value.length <= 3) return value.join(', ');
-      return `${value.slice(0, 3).join(', ')} +${value.length - 3} more`;
+      if (value.length <= 3) {
+        return value
+          .map((v) => {
+            if (typeof v === 'object' && v !== null) {
+              const keys = Object.keys(v as Record<string, unknown>);
+              if (keys.length <= 2) {
+                return keys
+                  .map((k) => `${k}: ${formatValue((v as Record<string, unknown>)[k])}`)
+                  .join(', ');
+              }
+              return `{${keys.length} fields}`;
+            }
+            return formatValue(v);
+          })
+          .join(', ');
+      }
+      return `${value
+        .slice(0, 3)
+        .map((v) => {
+          if (typeof v === 'object' && v !== null) {
+            const keys = Object.keys(v as Record<string, unknown>);
+            return `{${keys.length} fields}`;
+          }
+          return formatValue(v);
+        })
+        .join(', ')} +${value.length - 3} more`;
     }
-    if (typeof value === 'object' && value !== null) return JSON.stringify(value);
+    if (typeof value === 'object' && value !== null) {
+      const keys = Object.keys(value as Record<string, unknown>);
+      if (keys.length === 0) return 'None';
+      if (keys.length <= 3) {
+        return keys
+          .map((k) => `${k}: ${formatValue((value as Record<string, unknown>)[k])}`)
+          .join(', ');
+      }
+      return `${keys.length} fields`;
+    }
     return String(value);
   };
 
@@ -715,13 +748,15 @@ export function HealthScore({ health, onGenerate, onGenerateReport, className }:
     passedCount = 0,
     failedCount = 0,
     criticalCount = 0,
+    warningCount = 0,
+    notMeasuredCount = 0,
     details = [],
     summary,
   } = health || {};
   const circumference = 2 * Math.PI * 40;
   const offset = circumference - (score / 100) * circumference;
 
-  const allPassed = failedCount === 0;
+  const allPassed = failedCount === 0 && warningCount === 0;
 
   const structuralChecks = useMemo(
     () => details.filter((d) => d.category === 'structural'),
@@ -795,6 +830,22 @@ export function HealthScore({ health, onGenerate, onGenerateReport, className }:
                   <span className="inline-block h-2 w-2 rounded-full bg-red-500" />
                   <span className="text-muted-foreground">
                     <span className="font-semibold text-foreground">{failedCount}</span> failed
+                  </span>
+                </span>
+              )}
+              {warningCount > 0 && (
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
+                  <span className="text-muted-foreground">
+                    <span className="font-semibold text-foreground">{warningCount}</span> warnings
+                  </span>
+                </span>
+              )}
+              {notMeasuredCount > 0 && (
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block h-2 w-2 rounded-full bg-slate-400" />
+                  <span className="text-muted-foreground">
+                    <span className="font-semibold text-foreground">{notMeasuredCount}</span> N/A
                   </span>
                 </span>
               )}
