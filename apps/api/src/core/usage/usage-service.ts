@@ -49,10 +49,11 @@ class UsageService {
 
   async incrementHealthScan(userId: string): Promise<void> {
     const period = getCurrentPeriod();
+    const localUserId = await this.resolveLocalUserId(userId);
     await db.userUsage.upsert({
-      where: { userId_period: { userId, period } },
+      where: { userId_period: { userId: localUserId, period } },
       update: { healthScanCount: { increment: 1 } },
-      create: { userId, period, healthScanCount: 1 },
+      create: { userId: localUserId, period, healthScanCount: 1 },
     });
   }
 
@@ -69,10 +70,11 @@ class UsageService {
 
   async incrementAiReport(userId: string): Promise<void> {
     const period = getCurrentPeriod();
+    const localUserId = await this.resolveLocalUserId(userId);
     await db.userUsage.upsert({
-      where: { userId_period: { userId, period } },
+      where: { userId_period: { userId: localUserId, period } },
       update: { aiReportCount: { increment: 1 } },
-      create: { userId, period, aiReportCount: 1 },
+      create: { userId: localUserId, period, aiReportCount: 1 },
     });
   }
 
@@ -89,16 +91,18 @@ class UsageService {
 
   async incrementAiChat(userId: string): Promise<void> {
     const period = getCurrentPeriod();
+    const localUserId = await this.resolveLocalUserId(userId);
     await db.userUsage.upsert({
-      where: { userId_period: { userId, period } },
+      where: { userId_period: { userId: localUserId, period } },
       update: { aiChatCount: { increment: 1 } },
-      create: { userId, period, aiChatCount: 1 },
+      create: { userId: localUserId, period, aiChatCount: 1 },
     });
   }
 
   async checkRepositoryLimit(userId: string): Promise<LimitCheckResult> {
     const limits = FREE_PLAN_LIMITS;
-    const count = await this.countUserRepositories(userId);
+    const localUserId = await this.resolveLocalUserId(userId);
+    const count = await this.countUserRepositories(localUserId);
     return {
       allowed: count < limits.repositories,
       used: count,
@@ -123,9 +127,31 @@ class UsageService {
     return Number(result[0]?.count ?? 0);
   }
 
+  private async resolveLocalUserId(supabaseUserId: string): Promise<string> {
+    const user = await db.user.findUnique({
+      where: { supabaseUserId },
+      select: { id: true },
+    });
+    if (!user) {
+      // Auto-create user if they don't exist yet
+      const created = await db.user.upsert({
+        where: { supabaseUserId },
+        update: {},
+        create: {
+          supabaseUserId,
+          email: `${supabaseUserId}@placeholder.local`,
+          fullName: 'User',
+        },
+        select: { id: true },
+      });
+      return created.id;
+    }
+    return user.id;
+  }
+
   private async getOrCreateUsage(userId: string, period: string) {
     // Ensure user exists in local database (Supabase user may not have a local record yet)
-    await db.user.upsert({
+    const user = await db.user.upsert({
       where: { supabaseUserId: userId },
       update: {},
       create: {
@@ -133,12 +159,13 @@ class UsageService {
         email: `${userId}@placeholder.local`,
         fullName: 'User',
       },
+      select: { id: true },
     });
 
     return db.userUsage.upsert({
-      where: { userId_period: { userId, period } },
+      where: { userId_period: { userId: user.id, period } },
       update: {},
-      create: { userId, period },
+      create: { userId: user.id, period },
     });
   }
 
