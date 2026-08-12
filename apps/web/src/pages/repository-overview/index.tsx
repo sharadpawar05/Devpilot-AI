@@ -624,7 +624,11 @@ export default function RepositoryOverviewPage() {
             {overviewData?.health ? (
               <CompactHealthScore
                 health={overviewData.health}
-                onViewDetails={() => navigate('/health-overview')}
+                onViewDetails={() =>
+                  navigate(
+                    `/health-overview?repo=${encodeURIComponent(selectedRepo)}&branch=${encodeURIComponent(selectedBranch)}`,
+                  )
+                }
               />
             ) : (
               <p className="text-sm text-muted-foreground text-center py-4">

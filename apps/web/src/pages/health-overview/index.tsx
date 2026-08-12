@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { RefreshCw, ChevronDown, Loader2, Shield, Download } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/auth';
 import { useGitHub } from '@/hooks/use-github';
@@ -76,8 +77,11 @@ export default function HealthOverviewPage() {
   const { session } = useAuth();
   const token = session?.accessToken;
   const gh = useGitHub();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [selectedRepo, setSelectedRepo] = useState(() => {
+    const queryRepo = searchParams.get('repo');
+    if (queryRepo) return queryRepo;
     try {
       return localStorage.getItem('health-overview-selected-repo') || '';
     } catch {
@@ -85,6 +89,8 @@ export default function HealthOverviewPage() {
     }
   });
   const [selectedBranch, setSelectedBranch] = useState(() => {
+    const queryBranch = searchParams.get('branch');
+    if (queryBranch) return queryBranch;
     try {
       return localStorage.getItem('health-overview-selected-branch') || 'main';
     } catch {
@@ -117,6 +123,13 @@ export default function HealthOverviewPage() {
       // localStorage may be unavailable
     }
   }, [selectedBranch]);
+
+  // Sync query params to localStorage and clear them from URL
+  useEffect(() => {
+    if (searchParams.get('repo')) {
+      setSearchParams({}, { replace: true });
+    }
+  }, []);
 
   const fetchOverview = useCallback(async () => {
     if (!owner || !repo || !token) return;
