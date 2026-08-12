@@ -124,6 +124,17 @@ class UsageService {
   }
 
   private async getOrCreateUsage(userId: string, period: string) {
+    // Ensure user exists in local database (Supabase user may not have a local record yet)
+    await db.user.upsert({
+      where: { supabaseUserId: userId },
+      update: {},
+      create: {
+        supabaseUserId: userId,
+        email: `${userId}@placeholder.local`,
+        fullName: 'User',
+      },
+    });
+
     return db.userUsage.upsert({
       where: { userId_period: { userId, period } },
       update: {},
