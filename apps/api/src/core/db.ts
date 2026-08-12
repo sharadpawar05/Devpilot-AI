@@ -24,3 +24,21 @@ export async function checkDatabaseConnection(): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * Resolves a Supabase user ID to the local database User.id.
+ * Creates the user record if it doesn't exist yet.
+ */
+export async function resolveLocalUserId(supabaseUserId: string): Promise<string> {
+  const user = await db.user.upsert({
+    where: { supabaseUserId },
+    update: {},
+    create: {
+      supabaseUserId,
+      email: `${supabaseUserId}@placeholder.local`,
+      fullName: 'User',
+    },
+    select: { id: true },
+  });
+  return user.id;
+}

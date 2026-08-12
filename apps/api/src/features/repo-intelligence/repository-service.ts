@@ -1,5 +1,5 @@
 import { getOctokit } from '@/core/github';
-import { db } from '@/core/db';
+import { db, resolveLocalUserId } from '@/core/db';
 import type {
   RepositoryMetadata,
   RepositoryStatistics,
@@ -1395,17 +1395,11 @@ export class RepositoryIntelligenceService {
     commitSha?: string,
   ): Promise<void> {
     try {
-      // Resolve supabaseUserId to local User.id for FK constraint
-      const user = await db.user.findUnique({
-        where: { supabaseUserId: userId },
-        select: { id: true },
-      });
-      if (!user) return;
-
+      const localUserId = await resolveLocalUserId(userId);
       const sha = commitSha || (await this.getLatestCommitSha(userId, owner, repo)) || 'unknown';
       await db.repoHealthSnapshot.create({
         data: {
-          userId: user.id,
+          userId: localUserId,
           owner,
           repo,
           commitSha: sha,

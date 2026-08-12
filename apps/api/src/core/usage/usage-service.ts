@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { db } from '@/core/db';
+import { db, resolveLocalUserId } from '@/core/db';
 import { FREE_PLAN_LIMITS, getCurrentPeriod } from './plan-limits';
 
 export interface UsageData {
@@ -49,7 +49,7 @@ class UsageService {
 
   async incrementHealthScan(userId: string): Promise<void> {
     const period = getCurrentPeriod();
-    const localUserId = await this.resolveLocalUserId(userId);
+    const localUserId = await resolveLocalUserId(userId);
     await db.userUsage.upsert({
       where: { userId_period: { userId: localUserId, period } },
       update: { healthScanCount: { increment: 1 } },
@@ -70,7 +70,7 @@ class UsageService {
 
   async incrementAiReport(userId: string): Promise<void> {
     const period = getCurrentPeriod();
-    const localUserId = await this.resolveLocalUserId(userId);
+    const localUserId = await resolveLocalUserId(userId);
     await db.userUsage.upsert({
       where: { userId_period: { userId: localUserId, period } },
       update: { aiReportCount: { increment: 1 } },
@@ -91,7 +91,7 @@ class UsageService {
 
   async incrementAiChat(userId: string): Promise<void> {
     const period = getCurrentPeriod();
-    const localUserId = await this.resolveLocalUserId(userId);
+    const localUserId = await resolveLocalUserId(userId);
     await db.userUsage.upsert({
       where: { userId_period: { userId: localUserId, period } },
       update: { aiChatCount: { increment: 1 } },
@@ -101,7 +101,7 @@ class UsageService {
 
   async checkRepositoryLimit(userId: string): Promise<LimitCheckResult> {
     const limits = FREE_PLAN_LIMITS;
-    const localUserId = await this.resolveLocalUserId(userId);
+    const localUserId = await resolveLocalUserId(userId);
     const count = await this.countUserRepositories(localUserId);
     return {
       allowed: count < limits.repositories,
@@ -125,28 +125,6 @@ class UsageService {
       ) as repos
     `;
     return Number(result[0]?.count ?? 0);
-  }
-
-  private async resolveLocalUserId(supabaseUserId: string): Promise<string> {
-    const user = await db.user.findUnique({
-      where: { supabaseUserId },
-      select: { id: true },
-    });
-    if (!user) {
-      // Auto-create user if they don't exist yet
-      const created = await db.user.upsert({
-        where: { supabaseUserId },
-        update: {},
-        create: {
-          supabaseUserId,
-          email: `${supabaseUserId}@placeholder.local`,
-          fullName: 'User',
-        },
-        select: { id: true },
-      });
-      return created.id;
-    }
-    return user.id;
   }
 
   private async getOrCreateUsage(userId: string, period: string) {
