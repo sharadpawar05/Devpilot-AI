@@ -1,4 +1,12 @@
-import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useCallback,
+  useMemo,
+  type ReactNode,
+} from 'react';
 import type { Session, AuthUser, AuthProvider as OAuthProvider } from '@devpilot/types';
 import { supabase } from '@/lib/supabase';
 
@@ -12,6 +20,26 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// Development-only diagnostics. Never log tokens, Authorization headers, or cookies.
+function debugAuthEvent(event: string, expiresAt: number | undefined): void {
+  if (!import.meta.env.DEV) return;
+  const now = Math.floor(Date.now() / 1000);
+  console.debug('[Auth] event:', event);
+  console.debug('[Auth] session exists:', expiresAt !== undefined);
+  console.debug('[Auth] access token expiry:', expiresAt ?? null);
+  console.debug('[Auth] current time:', now);
+  console.debug('[Auth] seconds until expiry:', expiresAt !== undefined ? expiresAt - now : null);
+}
+
+// Avoid redundant state updates (and the re-render cascade they cause) when a
+// notification carries the same access token we already hold. This does not
+// interfere with refresh: a real TOKEN_REFRESHED always changes the token.
+function sessionsEquivalent(a: Session | null, b: Session | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return a.accessToken === b.accessToken && a.expiresAt === b.expiresAt;
+}
 
 function mapSession(
   supabaseSession: {
@@ -62,19 +90,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    let mounted = true;
+
     supabase.auth.getSession().then(({ data: { session: s } }) => {
-      setSession(mapSession(s));
+      if (!mounted) return;
+      debugAuthEvent('getSession', s?.expires_at);
+      setSession((prev) => {
+        const next = mapSession(s);
+        return sessionsEquivalent(prev, next) ? prev : next;
+      });
       setIsLoading(false);
     });
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, s) => {
-      setSession(mapSession(s));
+    } = supabase.auth.onAuthStateChange((event, s) => {
+      if (!mounted) return;
+      // Update React state only. Supabase handles automatic token refresh
+      // (autoRefreshToken); never call refreshSession() from this listener.
+      debugAuthEvent(event, s?.expires_at);
+      setSession((prev) => {
+        const next = mapSession(s);
+        return sessionsEquivalent(prev, next) ? prev : next;
+      });
       setIsLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signInWithOAuth = useCallback(async (provider: OAuthProvider) => {
@@ -98,14 +143,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
   }, []);
 
-  const value: AuthContextType = {
-    user: session?.user ?? null,
-    session,
-    isLoading,
-    isAuthenticated: !!session,
-    signInWithOAuth,
-    signOut,
-  };
+  const value: AuthContextType = useMemo(
+    () => ({
+      user: session?.user ?? null,
+      session,
+      isLoading,
+      isAuthenticated: !!session,
+      signInWithOAuth,
+      signOut,
+    }),
+    [session, isLoading, signInWithOAuth, signOut],
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
