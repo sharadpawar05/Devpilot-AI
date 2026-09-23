@@ -2,6 +2,13 @@ import { useState, useCallback, Fragment, type ReactNode } from 'react';
 import { Group, Panel, Separator, type GroupProps } from 'react-resizable-panels';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-media-query';
+import {
+  getPanelLayout,
+  getMobilePanel,
+  setMobilePanel,
+  setPanelLayout,
+} from '@/lib/ui-preferences';
+import { DragHandle } from './DragHandle';
 
 export interface SplitViewPanel {
   id: string;
@@ -45,30 +52,27 @@ export function SplitViewLayout({
   defaultMobilePanel,
 }: SplitViewLayoutProps) {
   const isMobile = useIsMobile();
-  const [mobilePanel, setMobilePanel] = useState(defaultMobilePanel ?? panels[0]?.id);
+  const pageKey = storageKey ?? 'split-view';
 
-  const [defaultLayout] = useState(() => {
-    if (!storageKey) return undefined;
-    try {
-      const saved = localStorage.getItem(storageKey);
-      if (saved) return JSON.parse(saved);
-    } catch {
-      /* ignore parse errors */
-    }
-    return undefined;
-  });
+  const [mobilePanel, setMobilePanelState] = useState(
+    () => getMobilePanel(pageKey) ?? defaultMobilePanel ?? panels[0]?.id,
+  );
+
+  const [defaultLayout] = useState(() => (storageKey ? getPanelLayout(storageKey) : undefined));
 
   const handleLayoutChange = useCallback(
     (layout: { [id: string]: number }) => {
-      if (storageKey) {
-        try {
-          localStorage.setItem(storageKey, JSON.stringify(layout));
-        } catch {
-          /* ignore storage errors */
-        }
-      }
+      if (storageKey) setPanelLayout(storageKey, layout);
     },
     [storageKey],
+  );
+
+  const handleMobilePanel = useCallback(
+    (panelId: string) => {
+      setMobilePanelState(panelId);
+      setMobilePanel(pageKey, panelId);
+    },
+    [pageKey],
   );
 
   if (isMobile) {
@@ -89,7 +93,7 @@ export function SplitViewLayout({
               aria-selected={panel.id === active?.id}
               aria-controls={`panel-${panel.id}`}
               id={`tab-${panel.id}`}
-              onClick={() => setMobilePanel(panel.id)}
+              onClick={() => handleMobilePanel(panel.id)}
               className={cn(
                 'flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-all duration-150 active:scale-[0.98]',
                 panel.id === active?.id
@@ -128,8 +132,10 @@ export function SplitViewLayout({
           {index > 0 && (
             <Separator
               aria-label={`Resize ${panels[index - 1].label} and ${panel.label} panels`}
-              className="w-1.5 shrink-0 cursor-col-resize bg-border transition-colors hover:bg-primary/50 focus-visible:bg-primary/50 focus-visible:outline-none"
-            />
+              className="group relative w-2 shrink-0 cursor-col-resize bg-border/50 transition-colors hover:bg-primary/40 focus-visible:bg-primary/50 focus-visible:outline-none active:bg-primary/60"
+            >
+              <DragHandle />
+            </Separator>
           )}
           <Panel
             id={panel.id}
