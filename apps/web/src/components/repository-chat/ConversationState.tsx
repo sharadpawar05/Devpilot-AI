@@ -1,8 +1,17 @@
-import { useState, useRef, useEffect } from 'react';
-import { Copy, Check, Trash2, AlertCircle, RefreshCw, MessageSquare } from 'lucide-react';
+import { useState, useRef, useEffect, useMemo } from 'react';
+import {
+  Copy,
+  Check,
+  Trash2,
+  AlertCircle,
+  RefreshCw,
+  MessageSquare,
+  FolderTree,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
+import { cn } from '@/lib/utils';
 import type { ChatMessage as ChatMessageType } from '@/hooks/use-repository-chat';
 
 interface ConversationStateProps {
@@ -13,6 +22,35 @@ interface ConversationStateProps {
   onFileClick?: (path: string) => void;
   error?: string | null;
   onRetry?: () => void;
+}
+
+interface MessageGroup {
+  id: string;
+  files: string[];
+  messages: ChatMessageType[];
+}
+
+/** Group messages into turns: each user message starts a group; following assistant replies join it. */
+function groupMessages(messages: ChatMessageType[]): MessageGroup[] {
+  const groups: MessageGroup[] = [];
+  for (const msg of messages) {
+    if (msg.role === 'user' || groups.length === 0) {
+      groups.push({ id: msg.id, files: [], messages: [msg] });
+    } else {
+      groups[groups.length - 1].messages.push(msg);
+    }
+    const g = groups[groups.length - 1];
+    if (msg.referencedFiles?.length) {
+      g.files = [...new Set([...g.files, ...msg.referencedFiles])];
+    }
+  }
+  return groups;
+}
+
+function shortLabel(path: string): string {
+  const parts = path.split('/');
+  if (parts.length <= 2) return path;
+  return `…/${parts.slice(-2).join('/')}`;
 }
 
 export function ConversationState({
@@ -26,6 +64,7 @@ export function ConversationState({
 }: ConversationStateProps) {
   const [copied, setCopied] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const groups = useMemo(() => groupMessages(messages), [messages]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -48,6 +87,7 @@ export function ConversationState({
           <h3 className="text-sm font-semibold">Chat</h3>
           <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
             {messages?.length ?? 0} message{(messages?.length ?? 0) !== 1 ? 's' : ''}
+            {groups.length > 1 ? ` · ${groups.length} threads` : ''}
           </span>
         </div>
         <div className="flex items-center gap-1">
@@ -93,27 +133,80 @@ export function ConversationState({
           </div>
         )}
 
-        {messages.map((msg) => (
-          <ChatMessage
-            key={msg.id}
-            role={msg.role}
-            content={msg.content}
-            provider={msg.provider}
-            model={msg.model}
-            latencyMs={msg.latencyMs}
-            usage={msg.usage}
-            referencedFiles={msg.referencedFiles}
-            onFileClick={onFileClick}
-          />
-        ))}
+        {groups.map((group, gi) => {
+          const hasContext = group.files.length > 0;
+          const isLastGroup = gi === groups.length - 1;
+
+          return (
+            <div key={group.id} className="mb-5" data-testid="message-group">
+              {hasContext && (
+                <div
+                  className="mb-2 flex flex-wrap items-center gap-1.5 px-1"
+                  role="group"
+                  aria-label="Message context files"
+                >
+                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <FolderTree className="h-3 w-3" aria-hidden />
+                    Context
+                  </span>
+                  {group.files.slice(0, 4).map((file) => (
+                    <button
+                      key={file}
+                      type="button"
+                      onClick={() => onFileClick?.(file)}
+                      className="cite-btn"
+                      aria-label={`Open context file ${file}`}
+                      title={file}
+                    >
+                      <span className="cite-label">{shortLabel(file)}</span>
+                    </button>
+                  ))}
+                  {group.files.length > 4 && (
+                    <span className="text-[10px] text-muted-foreground">
+                      +{group.files.length - 4}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              <div
+                className={cn(
+                  'space-y-1 rounded-2xl p-2 transition-colors',
+                  hasContext
+                    ? 'border border-primary/15 bg-gradient-to-b from-primary/[0.05] via-transparent to-transparent'
+                    : group.messages.length > 1
+                      ? 'border border-input/40 bg-muted/20'
+                      : 'border border-transparent',
+                  isLastGroup && 'animate-fade-in',
+                )}
+              >
+                {group.messages.map((msg, mi) => (
+                  <ChatMessage
+                    key={msg.id}
+                    role={msg.role}
+                    content={msg.content}
+                    provider={msg.provider}
+                    model={msg.model}
+                    latencyMs={msg.latencyMs}
+                    usage={msg.usage}
+                    referencedFiles={msg.referencedFiles}
+                    onFileClick={onFileClick}
+                    grouped={group.messages.length > 1}
+                    animationDelay={Math.min(mi * 60, 240)}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        })}
 
         {isChatting && (
           <div
-            className="mb-4 flex animate-fade-in justify-start"
+            className="mb-4 flex animate-message-in justify-start"
             role="status"
             aria-label="Assistant is thinking"
           >
-            <div className="flex items-center gap-2.5 rounded-2xl rounded-tl-md border border-input bg-card px-4 py-3 shadow-sm">
+            <div className="flex items-center gap-2.5 rounded-2xl rounded-tl-md border border-input gradient-assistant px-4 py-3 shadow-sm">
               <div className="flex gap-1" aria-hidden>
                 <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary [animation-delay:0ms]" />
                 <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary [animation-delay:150ms]" />
