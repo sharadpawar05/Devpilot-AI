@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { useGitHub } from '@/hooks/use-github';
 import { useSidebar } from './sidebar-provider';
 import { SidebarHeader } from './sidebar-header';
@@ -76,6 +76,7 @@ function SidebarContent() {
     <div className="flex h-full flex-col">
       <SidebarHeader />
       <nav
+        aria-label="Primary navigation"
         className={cn(
           'flex-1 space-y-4 overflow-y-auto py-4',
           collapsed && !isMobile ? 'px-2' : 'px-3',
@@ -102,7 +103,8 @@ export function Sidebar() {
   if (isMobile) {
     return (
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent side="left" className="w-[280px] p-0">
+        <SheetContent side="left" className="w-[280px] p-0 sm:max-w-[280px]" id="app-sidebar">
+          <SheetTitle className="sr-only">Navigation menu</SheetTitle>
           <SidebarContent />
         </SheetContent>
       </Sheet>
@@ -112,9 +114,11 @@ export function Sidebar() {
   return (
     <TooltipProvider>
       <aside
+        id="app-sidebar"
+        aria-label="Main sidebar"
         className={cn(
-          'flex h-full shrink-0 flex-col border-r bg-muted/30 transition-all duration-300 ease-in-out',
-          collapsed ? 'w-[64px]' : 'w-[240px]',
+          'flex h-full shrink-0 flex-col border-r bg-card/60 transition-[width] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]',
+          collapsed ? 'w-[68px]' : 'w-[248px]',
         )}
       >
         <SidebarContent />

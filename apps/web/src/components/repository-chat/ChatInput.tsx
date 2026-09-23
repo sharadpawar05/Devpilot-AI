@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Send, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 const selectClass =
-  'rounded-md border border-input bg-background px-3 py-1.5 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
+  'rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm transition-colors ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
 
 const MODELS_BY_PROVIDER: Record<string, { value: string; label: string }[]> = {
   gemini: [{ value: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash' }],
@@ -62,37 +63,77 @@ export function ChatInput({
   const availableModels = MODELS_BY_PROVIDER[provider] || [];
 
   return (
-    <div className="border-t border-input p-4">
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={placeholder}
-          disabled={disabled}
-          className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
-        />
-        <select
-          value={provider}
-          onChange={(e) => handleProviderChange(e.target.value)}
-          className={selectClass}
-        >
-          <option value="gemini">Gemini</option>
-          <option value="openai">OpenAI</option>
-          <option value="anthropic">Anthropic</option>
-        </select>
-        <select value={model} onChange={(e) => setModel(e.target.value)} className={selectClass}>
-          {availableModels.map((m) => (
-            <option key={m.value} value={m.value}>
-              {m.label}
-            </option>
-          ))}
-        </select>
-        <Button onClick={handleSend} disabled={!input.trim() || disabled} size="icon">
-          {disabled ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-        </Button>
+    <div className="shrink-0 border-t border-input bg-card/60 p-3 backdrop-blur sm:p-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="flex flex-1 items-center gap-2">
+          <label htmlFor="chat-message-input" className="sr-only">
+            Message
+          </label>
+          <input
+            id="chat-message-input"
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={placeholder}
+            disabled={disabled}
+            aria-label="Message"
+            className={cn(
+              'min-h-[44px] flex-1 rounded-xl border border-input bg-background px-4 py-2.5 text-sm shadow-sm transition-all duration-150',
+              'placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 disabled:opacity-50',
+            )}
+          />
+          <Button
+            onClick={handleSend}
+            disabled={!input.trim() || disabled}
+            size="icon"
+            aria-label="Send message"
+            className="shrink-0 rounded-xl"
+          >
+            {disabled ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            ) : (
+              <Send className="h-4 w-4" aria-hidden />
+            )}
+          </Button>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <label htmlFor="chat-provider-select" className="sr-only">
+            AI provider
+          </label>
+          <select
+            id="chat-provider-select"
+            value={provider}
+            onChange={(e) => handleProviderChange(e.target.value)}
+            aria-label="AI provider"
+            className={cn(selectClass, 'min-h-[40px] flex-1 sm:flex-none')}
+          >
+            <option value="gemini">Gemini</option>
+            <option value="openai">OpenAI</option>
+            <option value="anthropic">Anthropic</option>
+          </select>
+          <label htmlFor="chat-model-select" className="sr-only">
+            AI model
+          </label>
+          <select
+            id="chat-model-select"
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            aria-label="AI model"
+            className={cn(selectClass, 'min-h-[40px] flex-1 sm:flex-none')}
+          >
+            {availableModels.map((m) => (
+              <option key={m.value} value={m.value}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
+      <p className="mt-1.5 hidden text-[11px] text-muted-foreground sm:block">
+        Press <kbd className="rounded border bg-muted px-1 py-0.5 text-[10px]">Enter</kbd> to send
+      </p>
     </div>
   );
 }

@@ -27,7 +27,8 @@ function TreeItem({
         <button
           type="button"
           onClick={() => setExpanded(!expanded)}
-          className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-sm hover:bg-muted/50"
+          aria-expanded={expanded}
+          className="flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-muted/60 active:scale-[0.99]"
           style={{ paddingLeft: `${depth * 12 + 4}px` }}
         >
           {expanded ? (
@@ -35,7 +36,7 @@ function TreeItem({
           ) : (
             <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           )}
-          <Folder className="h-3.5 w-3.5 shrink-0 text-blue-500" />
+          <Folder className="h-3.5 w-3.5 shrink-0 text-sky-500" aria-hidden />
           <span className="truncate">{node.name}</span>
         </button>
         {expanded && node.children && (
@@ -59,8 +60,10 @@ function TreeItem({
     <button
       type="button"
       onClick={() => onFileSelect?.(node.path)}
-      className={`flex w-full items-center gap-1.5 rounded px-2 py-1 text-sm hover:bg-muted/50 ${
-        selectedFile === node.path ? 'bg-muted' : ''
+      aria-label={`Preview file ${node.path}`}
+      aria-current={selectedFile === node.path ? 'true' : undefined}
+      className={`flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-muted/60 active:scale-[0.99] ${
+        selectedFile === node.path ? 'bg-accent text-accent-foreground shadow-sm' : ''
       }`}
       style={{ paddingLeft: `${depth * 12 + 20}px` }}
     >
@@ -96,16 +99,23 @@ export function RepositoryTree({ tree, onFileSelect, selectedFile }: RepositoryT
   return (
     <div className="flex flex-col">
       <div className="relative mb-2">
-        <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+        <Search
+          className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+          aria-hidden
+        />
+        <label htmlFor="repo-tree-search" className="sr-only">
+          Search files
+        </label>
         <input
+          id="repo-tree-search"
           type="text"
           placeholder="Search files..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full rounded border border-input bg-background py-1.5 pl-7 pr-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+          className="w-full rounded-lg border border-input bg-background py-1.5 pl-7 pr-2 text-xs shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-ring"
         />
       </div>
-      <div className="max-h-[400px] overflow-y-auto">
+      <div>
         {(filteredTree?.length ?? 0) === 0 ? (
           <p className="px-2 py-4 text-center text-xs text-muted-foreground">
             {search ? 'No files match your search' : 'No files found'}

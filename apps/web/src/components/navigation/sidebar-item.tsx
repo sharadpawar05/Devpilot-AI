@@ -25,19 +25,29 @@ export function SidebarItem({ label, href, icon: Icon, badge, disabled }: Sideba
         if (disabled) e.preventDefault();
       }}
       className={cn(
-        'group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150',
+        'group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150 ease-out active:scale-[0.98]',
         collapsed && !isMobile && 'justify-center px-2',
         isActive
-          ? 'bg-accent text-accent-foreground'
-          : 'text-muted-foreground hover:bg-accent/50 hover:text-accent-foreground',
+          ? 'bg-accent text-accent-foreground shadow-sm'
+          : 'text-muted-foreground hover:bg-accent/60 hover:text-accent-foreground hover:translate-x-0.5',
         disabled && 'pointer-events-none opacity-50',
       )}
       aria-current={isActive ? 'page' : undefined}
+      title={collapsed && !isMobile ? label : undefined}
     >
       {isActive && (
-        <div className="absolute left-0 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-r-full bg-primary" />
+        <div
+          className="absolute left-0 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-r-full bg-primary transition-transform duration-200"
+          aria-hidden
+        />
       )}
-      <Icon className={cn('h-4 w-4 shrink-0', isActive && 'text-accent-foreground')} />
+      <Icon
+        className={cn(
+          'h-4 w-4 shrink-0 transition-colors duration-150',
+          isActive && 'text-primary',
+        )}
+        aria-hidden
+      />
       {(!collapsed || isMobile) && (
         <>
           <span className="flex-1 truncate">{label}</span>
