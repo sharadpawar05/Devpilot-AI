@@ -30,7 +30,7 @@ vi.mock('@/hooks/use-user-preferences', () => ({
   useUserPreferences: vi.fn(() => ({
     preferences: {
       defaultProvider: 'gemini',
-      defaultModel: 'gemini-3.5-flash',
+      defaultModel: 'gemini-3.6-flash',
     },
     updatePreference: vi.fn(),
     addRecentPrompt: vi.fn(),
@@ -107,8 +107,8 @@ describe('Playground Flow - 10 Steps', () => {
       // Provider select should have 'gemini' selected
       expect(selects[1]).toHaveValue('gemini');
 
-      // Model select should have 'gemini-3.5-flash' selected
-      expect(selects[2]).toHaveValue('gemini-3.5-flash');
+      // Model select should have 'gemini-3.6-flash' selected
+      expect(selects[2]).toHaveValue('gemini-3.6-flash');
     });
   });
 
@@ -176,7 +176,7 @@ describe('Playground Flow - 10 Steps', () => {
         error: null,
         metadata: {
           provider: 'gemini',
-          model: 'gemini-3.5-flash',
+          model: 'gemini-3.6-flash',
           latencyMs: 1500,
           tokens: { input: 10, output: 20, total: 30 },
         },
@@ -197,7 +197,7 @@ describe('Playground Flow - 10 Steps', () => {
         error: null,
         metadata: {
           provider: 'gemini',
-          model: 'gemini-3.5-flash',
+          model: 'gemini-3.6-flash',
           latencyMs: 1000,
           tokens: { input: 5, output: 10, total: 15 },
         },
@@ -222,7 +222,7 @@ describe('Playground Flow - 10 Steps', () => {
         error: null,
         metadata: {
           provider: 'gemini',
-          model: 'gemini-3.5-flash',
+          model: 'gemini-3.6-flash',
           latencyMs: 1000,
           tokens: { input: 5, output: 10, total: 15 },
         },
@@ -245,7 +245,7 @@ describe('Playground Flow - 10 Steps', () => {
         workflowType: 'playground',
         title: 'Test conversation',
         provider: 'gemini',
-        model: 'gemini-3.5-flash',
+        model: 'gemini-3.6-flash',
         totalLatency: 0,
         totalTokens: 0,
         pinned: false,
@@ -280,7 +280,7 @@ describe('Playground Flow - 10 Steps', () => {
         error: null,
         metadata: {
           provider: 'gemini',
-          model: 'gemini-3.5-flash',
+          model: 'gemini-3.6-flash',
           latencyMs: 1000,
           tokens: { input: 5, output: 10, total: 15 },
         },
@@ -311,9 +311,9 @@ describe('Playground Flow - 10 Steps', () => {
 
       const selects = screen.getAllByRole('combobox');
       // Third select is Model
-      await user.selectOptions(selects[2], 'gemini-2.5-pro');
+      await user.selectOptions(selects[2], 'gemini-3.6-flash');
 
-      expect(selects[2]).toHaveValue('gemini-2.5-pro');
+      expect(selects[2]).toHaveValue('gemini-3.6-flash');
     });
 
     it('should update available models when provider changes', async () => {
@@ -355,7 +355,7 @@ describe('Playground Flow - 10 Steps', () => {
       await user.click(advancedSettings);
 
       const selects = screen.getAllByRole('combobox');
-      await user.selectOptions(selects[2], 'gemini-2.5-pro');
+      await user.selectOptions(selects[2], 'gemini-3.6-flash');
 
       // The submit button may say "Generate" or "Continue" depending on session state
       const submitButton = screen.getByRole('button', { name: /generate|continue/i });
@@ -363,7 +363,7 @@ describe('Playground Flow - 10 Steps', () => {
 
       expect(mockStartStream).toHaveBeenCalledWith(
         expect.objectContaining({
-          model: 'gemini-2.5-pro',
+          model: 'gemini-3.6-flash',
         }),
       );
     });
@@ -463,7 +463,7 @@ describe('Playground Flow - 10 Steps', () => {
         error: null,
         metadata: {
           provider: 'gemini',
-          model: 'gemini-3.5-flash',
+          model: 'gemini-3.6-flash',
           latencyMs: 1000,
           tokens: { input: 5, output: 10, total: 15 },
         },
@@ -485,7 +485,7 @@ describe('Playground Flow - 10 Steps', () => {
         workflowType: 'playground',
         title: 'Test conversation',
         provider: 'gemini',
-        model: 'gemini-3.5-flash',
+        model: 'gemini-3.6-flash',
         totalLatency: 0,
         totalTokens: 0,
         pinned: false,
@@ -535,7 +535,7 @@ describe('Playground Flow - 10 Steps', () => {
         workflowType: 'playground',
         title: 'Test conversation',
         provider: 'gemini',
-        model: 'gemini-3.5-flash',
+        model: 'gemini-3.6-flash',
         totalLatency: 0,
         totalTokens: 0,
         pinned: false,
@@ -591,7 +591,7 @@ describe('Playground Flow - 10 Steps', () => {
         workflowType: 'playground',
         title: 'Test conversation',
         provider: 'gemini',
-        model: 'gemini-3.5-flash',
+        model: 'gemini-3.6-flash',
         totalLatency: 0,
         totalTokens: 0,
         pinned: false,
@@ -608,7 +608,7 @@ describe('Playground Flow - 10 Steps', () => {
         error: null,
         metadata: {
           provider: 'gemini',
-          model: 'gemini-3.5-flash',
+          model: 'gemini-3.6-flash',
           latencyMs: 1000,
           tokens: { input: 5, output: 10, total: 15 },
         },
@@ -657,7 +657,7 @@ describe('Playground Flow - 10 Steps', () => {
         workflowType: 'playground',
         title: 'Test conversation',
         provider: 'gemini',
-        model: 'gemini-3.5-flash',
+        model: 'gemini-3.6-flash',
         totalLatency: 0,
         totalTokens: 0,
         pinned: false,
@@ -674,7 +674,7 @@ describe('Playground Flow - 10 Steps', () => {
         error: null,
         metadata: {
           provider: 'gemini',
-          model: 'gemini-3.5-flash',
+          model: 'gemini-3.6-flash',
           latencyMs: 1000,
           tokens: { input: 5, output: 10, total: 15 },
         },
@@ -715,7 +715,7 @@ describe('Playground Flow - 10 Steps', () => {
         workflowType: 'playground',
         title: 'Test conversation',
         provider: 'gemini',
-        model: 'gemini-3.5-flash',
+        model: 'gemini-3.6-flash',
         totalLatency: 0,
         totalTokens: 0,
         pinned: false,
@@ -768,7 +768,7 @@ describe('Playground Flow - 10 Steps', () => {
         workflowType: 'playground',
         title: 'Test conversation',
         provider: 'gemini',
-        model: 'gemini-3.5-flash',
+        model: 'gemini-3.6-flash',
         totalLatency: 0,
         totalTokens: 0,
         pinned: false,

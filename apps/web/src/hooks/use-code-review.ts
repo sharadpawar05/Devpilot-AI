@@ -70,7 +70,7 @@ export function useCodeReview() {
         workflowType: 'code-review',
         title: generateCodeReviewTitle(params.language, params.reviewType),
         provider: (params.provider || 'gemini') as AIProviderName,
-        model: (params.model || 'gemini-3.5-flash') as AIModel,
+        model: (params.model || 'gemini-3.6-flash') as AIModel,
         messages: [
           {
             id: generateId(),
@@ -116,7 +116,7 @@ export function useCodeReview() {
               const response: CodeReviewResponse = {
                 success: true,
                 provider: metadata?.provider || request.provider || 'gemini',
-                model: metadata?.model || request.model || 'gemini-3.5-flash',
+                model: metadata?.model || request.model || 'gemini-3.6-flash',
                 response: content,
                 latencyMs: metadata?.latencyMs || 0,
                 reviewDepth: request.reviewDepth,

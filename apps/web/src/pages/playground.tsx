@@ -44,14 +44,7 @@ const PROVIDERS = [
 ] as const;
 
 const MODELS: Record<string, { value: string; label: string }[]> = {
-  gemini: [
-    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
-    { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
-    { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
-    { value: 'gemini-flash-latest', label: 'Gemini Flash (Latest)' },
-    { value: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash' },
-    { value: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash' },
-  ],
+  gemini: [{ value: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash' }],
   openai: [
     { value: 'gpt-4o', label: 'GPT-4o' },
     { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' },

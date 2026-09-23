@@ -17,7 +17,7 @@ interface UserPreferences {
 const DEFAULT_PREFERENCES: UserPreferences = {
   theme: 'system',
   defaultProvider: 'gemini',
-  defaultModel: 'gemini-flash-latest',
+  defaultModel: 'gemini-3.6-flash',
   reviewType: 'Standard',
   reviewDepth: 'Standard',
   streamingEnabled: true,

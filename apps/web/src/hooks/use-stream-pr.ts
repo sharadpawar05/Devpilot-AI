@@ -56,7 +56,7 @@ export function useStreamPR() {
                   repository: `${params.owner}/${params.repo}`,
                   title: `PR #${params.pull_number} Review`,
                   provider: (metadata?.provider || params.provider || 'gemini') as never,
-                  model: (metadata?.model || 'gemini-3.5-flash') as never,
+                  model: (metadata?.model || 'gemini-3.6-flash') as never,
                   messages: [
                     {
                       id: generateId(),
@@ -85,7 +85,7 @@ export function useStreamPR() {
               success: true,
               response: content,
               provider: metadata?.provider || params.provider || 'gemini',
-              model: metadata?.model || 'gemini-3.5-flash',
+              model: metadata?.model || 'gemini-3.6-flash',
               latencyMs: metadata?.latencyMs || 0,
               usage: metadata?.tokens || { input: 0, output: 0, total: 0 },
             });
@@ -128,7 +128,7 @@ export function useStreamPR() {
                   repository: `${params.owner}/${params.repo}`,
                   title: `PR #${params.pull_number} Analysis`,
                   provider: (metadata?.provider || params.provider || 'gemini') as never,
-                  model: (metadata?.model || 'gemini-3.5-flash') as never,
+                  model: (metadata?.model || 'gemini-3.6-flash') as never,
                   messages: [
                     {
                       id: generateId(),
@@ -157,7 +157,7 @@ export function useStreamPR() {
               success: true,
               response: content,
               provider: metadata?.provider || params.provider || 'gemini',
-              model: metadata?.model || 'gemini-3.5-flash',
+              model: metadata?.model || 'gemini-3.6-flash',
               latencyMs: metadata?.latencyMs || 0,
               truncated: false,
               fileTypes: '',

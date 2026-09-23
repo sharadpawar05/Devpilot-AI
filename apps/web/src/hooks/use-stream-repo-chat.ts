@@ -62,7 +62,7 @@ export function useStreamRepoChat() {
               role: 'assistant',
               content,
               provider: metadata?.provider || params.provider || 'gemini',
-              model: metadata?.model || params.model || 'gemini-3.5-flash',
+              model: metadata?.model || params.model || 'gemini-3.6-flash',
               latencyMs: metadata?.latencyMs || 0,
               usage: metadata?.tokens,
               timestamp: new Date(),

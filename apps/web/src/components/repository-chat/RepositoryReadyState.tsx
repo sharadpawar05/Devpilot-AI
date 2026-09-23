@@ -29,7 +29,7 @@ export function RepositoryReadyState({
           <div className="mt-8">
             <p className="mb-3 text-xs font-medium text-muted-foreground">Suggested Questions</p>
             <SuggestedQuestions
-              onSelect={(q) => onSend(q, 'gemini', 'gemini-3.5-flash')}
+              onSelect={(q) => onSend(q, 'gemini', 'gemini-3.6-flash')}
               disabled={isChatting}
             />
           </div>

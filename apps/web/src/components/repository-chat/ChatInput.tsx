@@ -6,11 +6,7 @@ const selectClass =
   'rounded-md border border-input bg-background px-3 py-1.5 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
 
 const MODELS_BY_PROVIDER: Record<string, { value: string; label: string }[]> = {
-  gemini: [
-    { value: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash' },
-    { value: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash' },
-    { value: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash Lite' },
-  ],
+  gemini: [{ value: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash' }],
   openai: [
     { value: 'gpt-4o', label: 'GPT-4o' },
     { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' },
@@ -40,7 +36,7 @@ export function ChatInput({
 }: ChatInputProps) {
   const [input, setInput] = useState('');
   const [provider, setProvider] = useState('gemini');
-  const [model, setModel] = useState('gemini-3.5-flash');
+  const [model, setModel] = useState('gemini-3.6-flash');
 
   const handleProviderChange = (newProvider: string) => {
     setProvider(newProvider);
