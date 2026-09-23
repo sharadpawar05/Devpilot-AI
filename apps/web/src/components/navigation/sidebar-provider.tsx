@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useIsMobile } from '@/hooks/use-media-query';
+import { getUIPreferences, setUIPreferences } from '@/lib/ui-preferences';
 
 interface SidebarContextType {
   collapsed: boolean;
@@ -20,38 +21,35 @@ interface SidebarContextType {
 
 const SidebarContext = createContext<SidebarContextType | undefined>(undefined);
 
-const STORAGE_KEY = 'devpilot_sidebar_collapsed';
+function adaptiveDefaultCollapsed(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.matchMedia('(min-width: 768px) and (max-width: 1023px)').matches;
+  } catch {
+    return false;
+  }
+}
+
+function initialCollapsed(): boolean {
+  const stored = getUIPreferences().sidebarCollapsed;
+  if (typeof stored === 'boolean') return stored;
+  return adaptiveDefaultCollapsed();
+}
 
 export function SidebarProvider({ children }: { children: ReactNode }) {
   const isMobile = useIsMobile();
-  const [collapsed, setCollapsedState] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      return stored === 'true';
-    } catch {
-      return false;
-    }
-  });
+  const [collapsed, setCollapsedState] = useState<boolean>(initialCollapsed);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const setCollapsed = useCallback((value: boolean) => {
     setCollapsedState(value);
-    try {
-      localStorage.setItem(STORAGE_KEY, String(value));
-    } catch {
-      /* noop */
-    }
+    setUIPreferences({ sidebarCollapsed: value });
   }, []);
 
   const toggleCollapsed = useCallback(() => {
     setCollapsedState((prev) => {
       const next = !prev;
-      try {
-        localStorage.setItem(STORAGE_KEY, String(next));
-      } catch {
-        /* noop */
-      }
+      setUIPreferences({ sidebarCollapsed: next });
       return next;
     });
   }, []);

@@ -1,6 +1,8 @@
 export { WorkspaceLayout } from './WorkspaceLayout';
 export type { WorkspaceLayoutProps } from './WorkspaceLayout';
 
+export { DragHandle } from './DragHandle';
+
 export { PageHeader } from './PageHeader';
 
 export { ResponsePanel } from './ResponsePanel';

@@ -2,6 +2,8 @@ import { useState, useCallback } from 'react';
 import { Group, Panel, Separator, type GroupProps } from 'react-resizable-panels';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-media-query';
+import { getPanelLayout, setPanelLayout } from '@/lib/ui-preferences';
+import { DragHandle } from './DragHandle';
 
 interface WorkspaceLayoutProps {
   left: React.ReactNode;
@@ -47,26 +49,11 @@ function WorkspaceLayout({
     [onMobilePanelChange],
   );
 
-  const [defaultLayout] = useState(() => {
-    if (!storageKey) return undefined;
-    try {
-      const saved = localStorage.getItem(storageKey);
-      if (saved) return JSON.parse(saved);
-    } catch {
-      // Ignore parse errors
-    }
-    return undefined;
-  });
+  const [defaultLayout] = useState(() => (storageKey ? getPanelLayout(storageKey) : undefined));
 
   const handleLayoutChange = useCallback(
     (layout: { [id: string]: number }) => {
-      if (storageKey) {
-        try {
-          localStorage.setItem(storageKey, JSON.stringify(layout));
-        } catch {
-          // Ignore storage errors
-        }
-      }
+      if (storageKey) setPanelLayout(storageKey, layout);
     },
     [storageKey],
   );
@@ -139,7 +126,12 @@ function WorkspaceLayout({
           {leftFooter}
         </div>
       </Panel>
-      <Separator className="w-1.5 bg-border hover:bg-primary/50 transition-colors cursor-col-resize" />
+      <Separator
+        aria-label="Resize editor and response panels"
+        className="group relative w-2 shrink-0 cursor-col-resize bg-border/50 transition-colors hover:bg-primary/40 focus-visible:bg-primary/50 focus-visible:outline-none active:bg-primary/60"
+      >
+        <DragHandle />
+      </Separator>
       <Panel
         defaultSize={defaultLayout?.right ?? 100 - defaultLeftSize}
         minSize={35}
