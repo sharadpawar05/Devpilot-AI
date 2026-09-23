@@ -1,4 +1,12 @@
-import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+  useMemo,
+  type ReactNode,
+} from 'react';
 import { useIsMobile } from '@/hooks/use-media-query';
 
 interface SidebarContextType {
@@ -54,14 +62,32 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
     }
   }, [isMobile]);
 
-  const value: SidebarContextType = {
-    collapsed,
-    setCollapsed,
-    toggleCollapsed,
-    mobileOpen,
-    setMobileOpen,
-    isMobile,
-  };
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        if (isMobile) {
+          setMobileOpen((open) => !open);
+        } else {
+          toggleCollapsed();
+        }
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [isMobile, toggleCollapsed]);
+
+  const value = useMemo<SidebarContextType>(
+    () => ({
+      collapsed,
+      setCollapsed,
+      toggleCollapsed,
+      mobileOpen,
+      setMobileOpen,
+      isMobile,
+    }),
+    [collapsed, setCollapsed, toggleCollapsed, mobileOpen, isMobile],
+  );
 
   return <SidebarContext.Provider value={value}>{children}</SidebarContext.Provider>;
 }
