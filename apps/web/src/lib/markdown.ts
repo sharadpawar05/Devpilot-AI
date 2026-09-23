@@ -1,16 +1,82 @@
 import DOMPurify from 'dompurify';
 
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function escapeAttr(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+const FILE_PATH_IN_TEXT =
+  /([\w][\w./-]*\.(?:ts|tsx|js|jsx|mjs|cjs|py|go|rs|java|kt|rb|php|cs|cpp|c|h|hpp|swift|scala|vue|svelte|css|scss|sass|less|html|htm|json|jsonc|md|mdx|yml|yaml|toml|ini|env|sh|bash|zsh|sql|prisma|graphql|gql|proto|diff|lock|txt))\b(?:#L(\d+)(?:-L(\d+))?|\?line=(\d+))?/g;
+
+function citeButton(path: string, label: string, line?: string): string {
+  const title = line ? `Open ${path} line ${line}` : `Open ${path}`;
+  const lineAttr = line ? ` data-cite-line="${escapeAttr(line)}"` : '';
+  const shortLabel = label.length > 48 ? `…${label.slice(-47)}` : label;
+  return `<button type="button" data-cite="${escapeAttr(path)}"${lineAttr} class="cite-btn" title="${escapeAttr(title)}" aria-label="${escapeAttr(title)}"><svg class="cite-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span class="cite-label">${escapeHtml(shortLabel)}</span>${line ? `<span class="cite-line">L${escapeHtml(line)}</span>` : ''}</button>`;
+}
+
 export function renderMarkdown(text: string): string {
   let html = text;
 
-  // Fenced code blocks with language badge and copy button
+  // Stash fully-built HTML (code blocks, cite buttons) so later regex passes can't corrupt it
+  const stash: string[] = [];
+  const protect = (chunk: string): string => {
+    stash.push(chunk);
+    return `@@DPBLOCK${stash.length - 1}@@`;
+  };
+  const restore = (s: string): string =>
+    s.replace(/@@DPBLOCK(\d+)@@/g, (_m, i: string) => stash[Number(i)] ?? '');
+
+  // Fenced code blocks with language badge, line numbers, and copy button
   html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_m, lang: string, code: string) => {
-    const escaped = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const raw = code.replace(/\n$/, '');
+    const lines = raw.split('\n');
+    const escaped = lines.map((line) => escapeHtml(line)).join('\n');
+    const lineNumbers = lines.map((_, i) => `<span class="block">${i + 1}</span>`).join('');
     const codeId = `code-${Math.random().toString(36).slice(2, 9)}`;
-    return `<div class="relative my-3 rounded-md border border-input bg-muted/50"><div class="flex items-center justify-between px-3 py-1.5 text-xs text-muted-foreground border-b border-input"><span>${lang || 'code'}</span><button data-copy-target="${codeId}" data-copy-feedback="true" class="copy-button flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"><svg class="copy-icon h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><svg class="check-icon h-3 w-3 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg><span class="copy-label">Copy</span></button></div><pre class="overflow-x-auto p-4 font-mono text-sm"><code id="${codeId}">${escaped}</code></pre></div>`;
+    const langLabel = escapeHtml(lang || 'code');
+    return protect(
+      `<div class="code-block group relative my-3 overflow-hidden rounded-xl border border-input shadow-sm"><div class="code-block-header flex items-center justify-between border-b border-input bg-muted/70 px-3 py-1.5 text-xs"><span class="code-block-lang font-medium text-muted-foreground">${langLabel}</span><button type="button" data-copy-target="${codeId}" class="copy-button inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-medium text-muted-foreground transition-all duration-150 hover:bg-accent hover:text-foreground active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label="Copy code"><svg class="copy-icon h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><svg class="check-icon h-3.5 w-3.5 hidden text-green-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg><span class="copy-label">Copy</span></button></div><div class="code-block-body flex overflow-x-auto"><div class="code-line-numbers shrink-0 select-none border-r border-input bg-muted/40 px-2 py-3 text-right font-mono text-xs leading-6 text-muted-foreground/50" aria-hidden="true">${lineNumbers}</div><pre class="min-w-0 flex-1 p-3 font-mono text-[13px] leading-6"><code id="${codeId}">${escaped}</code></pre></div></div>`,
+    );
   });
 
-  // Inline code
+  // Inline file citations: markdown links to local file paths → cite buttons
+  html = html.replace(
+    /\[([^\]]+)\]\(((?!https?:\/\/|mailto:|#|tel:)[^)\s]+\.[A-Za-z0-9]+(?:#[^)]*)?)\)/g,
+    (_m, label: string, href: string) => {
+      const [pathPart, hash] = href.split('#');
+      const lineMatch = hash?.match(/^L(\d+)/);
+      return protect(citeButton(pathPart, label || pathPart, lineMatch?.[1]));
+    },
+  );
+
+  // Backtick-wrapped file paths → inline cite buttons
+  html = html.replace(
+    /`([\w][\w./-]*\.[A-Za-z0-9]{1,10}(?:#\d+(?:-\d+)?)?)`/g,
+    (_m, path: string) => {
+      const [pathPart, hash] = path.split('#');
+      const lineMatch = hash?.match(/^(\d+)/);
+      return protect(citeButton(pathPart, pathPart, lineMatch?.[1]));
+    },
+  );
+
+  // Bare file paths in text → cite buttons
+  html = html.replace(
+    FILE_PATH_IN_TEXT,
+    (_match, path: string, l1?: string, _l2?: string, l3?: string) => {
+      const line = l1 || l3;
+      return protect(citeButton(path, path, line));
+    },
+  );
+
+  // Inline code (non-path leftovers)
   html = html.replace(
     /`([^`]+)`/g,
     '<code class="rounded bg-muted px-1.5 py-0.5 font-mono text-sm">$1</code>',
@@ -28,9 +94,9 @@ export function renderMarkdown(text: string): string {
   // Horizontal rule
   html = html.replace(/^---$/gm, '<hr class="my-4 border-input" />');
 
-  // Links: [text](url)
+  // Links: [text](url) — http(s) only (local files already became cite buttons)
   html = html.replace(
-    /\[([^\]]+)\]\(([^)]+)\)/g,
+    /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,
     '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-primary underline underline-offset-2 hover:text-primary/80 transition-colors">$1</a>',
   );
 
@@ -86,12 +152,28 @@ export function renderMarkdown(text: string): string {
     },
   );
 
-  // Paragraphs (must be last)
-  html = html.replace(/^(?!<[a-z/])((?!^\s*$).+)$/gm, '<p class="mb-2">$1</p>');
+  // Paragraphs (must be last) — skip lines that are only protected blocks (code, cites)
+  html = html.replace(/^(?!<[a-z/])(?!@@DPBLOCK\d+@@$)((?!^\s*$).+)$/gm, '<p class="mb-2">$1</p>');
+
+  html = restore(html);
 
   return DOMPurify.sanitize(html, {
-    ADD_TAGS: ['button'],
-    ADD_ATTR: ['class', 'id', 'data-copy-target', 'data-copy-feedback', 'target', 'rel', 'href'],
+    ADD_TAGS: ['button', 'span'],
+    ADD_ATTR: [
+      'class',
+      'id',
+      'data-copy-target',
+      'data-copy-feedback',
+      'data-cite',
+      'data-cite-line',
+      'target',
+      'rel',
+      'href',
+      'title',
+      'type',
+      'aria-label',
+      'aria-hidden',
+    ],
   });
 }
 

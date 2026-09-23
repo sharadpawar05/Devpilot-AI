@@ -5,20 +5,22 @@ import { cn } from '@/lib/utils';
 interface MarkdownRendererProps {
   content: string;
   className?: string;
+  onCite?: (path: string, line?: string) => void;
 }
 
-function MarkdownRenderer({ content, className }: MarkdownRendererProps) {
+function MarkdownRenderer({ content, className, onCite }: MarkdownRendererProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const html = useMemo(() => renderMarkdownUtil(content), [content]);
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    const root = containerRef.current;
+    if (!root) return;
 
-    const buttons = containerRef.current.querySelectorAll('[data-copy-target]');
     const cleanupFns: Array<() => void> = [];
 
-    buttons.forEach((btn) => {
+    // Copy buttons on code blocks
+    root.querySelectorAll('[data-copy-target]').forEach((btn) => {
       const handler = async (e: Event) => {
         e.preventDefault();
         const targetId = btn.getAttribute('data-copy-target');
@@ -30,7 +32,6 @@ function MarkdownRenderer({ content, className }: MarkdownRendererProps) {
         const code = codeElement.textContent || '';
         await navigator.clipboard.writeText(code);
 
-        // Show feedback
         const copyIcon = btn.querySelector('.copy-icon');
         const checkIcon = btn.querySelector('.check-icon');
         const label = btn.querySelector('.copy-label');
@@ -39,7 +40,6 @@ function MarkdownRenderer({ content, className }: MarkdownRendererProps) {
         if (checkIcon) checkIcon.classList.remove('hidden');
         if (label) label.textContent = 'Copied!';
 
-        // Reset after 2 seconds
         setTimeout(() => {
           if (copyIcon) copyIcon.classList.remove('hidden');
           if (checkIcon) checkIcon.classList.add('hidden');
@@ -51,8 +51,25 @@ function MarkdownRenderer({ content, className }: MarkdownRendererProps) {
       cleanupFns.push(() => btn.removeEventListener('click', handler));
     });
 
+    // Inline cite buttons → open file in explorer/preview
+    if (onCite) {
+      root.querySelectorAll('[data-cite]').forEach((btn) => {
+        const handler = (e: Event) => {
+          e.preventDefault();
+          const path = btn.getAttribute('data-cite');
+          if (!path) return;
+          const line = btn.getAttribute('data-cite-line') || undefined;
+          onCite(path, line);
+          btn.classList.add('cite-btn-active');
+          setTimeout(() => btn.classList.remove('cite-btn-active'), 400);
+        };
+        btn.addEventListener('click', handler);
+        cleanupFns.push(() => btn.removeEventListener('click', handler));
+      });
+    }
+
     return () => cleanupFns.forEach((fn) => fn());
-  }, [html]);
+  }, [html, onCite]);
 
   return (
     <div
