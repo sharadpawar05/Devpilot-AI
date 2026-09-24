@@ -1,5 +1,6 @@
 import { FolderSearch, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { RepositoryGrid } from '@/components/repository';
 import type { GitHubContextValue } from '@/hooks/use-github';
 
 const selectClass =
@@ -39,18 +40,20 @@ export function RepositorySelectionState({
   };
 
   return (
-    <div className="flex h-full flex-col items-center justify-center overflow-y-auto px-4">
-      <div className="mx-auto w-full max-w-md text-center">
-        <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-muted">
-          <FolderSearch className="h-8 w-8 text-muted-foreground" />
+    <div className="flex h-full flex-col items-start overflow-y-auto px-4 py-8">
+      <div className="mx-auto w-full max-w-3xl">
+        <div className="mb-6 text-center">
+          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-muted">
+            <FolderSearch className="h-8 w-8 text-muted-foreground" />
+          </div>
+
+          <h2 className="text-xl font-bold tracking-tight">Select a Repository</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Choose a repository to begin chatting with your codebase.
+          </p>
         </div>
 
-        <h2 className="text-xl font-bold tracking-tight">Select a Repository</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Choose a repository to begin chatting with your codebase.
-        </p>
-
-        <div className="mt-8 space-y-4 text-left">
+        <div className="mx-auto max-w-md space-y-4 text-left">
           <div className="relative">
             <label className="mb-1.5 block text-sm font-medium">Repository</label>
             <select
@@ -96,26 +99,22 @@ export function RepositorySelectionState({
           </Button>
         </div>
 
-        {(gh.repositories?.length ?? 0) > 0 && (
+        {gh.loading || (gh.repositories?.length ?? 0) > 0 ? (
           <div className="mt-8 border-t border-input pt-6">
-            <p className="mb-3 text-xs font-medium text-muted-foreground">Recent repositories</p>
-            <div className="space-y-1.5">
-              {gh.repositories.slice(0, 5).map((r) => (
-                <button
-                  key={r.full_name}
-                  type="button"
-                  onClick={() => handleRepoChange(r.full_name)}
-                  className={`w-full rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-muted ${
-                    selectedRepoFullName === r.full_name ? 'bg-muted' : ''
-                  }`}
-                >
-                  <span className="font-medium">{r.name}</span>
-                  <span className="ml-2 text-muted-foreground">{r.language || 'No language'}</span>
-                </button>
-              ))}
-            </div>
+            <p className="mb-3 text-xs font-medium text-muted-foreground">
+              {gh.loading ? 'Loading repositories…' : 'Your repositories'}
+            </p>
+            <RepositoryGrid
+              repositories={gh.repositories}
+              selectedRepo={selectedRepoFullName}
+              onSelect={handleRepoChange}
+              onChat={handleRepoChange}
+              loading={gh.loading}
+              skeletonCount={3}
+              limit={9}
+            />
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

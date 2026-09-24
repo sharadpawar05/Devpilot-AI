@@ -362,6 +362,9 @@ export async function githubRoutes(app: FastifyInstance) {
             language: r.language,
             updated_at: r.updated_at,
             html_url: r.html_url,
+            stargazers_count: r.stargazers_count,
+            forks_count: r.forks_count,
+            size: r.size,
           })),
         });
       } catch (error) {

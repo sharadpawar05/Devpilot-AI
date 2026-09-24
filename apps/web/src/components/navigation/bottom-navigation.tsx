@@ -18,25 +18,27 @@ export function BottomNavigation() {
       aria-label="Mobile navigation"
       data-testid="bottom-navigation"
       className={cn(
-        'fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/90',
+        'bottom-nav fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/90',
         'pb-[env(safe-area-inset-bottom)]',
         isMobile ? 'block' : 'hidden md:hidden',
       )}
     >
-      <ul className="mx-auto flex h-14 max-w-lg items-stretch justify-around">
+      <ul className="mx-auto flex h-16 max-w-lg items-stretch justify-around">
         {BOTTOM_NAV_ITEMS.map(({ label, href, icon: Icon }) => (
           <li key={href} className="flex-1">
             <NavLink
               to={href}
               className={({ isActive }) =>
                 cn(
-                  'flex h-full flex-col items-center justify-center gap-0.5 px-1 text-[10px] font-medium transition-colors active:scale-95',
-                  isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
+                  'nav-item h-full min-h-[56px] flex-col gap-1 rounded-none px-1 text-[11px] font-medium active:scale-95',
+                  isActive ? 'nav-item-active' : 'text-muted-foreground hover:text-foreground',
                 )
               }
             >
-              <Icon className="h-5 w-5" aria-hidden />
-              <span>{label}</span>
+              <span className="nav-icon" aria-hidden>
+                <Icon className="h-5 w-5" />
+              </span>
+              <span className="nav-label">{label}</span>
             </NavLink>
           </li>
         ))}
@@ -46,10 +48,12 @@ export function BottomNavigation() {
             onClick={() => setMobileOpen(true)}
             aria-label="Open navigation menu"
             aria-controls="app-sidebar"
-            className="flex h-full w-full flex-col items-center justify-center gap-0.5 px-1 text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground active:scale-95"
+            className="nav-item h-full min-h-[56px] w-full flex-col gap-1 rounded-none px-1 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground active:scale-95"
           >
-            <Menu className="h-5 w-5" aria-hidden />
-            <span>Menu</span>
+            <span className="nav-icon" aria-hidden>
+              <Menu className="h-5 w-5" />
+            </span>
+            <span className="nav-label">Menu</span>
           </button>
         </li>
       </ul>
