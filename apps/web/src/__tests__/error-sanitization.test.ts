@@ -59,6 +59,29 @@ describe('Error Message Sanitization', () => {
       expect(result.suggestion).toContain('Upgrade');
     });
 
+    it('should prefer server feature-specific message for USAGE_LIMIT_REACHED', () => {
+      const result = getErrorMessage({
+        code: 'USAGE_LIMIT_REACHED',
+        message:
+          'Engineering report limit reached. Your plan includes 2 reports per month. Upgrade to generate more reports.',
+      });
+
+      expect(result.title).toBe('Usage limit reached');
+      expect(result.message).toContain('Engineering report limit reached');
+      expect(result.message).toContain('2 reports per month');
+      expect(result.retryable).toBe(false);
+    });
+
+    it('should show repository quota message from server', () => {
+      const result = getErrorMessage({
+        code: 'USAGE_LIMIT_REACHED',
+        message: 'Your plan includes 1 active repository. Upgrade to use another repository.',
+      });
+
+      expect(result.message).toContain('1 active repository');
+      expect(result.retryable).toBe(false);
+    });
+
     it('should return friendly message for DATABASE_TIMEOUT', () => {
       const result = getErrorMessage({ code: 'DATABASE_TIMEOUT' });
 

@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { authenticate } from '@/core/auth/middleware';
 import { incidentSummaryService } from './incident-summary-service';
+import { usageService, sendUsageLimitReached } from '@/core/usage';
 
 const incidentSummarySchema = z.object({
   owner: z.string().min(1),
@@ -64,6 +65,18 @@ export async function incidentSummaryRoutes(app: FastifyInstance) {
           });
         }
 
+        // Reject new repository activation before expensive AI work.
+        const repoAccess = await usageService.ensureRepositoryAccess(auth.sub, owner, repo);
+        if (!repoAccess.allowed && repoAccess.details) {
+          return sendUsageLimitReached(reply, repoAccess.details);
+        }
+
+        // Atomically consume AI report + AI credits before generation
+        const consume = await usageService.consumeWithCredits(auth.sub, 'AI_REPORT', 'AI_REPORT');
+        if (!consume.allowed && consume.details) {
+          return sendUsageLimitReached(reply, consume.details);
+        }
+
         const result = await incidentSummaryService.generateSummary(auth.sub, {
           owner,
           repo,
@@ -74,7 +87,10 @@ export async function incidentSummaryRoutes(app: FastifyInstance) {
         });
 
         if (!result.success) {
-          return reply.status(500).send(result);
+          // Failed generation must not consume quota
+          await usageService.refundWithCredits(auth.sub, 'AI_REPORT', 'AI_REPORT');
+          const status = result.error?.code === 'RATE_LIMIT_EXCEEDED' ? 429 : 500;
+          return reply.status(status).send(result);
         }
 
         return reply.send(result);

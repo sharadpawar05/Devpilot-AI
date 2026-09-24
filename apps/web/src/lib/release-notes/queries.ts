@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/auth';
-import { releaseNotesApi } from './api';
+import { releaseNotesApi, ReleaseNotesApiError } from './api';
 import type { ReleaseNotesRequest, ReleaseNotesResponse, ReleaseTag } from './types';
 
 export function useReleaseNotes() {
@@ -9,11 +9,28 @@ export function useReleaseNotes() {
 
   return useMutation<ReleaseNotesResponse, Error, ReleaseNotesRequest>({
     mutationFn: async (request) => {
-      const result = await releaseNotesApi.generateReleaseNotes(request, token);
-      if (!result.success) {
-        throw new Error(result.error?.message || 'Failed to generate release notes');
+      try {
+        const result = await releaseNotesApi.generateReleaseNotes(request, token);
+        if (!result.success) {
+          throw new ReleaseNotesApiError(
+            result.error?.message || 'Failed to generate release notes',
+            {
+              code: result.error?.code,
+              feature: result.error?.feature,
+              used: result.error?.used,
+              limit: result.error?.limit,
+              resetAt: result.error?.resetAt,
+              retryable: false,
+            },
+          );
+        }
+        return result;
+      } catch (error) {
+        if (error instanceof ReleaseNotesApiError) throw error;
+        throw new ReleaseNotesApiError(
+          error instanceof Error ? error.message : 'Failed to generate release notes',
+        );
       }
-      return result;
     },
   });
 }

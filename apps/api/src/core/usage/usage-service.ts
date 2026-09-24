@@ -17,6 +17,8 @@ export interface UsageSummary {
   plan: string;
   periodStart: string;
   periodEnd: string;
+  /** Alias for periodEnd — when counters reset. */
+  resetAt: string;
   usage: {
     aiCredits: number;
     healthScans: number;
@@ -126,25 +128,163 @@ class UsageService {
   }
 
   /**
-   * Count distinct owner/repo pairs the user has actually used
-   * (repository indexes, health snapshots, AI history sessions).
-   * Does NOT count every GitHub repo visible to the user.
+   * Count distinct owner/repo pairs the user has actually activated/used
+   * via DevPilot features (repository indexes and AI history sessions).
+   *
+   * Deliberately excludes `repo_health_snapshots`: those rows are created as a
+   * side effect of merely viewing overview/health pages and must not consume
+   * the repository quota. GitHub repo listings also never write here.
+   *
+   * Identity is stable `owner/repo` (distinct), so re-use never double-counts.
    */
   async countUserRepositories(localUserId: string): Promise<number> {
     const result = await db.$queryRaw<[{ count: bigint }]>`
       SELECT COUNT(DISTINCT CONCAT(owner, '/', repo)) as count
       FROM (
-        SELECT owner, repo FROM repository_indexes WHERE "userId" = ${localUserId}
-        UNION
-        SELECT owner, repo FROM repo_health_snapshots WHERE "userId" = ${localUserId}
+        SELECT owner, repo FROM repository_indexes WHERE "userId" = ${localUserId}::uuid
         UNION
         SELECT
           SPLIT_PART(repository, '/', 1) as owner,
           SPLIT_PART(repository, '/', 2) as repo
-        FROM ai_history_sessions WHERE "userId" = ${localUserId} AND repository IS NOT NULL
+        FROM ai_history_sessions
+        WHERE "userId" = ${localUserId}::uuid
+          AND repository IS NOT NULL
+          AND POSITION('/' IN repository) > 0
       ) as repos
     `;
     return Number(result[0]?.count ?? 0);
+  }
+
+  /** True when owner/repo is already an active DevPilot repository for this user. */
+  async isRepositoryActive(localUserId: string, owner: string, repo: string): Promise<boolean> {
+    const result = await db.$queryRaw<[{ exists: boolean }]>`
+      SELECT EXISTS (
+        SELECT 1 FROM repository_indexes
+        WHERE "userId" = ${localUserId}::uuid AND owner = ${owner} AND repo = ${repo}
+        UNION
+        SELECT 1 FROM ai_history_sessions
+        WHERE "userId" = ${localUserId}::uuid
+          AND repository = ${`${owner}/${repo}`}
+      ) as exists
+    `;
+    return Boolean(result[0]?.exists);
+  }
+
+  /**
+   * Ensure the user may use `owner/repo` under the REPOSITORIES plan limit.
+   *
+   * - Already-active repo → allowed (cached/second use never re-charges).
+   * - New repo when under limit → allowed; writes a lightweight activation
+   *   marker into `repository_indexes` so the repo is counted exactly once.
+   * - New repo when at/over limit → rejected with USAGE_LIMIT_REACHED details.
+   *
+   * Uses a transaction-scoped advisory lock keyed on the user id so concurrent
+   * activations of different repos cannot both pass the limit check.
+   */
+  async ensureRepositoryAccess(
+    supabaseUserId: string,
+    owner: string,
+    repo: string,
+  ): Promise<QuotaCheckResult> {
+    const localUserId = await resolveLocalUserId(supabaseUserId);
+    const plan = await this.getPlanForUser(supabaseUserId);
+    const limits = getPlanLimits(plan);
+    const { periodEnd } = getCurrentMonthPeriod();
+    const limit = limits.repositories;
+
+    const active = await this.isRepositoryActive(localUserId, owner, repo);
+    if (active) {
+      const used = await this.countUserRepositories(localUserId);
+      return {
+        allowed: true,
+        used,
+        limit,
+        remaining: Math.max(0, limit - used),
+        resetAt: periodEnd,
+      };
+    }
+
+    const outcome = await db.$transaction(async (tx) => {
+      // Serialize repository activations for this user.
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${localUserId}::text))`;
+
+      const stillActive = await tx.$queryRaw<[{ exists: boolean }]>`
+        SELECT EXISTS (
+          SELECT 1 FROM repository_indexes
+          WHERE "userId" = ${localUserId}::uuid AND owner = ${owner} AND repo = ${repo}
+          UNION
+          SELECT 1 FROM ai_history_sessions
+          WHERE "userId" = ${localUserId}::uuid
+            AND repository = ${`${owner}/${repo}`}
+        ) as exists
+      `;
+      if (stillActive[0]?.exists) {
+        const usedNow = await this.countUserRepositories(localUserId);
+        return { ok: true as const, used: usedNow };
+      }
+
+      const countResult = await tx.$queryRaw<[{ count: bigint }]>`
+        SELECT COUNT(DISTINCT CONCAT(owner, '/', repo)) as count
+        FROM (
+          SELECT owner, repo FROM repository_indexes WHERE "userId" = ${localUserId}::uuid
+          UNION
+          SELECT
+            SPLIT_PART(repository, '/', 1) as owner,
+            SPLIT_PART(repository, '/', 2) as repo
+          FROM ai_history_sessions
+          WHERE "userId" = ${localUserId}::uuid
+            AND repository IS NOT NULL
+            AND POSITION('/' IN repository) > 0
+        ) as repos
+      `;
+      const used = Number(countResult[0]?.count ?? 0);
+
+      if (used >= limit) {
+        return { ok: false as const, used };
+      }
+
+      // Activation marker: counted by countUserRepositories exactly once (DISTINCT).
+      // Real indexing later upserts over this row for the same (user, owner, repo, branch).
+      await tx.repositoryIndex.upsert({
+        where: {
+          userId_owner_repo_branch: { userId: localUserId, owner, repo, branch: 'main' },
+        },
+        update: {},
+        create: {
+          userId: localUserId,
+          owner,
+          repo,
+          branch: 'main',
+          commitSha: '',
+          status: 'NOT_INDEXED',
+          tree: [],
+          fileMetadata: [],
+          languageBreakdown: {},
+          stats: {},
+        },
+      });
+
+      return { ok: true as const, used: used + 1 };
+    });
+
+    if (!outcome.ok) {
+      return {
+        allowed: false,
+        used: outcome.used,
+        limit,
+        remaining: Math.max(0, limit - outcome.used),
+        resetAt: periodEnd,
+        details: { feature: 'REPOSITORIES', used: outcome.used, limit, resetAt: periodEnd },
+      };
+    }
+
+    return {
+      allowed: true,
+      used: outcome.used,
+      limit,
+      remaining: Math.max(0, limit - outcome.used),
+      resetAt: periodEnd,
+    };
   }
 
   /**
@@ -419,11 +559,14 @@ class UsageService {
       chatMessages: Math.max(0, limits.chatMessages - usage.chatMessagesUsed),
       repositories: Math.max(0, limits.repositories - repositories),
     };
+    // Note: repositories (and all counters) may legitimately exceed limits when
+    // historical data predates enforcement — remaining clamps at 0, usage shows truth.
 
     return {
       plan,
       periodStart: periodStart.toISOString(),
       periodEnd: periodEnd.toISOString(),
+      resetAt: periodEnd.toISOString(),
       usage: {
         aiCredits: usage.aiCreditsUsed,
         healthScans: usage.healthScansUsed,

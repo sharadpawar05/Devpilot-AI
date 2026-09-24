@@ -7,7 +7,7 @@ import { repoOverviewService } from './overview-service';
 import { generatorService } from './generator-service';
 import { repositoryAnalyzer } from './analyzer-service';
 import { sanitizeError, createErrorResponse } from '@/core/errors/sanitize';
-import { usageService, sendUsageLimitReached } from '@/core/usage';
+import { usageService, sendUsageLimitReached, AI_CREDIT_COSTS } from '@/core/usage';
 import type { HealthActionType } from './types';
 
 const overviewQuerySchema = z.object({
@@ -213,6 +213,17 @@ export async function repoOverviewRoutes(app: FastifyInstance) {
 
       const { owner, repo } = parsed.data;
 
+      // AI repo summary is a structured engineering report generated from repository data.
+      const repoAccess = await usageService.ensureRepositoryAccess(auth.sub, owner, repo);
+      if (!repoAccess.allowed && repoAccess.details) {
+        return sendUsageLimitReached(reply, repoAccess.details);
+      }
+
+      const consume = await usageService.consumeWithCredits(auth.sub, 'AI_REPORT', 'AI_REPORT');
+      if (!consume.allowed && consume.details) {
+        return sendUsageLimitReached(reply, consume.details);
+      }
+
       try {
         const [readmeContent, overview] = await Promise.allSettled([
           repositoryIntelligenceService.getReadme(auth.sub, owner, repo),
@@ -280,6 +291,7 @@ Keep each section concise (2-4 sentences). Use markdown headers and bullet point
           summary: response.content,
         });
       } catch (error: unknown) {
+        await usageService.refundWithCredits(auth.sub, 'AI_REPORT', 'AI_REPORT');
         const sanitized = sanitizeError(error, 'AI_ERROR', 'Failed to generate summary.', 502);
         return reply.status(sanitized.statusCode).send({
           success: false,
@@ -421,8 +433,15 @@ Keep each section concise (2-4 sentences). Use markdown headers and bullet point
 
       const { owner, repo, actionType } = parsed.data;
 
-      // Atomically consume AI report + AI credits before generation
-      const consume = await usageService.consumeWithCredits(auth.sub, 'AI_REPORT', 'AI_REPORT');
+      // Artifact generation (README/license/CI/etc) is NOT an Engineering Report.
+      // Consume AI credits only, using the centralized REPOSITORY_OVERVIEW cost.
+      const repoAccess = await usageService.ensureRepositoryAccess(auth.sub, owner, repo);
+      if (!repoAccess.allowed && repoAccess.details) {
+        return sendUsageLimitReached(reply, repoAccess.details);
+      }
+
+      const creditCost = AI_CREDIT_COSTS.REPOSITORY_OVERVIEW;
+      const consume = await usageService.consumeQuota(auth.sub, 'AI_CREDITS', creditCost);
       if (!consume.allowed && consume.details) {
         return sendUsageLimitReached(reply, consume.details);
       }
@@ -437,7 +456,7 @@ Keep each section concise (2-4 sentences). Use markdown headers and bullet point
 
         return reply.send({ success: true, data: result });
       } catch (error: unknown) {
-        await usageService.refundWithCredits(auth.sub, 'AI_REPORT', 'AI_REPORT');
+        await usageService.refundQuota(auth.sub, 'AI_CREDITS', creditCost);
         const sanitized = sanitizeError(
           error,
           'GENERATION_ERROR',

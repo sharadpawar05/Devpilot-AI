@@ -16,6 +16,12 @@ export function useSprintSummary() {
             result.error?.message || 'Failed to generate sprint summary',
             result.error?.code,
             result.error?.retryable,
+            {
+              feature: result.error?.feature,
+              used: result.error?.used,
+              limit: result.error?.limit,
+              resetAt: result.error?.resetAt,
+            },
           );
         }
         return result;

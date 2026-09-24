@@ -1,16 +1,17 @@
 import type { SprintSummaryRequest, SprintSummaryResponse } from './types';
+import { ApiError } from '@/lib/api-error';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
 
-export class SprintSummaryApiError extends Error {
-  code?: string;
-  retryable?: boolean;
-
-  constructor(message: string, code?: string, retryable?: boolean) {
-    super(message);
+export class SprintSummaryApiError extends ApiError {
+  constructor(
+    message: string,
+    code?: string,
+    retryable?: boolean,
+    options: { feature?: string; used?: number; limit?: number; resetAt?: string } = {},
+  ) {
+    super(message, { code, retryable, ...options });
     this.name = 'SprintSummaryApiError';
-    this.code = code;
-    this.retryable = retryable ?? true;
   }
 }
 
@@ -36,8 +37,18 @@ async function authFetch(
 
   if (!res.ok) {
     const errorBody = await res.json().catch(() => ({}));
-    const message = errorBody?.error?.message || `Request failed with status ${res.status}`;
-    throw new SprintSummaryApiError(message, errorBody?.error?.code, errorBody?.error?.retryable);
+    const err = errorBody?.error ?? {};
+    throw new SprintSummaryApiError(
+      err.message || `Request failed with status ${res.status}`,
+      err.code,
+      err.retryable,
+      {
+        feature: err.feature,
+        used: err.used,
+        limit: err.limit,
+        resetAt: err.resetAt,
+      },
+    );
   }
 
   return res;

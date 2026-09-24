@@ -27,6 +27,9 @@ import { repoOverviewApi } from '@/lib/repo-overview/api';
 import { renderMarkdown } from '@/lib/markdown';
 import { cn } from '@/lib/utils';
 import { getErrorMessage } from '@/lib/error-messages';
+import { isUsageLimitError } from '@/lib/api-error';
+import { useUsageLimitModal } from '@/hooks/use-usage-limit-modal';
+import { UsageLimitModal } from '@/components/UsageLimitModal';
 import {
   MetricCard,
   LanguageBar,
@@ -150,15 +153,21 @@ export default function RepositoryOverviewPage() {
   const [error, setError] = useState<{ code?: string; message?: string } | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
-  const [summaryError, setSummaryError] = useState<{ code?: string; message?: string } | null>(
-    null,
-  );
+  const [summaryError, setSummaryError] = useState<{
+    code?: string;
+    message?: string;
+    feature?: string;
+    used?: number;
+    limit?: number;
+    resetAt?: string;
+  } | null>(null);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [techStack, setTechStack] = useState<TechnologyStack | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const owner = selectedRepo.split('/')[0] || '';
   const repo = selectedRepo.split('/')[1] || '';
+  const summaryUsageLimit = useUsageLimitModal(summaryError);
 
   useEffect(() => {
     try {
@@ -233,9 +242,22 @@ export default function RepositoryOverviewPage() {
       }
       setSummary(result.summary);
     } catch (err) {
-      // Never expose raw error messages - use structured error codes
       const errorMessage = err instanceof Error ? err.message : 'Failed to generate summary';
-      setSummaryError({ code: 'AI_ERROR', message: errorMessage });
+      const e = err as {
+        code?: string;
+        feature?: string;
+        used?: number;
+        limit?: number;
+        resetAt?: string;
+      };
+      setSummaryError({
+        code: e.code || (isUsageLimitError(err) ? 'USAGE_LIMIT_REACHED' : 'AI_ERROR'),
+        message: errorMessage,
+        feature: e.feature,
+        used: e.used,
+        limit: e.limit,
+        resetAt: e.resetAt,
+      });
     } finally {
       setIsGeneratingSummary(false);
     }
@@ -344,6 +366,11 @@ export default function RepositoryOverviewPage() {
 
   return (
     <div className="w-full px-6 py-6 space-y-6">
+      <UsageLimitModal
+        details={summaryUsageLimit.details}
+        open={summaryUsageLimit.open}
+        onOpenChange={summaryUsageLimit.setOpen}
+      />
       {/* Header with Repo Selector */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <RepoSelector
@@ -535,7 +562,7 @@ export default function RepositoryOverviewPage() {
           </div>
         )}
 
-        {summaryError && (
+        {summaryError && !summaryUsageLimit.isLimitError && (
           <div className="rounded-md bg-red-50 p-4 dark:bg-red-950/30">
             <p className="text-sm font-medium text-red-800 dark:text-red-200">
               {getErrorMessage(summaryError).title}

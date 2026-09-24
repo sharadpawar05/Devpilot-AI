@@ -96,6 +96,10 @@ export interface EngineeringStatusResponse {
     code: string;
     message: string;
     retryable?: boolean;
+    feature?: string;
+    used?: number;
+    limit?: number;
+    resetAt?: string;
   };
   latencyMs?: number;
   provider?: string;

@@ -1,7 +1,8 @@
 import { memo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Github, Link, Folder, GitPullRequest, Clock } from 'lucide-react';
+import { Github, Link, Folder, GitPullRequest, Clock, FolderGit2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useUsage } from '@/hooks/use-usage';
 import type { GitHubContextValue } from '@/hooks/use-github';
 
 interface GitHubWidgetProps {
@@ -11,6 +12,9 @@ interface GitHubWidgetProps {
 
 export const GitHubWidget = memo(function GitHubWidget({ gh, lastSyncedAt }: GitHubWidgetProps) {
   const navigate = useNavigate();
+  const { data: usage } = useUsage();
+  const activeRepos = usage?.usage?.repositories;
+  const activeRepoLimit = usage?.limits?.repositories;
 
   if (!gh.connected) {
     return (
@@ -74,10 +78,32 @@ export const GitHubWidget = memo(function GitHubWidget({ gh, lastSyncedAt }: Git
         <div className="rounded-xl bg-muted/50 px-3 py-2.5">
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Folder className="h-3 w-3" />
-            Repositories
+            GitHub
           </div>
-          <p className="mt-1 text-lg font-bold">{gh.repositories.length}</p>
+          <p className="mt-1 text-lg font-bold">
+            {gh.repositories.length}
+            <span className="ml-1 text-xs font-normal text-muted-foreground">
+              repositories available
+            </span>
+          </p>
         </div>
+        <div className="rounded-xl bg-muted/50 px-3 py-2.5">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <FolderGit2 className="h-3 w-3" />
+            DevPilot
+          </div>
+          <p className="mt-1 text-lg font-bold">
+            {typeof activeRepos === 'number' ? activeRepos : '—'}
+            {typeof activeRepoLimit === 'number' && (
+              <span className="ml-1 text-xs font-normal text-muted-foreground">
+                / {activeRepoLimit} active
+              </span>
+            )}
+          </p>
+        </div>
+      </div>
+
+      <div className="mb-4 grid grid-cols-1 gap-2">
         <div className="rounded-xl bg-muted/50 px-3 py-2.5">
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <GitPullRequest className="h-3 w-3" />

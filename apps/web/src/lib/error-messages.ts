@@ -315,6 +315,17 @@ export function getErrorMessage(
 
   const config = ERROR_MESSAGES[code] ?? ERROR_MESSAGES.UNKNOWN_ERROR;
 
+  // Prefer the server's feature-specific usage message when present
+  // (e.g. "Engineering report limit reached. Your plan includes 2 reports…").
+  if (code === 'USAGE_LIMIT_REACHED' || code === 'PLAN_LIMIT_REACHED') {
+    const serverMessage = cleanErrorMessage(message);
+    const hasServerMessage = serverMessage && serverMessage !== 'An unexpected error occurred.';
+    return {
+      ...config,
+      message: hasServerMessage ? (error.message ?? config.message) : config.message,
+    };
+  }
+
   // For known error codes, use the friendly message from config
   if (ERROR_MESSAGES[code]) {
     return config;

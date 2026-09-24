@@ -2,6 +2,7 @@ import type { RepoOverviewData, RepoFileNode, RepoContributor } from './types';
 import type { GenerationResult, GenerationError } from './generators';
 import type { HealthActionType } from './types';
 import type { TechnologyStack } from './analyzer';
+import { ApiError } from '@/lib/api-error';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
 
@@ -21,13 +22,24 @@ async function authFetch(
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     let message = `Request failed (${res.status})`;
+    let errCode: string | undefined;
+    let feature: string | undefined;
+    let used: number | undefined;
+    let limit: number | undefined;
+    let resetAt: string | undefined;
     try {
       const json = JSON.parse(text);
-      message = json.error?.message || json.message || message;
+      const body = json.error ?? {};
+      message = body.message || json.message || message;
+      errCode = typeof body.code === 'string' ? body.code : undefined;
+      feature = typeof body.feature === 'string' ? body.feature : undefined;
+      used = typeof body.used === 'number' ? body.used : undefined;
+      limit = typeof body.limit === 'number' ? body.limit : undefined;
+      resetAt = typeof body.resetAt === 'string' ? body.resetAt : undefined;
     } catch {
       message = text || message;
     }
-    throw new Error(message);
+    throw new ApiError(message, { code: errCode, feature, used, limit, resetAt, retryable: false });
   }
   return res;
 }
@@ -122,6 +134,7 @@ export const repoOverviewApi = {
         };
       return { success: true, summary: json.summary as string };
     } catch (error) {
+      if (error instanceof ApiError) throw error;
       return { success: false, error: error instanceof Error ? error.message : 'Network error' };
     }
   },

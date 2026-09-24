@@ -3,6 +3,7 @@ import { authenticate } from '@/core/auth';
 import { repositoryIndexer } from './indexer';
 import { repositoryStatusService } from './status';
 import { repositoryCache } from './cache';
+import { usageService, sendUsageLimitReached } from '@/core/usage';
 
 export default async function repositoryRoutes(app: FastifyInstance) {
   app.get(
@@ -40,6 +41,12 @@ export default async function repositoryRoutes(app: FastifyInstance) {
         });
       }
 
+      // Reject activating a new repository beyond the plan limit before indexing.
+      const repoAccess = await usageService.ensureRepositoryAccess(userId, owner, repo);
+      if (!repoAccess.allowed && repoAccess.details) {
+        return sendUsageLimitReached(reply, repoAccess.details);
+      }
+
       repositoryIndexer.index(userId, owner, repo, branch).catch((err) => {
         app.log.error({ err, owner, repo, branch }, 'Background indexing failed');
       });
@@ -68,6 +75,12 @@ export default async function repositoryRoutes(app: FastifyInstance) {
           success: false,
           error: { message: 'Indexing already in progress' },
         });
+      }
+
+      // Reject activating a new repository beyond the plan limit before reindexing.
+      const repoAccess = await usageService.ensureRepositoryAccess(userId, owner, repo);
+      if (!repoAccess.allowed && repoAccess.details) {
+        return sendUsageLimitReached(reply, repoAccess.details);
       }
 
       await repositoryStatusService.markOutdated(userId, owner, repo, branch);

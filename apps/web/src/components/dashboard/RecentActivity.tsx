@@ -53,6 +53,16 @@ const workflowIcons: Record<string, typeof MessageSquare> = {
   architecture_review: Layout,
   'architecture-review': Layout,
   github_connected: MessageSquare,
+  health_scan: Shield,
+  'health-scan': Shield,
+  dependency_analysis: FlaskConical,
+  'dependency-analysis': FlaskConical,
+  ai_report: BookOpen,
+  'ai-report': BookOpen,
+  engineering_status: Layout,
+  'engineering-status': Layout,
+  repository_overview: Layout,
+  'repository-overview': Layout,
 };
 
 const workflowColors: Record<string, string> = {
@@ -73,6 +83,16 @@ const workflowColors: Record<string, string> = {
   architecture_review: 'bg-indigo-500',
   'architecture-review': 'bg-indigo-500',
   github_connected: 'bg-emerald-500',
+  health_scan: 'bg-teal-500',
+  'health-scan': 'bg-teal-500',
+  dependency_analysis: 'bg-amber-500',
+  'dependency-analysis': 'bg-amber-500',
+  ai_report: 'bg-orange-500',
+  'ai-report': 'bg-orange-500',
+  engineering_status: 'bg-indigo-500',
+  'engineering-status': 'bg-indigo-500',
+  repository_overview: 'bg-pink-500',
+  'repository-overview': 'bg-pink-500',
 };
 
 const historyIcons: Record<WorkflowType, typeof MessageSquare> = {
@@ -85,6 +105,14 @@ const historyIcons: Record<WorkflowType, typeof MessageSquare> = {
   'test-generation': FlaskConical,
   'security-review': Shield,
   'architecture-review': Layout,
+};
+
+const historyLabels: Partial<Record<string, string>> = {
+  'health-scan': 'Health Scan',
+  'dependency-analysis': 'Dependency Analysis',
+  'ai-report': 'AI Report',
+  'engineering-status': 'Engineering Status',
+  'repository-overview': 'Repository Overview',
 };
 
 function formatWorkflowName(action: string): string {
@@ -203,7 +231,11 @@ export const RecentActivity = memo(function RecentActivity({ activities }: Recen
                   {session.title}
                 </button>
                 <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
-                  <span>{WORKFLOW_TYPE_LABELS[session.workflowType]}</span>
+                  <span>
+                    {historyLabels[session.workflowType] ||
+                      WORKFLOW_TYPE_LABELS[session.workflowType] ||
+                      session.workflowType}
+                  </span>
                   <span>{timeAgo(session.updatedAt)}</span>
                 </div>
               </div>

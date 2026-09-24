@@ -1,6 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
 import { useAuth } from '@/auth';
-import { incidentSummaryApi } from './api';
+import { incidentSummaryApi, IncidentSummaryApiError } from './api';
 import type { IncidentSummaryRequest, IncidentSummaryResponse } from './types';
 
 export function useIncidentSummary() {
@@ -9,11 +9,28 @@ export function useIncidentSummary() {
 
   return useMutation<IncidentSummaryResponse, Error, IncidentSummaryRequest>({
     mutationFn: async (request) => {
-      const result = await incidentSummaryApi.generateSummary(request, token);
-      if (!result.success) {
-        throw new Error(result.error?.message || 'Failed to generate incident summary');
+      try {
+        const result = await incidentSummaryApi.generateSummary(request, token);
+        if (!result.success) {
+          throw new IncidentSummaryApiError(
+            result.error?.message || 'Failed to generate incident summary',
+            {
+              code: result.error?.code,
+              feature: result.error?.feature,
+              used: result.error?.used,
+              limit: result.error?.limit,
+              resetAt: result.error?.resetAt,
+              retryable: false,
+            },
+          );
+        }
+        return result;
+      } catch (error) {
+        if (error instanceof IncidentSummaryApiError) throw error;
+        throw new IncidentSummaryApiError(
+          error instanceof Error ? error.message : 'Failed to generate incident summary',
+        );
       }
-      return result;
     },
   });
 }

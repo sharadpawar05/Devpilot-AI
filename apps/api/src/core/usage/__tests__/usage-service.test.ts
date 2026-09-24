@@ -155,6 +155,10 @@ describe('UsageService', () => {
         findUniqueOrThrow: vi.fn().mockResolvedValue(localRow),
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
+      repositoryIndex: {
+        upsert: vi.fn().mockResolvedValue({}),
+      },
+      $queryRaw: vi.fn().mockResolvedValue([]),
     };
     mockDb.$transaction.mockImplementation(async (fn: unknown) =>
       (fn as (t: typeof tx) => Promise<unknown>)(tx),
@@ -221,6 +225,23 @@ describe('UsageService', () => {
       expect(result.allowed).toBe(false); // FREE allows only 1
     });
 
+    it('should not include repo_health_snapshots in repository count SQL', async () => {
+      // countUserRepositories must only union repository_indexes + ai_history_sessions
+      // so passive overview/health viewing does not consume repository quota.
+      const sqlParts: string[] = [];
+      mockDb.$queryRaw.mockImplementation(
+        async (_strings: TemplateStringsArray, ..._vals: unknown[]) => {
+          sqlParts.push(_strings.join('?'));
+          return [{ count: 1n }];
+        },
+      );
+      await usageService.countUserRepositories(userId);
+      const sql = sqlParts.join('\n');
+      expect(sql).toContain('repository_indexes');
+      expect(sql).toContain('ai_history_sessions');
+      expect(sql).not.toContain('repo_health_snapshots');
+    });
+
     it('should isolate periods using current UTC month', async () => {
       await usageService.checkQuota(userId, 'HEALTH_SCAN');
       const callArgs = mockDb.userUsage.upsert.mock.calls[0][0] as {
@@ -228,6 +249,77 @@ describe('UsageService', () => {
       };
       const expected = getCurrentMonthPeriod().periodStart;
       expect(callArgs.where.userId_periodStart.periodStart.getTime()).toBe(expected.getTime());
+    });
+  });
+
+  describe('ensureRepositoryAccess', () => {
+    const owner = 'acme';
+    const repo = 'demo';
+
+    function setupTx(opts: { active?: boolean; count?: number; upsertOk?: boolean }) {
+      const tx = {
+        userUsage: {
+          upsert: vi.fn().mockResolvedValue(localRow),
+          findUniqueOrThrow: vi.fn().mockResolvedValue(localRow),
+          updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        },
+        repositoryIndex: {
+          upsert: vi.fn().mockResolvedValue({}),
+        },
+        $queryRaw: vi.fn().mockImplementation(async (strings: TemplateStringsArray) => {
+          const sql = strings.join('?');
+          if (sql.includes('pg_advisory_xact_lock')) return [];
+          if (sql.includes('EXISTS')) return [{ exists: opts.active ?? false }];
+          if (sql.includes('COUNT')) return [{ count: BigInt(opts.count ?? 0) }];
+          return [];
+        }),
+      };
+      mockDb.$transaction.mockImplementation(async (fn: unknown) =>
+        (fn as (t: typeof tx) => Promise<unknown>)(tx),
+      );
+      return tx;
+    }
+
+    it('allows already-active repository without consuming another slot', async () => {
+      // isRepositoryActive outside tx returns true
+      mockDb.$queryRaw
+        .mockResolvedValueOnce([{ exists: true }])
+        .mockResolvedValueOnce([{ count: 1n }]);
+      const result = await usageService.ensureRepositoryAccess(userId, owner, repo);
+      expect(result.allowed).toBe(true);
+      expect(mockDb.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('activates a new repository when under the FREE limit', async () => {
+      // Outside tx: not active
+      mockDb.$queryRaw.mockResolvedValueOnce([{ exists: false }]);
+      const tx = setupTx({ active: false, count: 0 });
+      const result = await usageService.ensureRepositoryAccess(userId, owner, repo);
+      expect(result.allowed).toBe(true);
+      expect(result.used).toBe(1);
+      expect(tx.repositoryIndex.upsert).toHaveBeenCalled();
+    });
+
+    it('rejects a second repository on FREE when already at limit', async () => {
+      mockDb.$queryRaw.mockResolvedValueOnce([{ exists: false }]);
+      setupTx({ active: false, count: 1 }); // limit is 1
+      const result = await usageService.ensureRepositoryAccess(userId, owner, 'second-repo');
+      expect(result.allowed).toBe(false);
+      expect(result.details?.feature).toBe('REPOSITORIES');
+      expect(result.details?.used).toBe(1);
+      expect(result.details?.limit).toBe(1);
+      expect(result.details?.resetAt).toBeInstanceOf(Date);
+    });
+
+    it('does not double-count when the same repository is used again', async () => {
+      mockDb.$queryRaw
+        .mockResolvedValueOnce([{ exists: true }])
+        .mockResolvedValueOnce([{ count: 1n }]);
+      const first = await usageService.ensureRepositoryAccess(userId, owner, repo);
+      const second = await usageService.ensureRepositoryAccess(userId, owner, repo);
+      expect(first.allowed).toBe(true);
+      expect(second.allowed).toBe(true);
+      expect(second.used).toBe(1);
     });
   });
 
@@ -249,6 +341,8 @@ describe('UsageService', () => {
           }),
           updateMany: vi.fn().mockResolvedValue({ count: 0 }),
         },
+        repositoryIndex: { upsert: vi.fn() },
+        $queryRaw: vi.fn().mockResolvedValue([]),
       };
       mockDb.$transaction.mockImplementation(async (fn: unknown) =>
         (fn as (t: typeof tx) => Promise<unknown>)(tx),
@@ -269,6 +363,8 @@ describe('UsageService', () => {
           findUniqueOrThrow: vi.fn().mockResolvedValue(localRow),
           updateMany: vi.fn().mockResolvedValue({ count: 1 }),
         },
+        repositoryIndex: { upsert: vi.fn() },
+        $queryRaw: vi.fn().mockResolvedValue([]),
       };
       mockDb.$transaction.mockImplementation(async (fn: unknown) =>
         (fn as (t: typeof tx) => Promise<unknown>)(tx),
@@ -281,6 +377,37 @@ describe('UsageService', () => {
       };
       expect(args.where.healthScansUsed.lte).toBe(1); // limit 2 - amount 1
       expect(args.data.healthScansUsed.increment).toBe(1);
+    });
+
+    it('third concurrent AI report at limit 2 cannot succeed (atomic conditional)', async () => {
+      // Simulate: two already consumed (aiReportsUsed=2), third updateMany matches 0 rows
+      const tx = {
+        userUsage: {
+          upsert: vi.fn().mockResolvedValue(localRow),
+          findUniqueOrThrow: vi.fn().mockResolvedValue({ ...localRow, aiReportsUsed: 2 }),
+          updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+        },
+        repositoryIndex: { upsert: vi.fn() },
+        $queryRaw: vi.fn().mockResolvedValue([]),
+      };
+      mockDb.$transaction.mockImplementation(async (fn: unknown) =>
+        (fn as (t: typeof tx) => Promise<unknown>)(tx),
+      );
+
+      const result = await usageService.consumeWithCredits(userId, 'AI_REPORT', 'AI_REPORT');
+      expect(result.allowed).toBe(false);
+      expect(result.consumed).toBe(false);
+      expect(result.details?.feature).toBe('AI_REPORT');
+      expect(result.details?.used).toBe(2);
+      expect(result.details?.limit).toBe(2);
+    });
+
+    it('credits-only consumeQuota uses AI_CREDITS feature (not AI_REPORT)', async () => {
+      const result = await usageService.consumeQuota(userId, 'AI_CREDITS', 5);
+      expect(result.allowed).toBe(true);
+      expect(result.limit).toBe(50); // FREE aiCredits limit
+      const tx = mockDb.$transaction.mock.calls[0]?.[0];
+      expect(typeof tx).toBe('function');
     });
   });
 
@@ -302,6 +429,8 @@ describe('UsageService', () => {
           }),
           updateMany: vi.fn().mockResolvedValue({ count: 0 }),
         },
+        repositoryIndex: { upsert: vi.fn() },
+        $queryRaw: vi.fn().mockResolvedValue([]),
       };
       mockDb.$transaction.mockImplementation(async (fn: unknown) =>
         (fn as (t: typeof tx) => Promise<unknown>)(tx),
@@ -322,6 +451,8 @@ describe('UsageService', () => {
           }),
           updateMany: vi.fn().mockResolvedValue({ count: 0 }),
         },
+        repositoryIndex: { upsert: vi.fn() },
+        $queryRaw: vi.fn().mockResolvedValue([]),
       };
       mockDb.$transaction.mockImplementation(async (fn: unknown) =>
         (fn as (t: typeof tx) => Promise<unknown>)(tx),
@@ -336,11 +467,12 @@ describe('UsageService', () => {
   });
 
   describe('getUsageSummary', () => {
-    it('should return plan, period, usage, limits, remaining', async () => {
+    it('should return plan, period, usage, limits, remaining, resetAt', async () => {
       const summary = await usageService.getUsageSummary(userId);
       expect(summary.plan).toBe('FREE');
       expect(summary.periodStart).toMatch(/^\d{4}-\d{2}-\d{2}T/);
       expect(summary.periodEnd).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+      expect(summary.resetAt).toBe(summary.periodEnd);
       expect(summary.limits).toEqual({
         aiCredits: 50,
         healthScans: 2,
@@ -351,6 +483,26 @@ describe('UsageService', () => {
       expect(summary.usage).toHaveProperty('aiCredits');
       expect(summary.usage).toHaveProperty('repositories');
       expect(summary.remaining.aiCredits).toBe(50);
+    });
+
+    it('remaining is always max(limit - used, 0)', async () => {
+      mockDb.userUsage.upsert.mockResolvedValue({
+        ...localRow,
+        aiCreditsUsed: 60,
+        healthScansUsed: 5,
+        aiReportsUsed: 3,
+        chatMessagesUsed: 25,
+      });
+      mockDb.$queryRaw.mockResolvedValue([{ count: 2n }]);
+      const summary = await usageService.getUsageSummary(userId);
+      expect(summary.remaining.aiCredits).toBe(0);
+      expect(summary.remaining.healthScans).toBe(0);
+      expect(summary.remaining.aiReports).toBe(0);
+      expect(summary.remaining.chatMessages).toBe(0);
+      expect(summary.remaining.repositories).toBe(0);
+      // Usage shows real (over-limit) values so UI can display truth
+      expect(summary.usage.aiCredits).toBe(60);
+      expect(summary.usage.repositories).toBe(2);
     });
 
     it('should respect PRO plan limits', async () => {
