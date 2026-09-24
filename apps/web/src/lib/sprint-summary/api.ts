@@ -2,6 +2,18 @@ import type { SprintSummaryRequest, SprintSummaryResponse } from './types';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
 
+export class SprintSummaryApiError extends Error {
+  code?: string;
+  retryable?: boolean;
+
+  constructor(message: string, code?: string, retryable?: boolean) {
+    super(message);
+    this.name = 'SprintSummaryApiError';
+    this.code = code;
+    this.retryable = retryable ?? true;
+  }
+}
+
 async function authFetch(
   url: string,
   token?: string,
@@ -25,7 +37,7 @@ async function authFetch(
   if (!res.ok) {
     const errorBody = await res.json().catch(() => ({}));
     const message = errorBody?.error?.message || `Request failed with status ${res.status}`;
-    throw new Error(message);
+    throw new SprintSummaryApiError(message, errorBody?.error?.code, errorBody?.error?.retryable);
   }
 
   return res;

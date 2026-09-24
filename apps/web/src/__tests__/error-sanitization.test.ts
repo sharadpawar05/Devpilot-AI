@@ -101,11 +101,34 @@ describe('Error Message Sanitization', () => {
       }
     });
 
+    it('should sanitize Gemini 429 quota errors for sprint summary', () => {
+      const raw = `[GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent: [429 Too Many Requests] You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. * Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-3.6-flash Please retry in 41.206410223s. [{"@type":"type.googleapis.com/google.rpc.Help"}]`;
+
+      const byCode = getErrorMessage({
+        code: 'RATE_LIMIT_EXCEEDED',
+        message: 'Rate limit exceeded. Please wait 42 seconds and try again.',
+      });
+      expect(byCode.title).toBe('Rate limit exceeded');
+      expect(byCode.retryable).toBe(true);
+      expect(byCode.message).not.toContain('GoogleGenerativeAI');
+      expect(byCode.message).not.toContain('429');
+      expect(byCode.message).not.toContain('generativelanguage');
+
+      const byRawMessage = getErrorMessage({ code: 'GENERATION_FAILED', message: raw });
+      expect(byRawMessage.title).toBe('Rate limit exceeded');
+      expect(byRawMessage.message).not.toContain('GoogleGenerativeAI');
+      expect(byRawMessage.message).not.toContain('generativelanguage.googleapis.com');
+      expect(byRawMessage.message).not.toContain('quotaValue');
+      expect(byRawMessage.suggestion).toContain('42');
+    });
+
     it('should provide suggestions for retryable errors', () => {
       const retryableCodes = [
         'NETWORK_ERROR',
         'TIMEOUT',
         'RATE_LIMIT',
+        'RATE_LIMIT_EXCEEDED',
+        'GENERATION_FAILED',
         'DATABASE_ERROR',
         'DATABASE_TIMEOUT',
         'REPOSITORY_LOAD_FAILED',

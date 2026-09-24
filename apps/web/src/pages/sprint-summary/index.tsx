@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import { useGitHub } from '@/hooks/use-github';
 import { useSprintSummary } from '@/lib/sprint-summary';
 import { renderMarkdown } from '@/lib/markdown';
+import { getErrorMessage } from '@/lib/error-messages';
 import { cn } from '@/lib/utils';
 import type {
   SprintSummaryData,
@@ -445,11 +446,29 @@ export default function SprintSummaryPage() {
           </Button>
         </div>
 
-        {generateMutation.isError && (
-          <div className="mt-4 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
-            {generateMutation.error?.message || 'Failed to generate summary'}
-          </div>
-        )}
+        {generateMutation.isError &&
+          (() => {
+            const err = generateMutation.error;
+            const code =
+              (err as { code?: string } | undefined)?.code ||
+              (err as { response?: { code?: string } } | undefined)?.response?.code;
+            const friendly = getErrorMessage({
+              code,
+              message: err?.message,
+            });
+            return (
+              <div className="mt-4 flex items-start gap-2 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <div>
+                  <p className="font-medium">{friendly.title}</p>
+                  <p>{friendly.message}</p>
+                  {friendly.suggestion && (
+                    <p className="mt-1 text-xs opacity-80">{friendly.suggestion}</p>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
       </div>
 
       {generateMutation.isPending && (

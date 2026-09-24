@@ -1,4 +1,4 @@
-export { sprintSummaryApi } from './api';
+export { sprintSummaryApi, SprintSummaryApiError } from './api';
 export { useSprintSummary } from './queries';
 export type {
   SprintSummaryRequest,

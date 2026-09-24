@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { authenticate } from '@/core/auth/middleware';
 import { sprintSummaryService } from './sprint-summary-service';
 import { usageService } from '@/core/usage';
+import { classifyAIError } from '@/core/ai/classify-error';
 
 const sprintSummarySchema = z.object({
   owner: z.string().min(1),
@@ -87,7 +88,8 @@ export async function sprintSummaryRoutes(app: FastifyInstance) {
         });
 
         if (!result.success) {
-          return reply.status(500).send(result);
+          const status = result.error?.code === 'RATE_LIMIT_EXCEEDED' ? 429 : 500;
+          return reply.status(status).send(result);
         }
 
         // Increment usage after successful generation
@@ -96,11 +98,16 @@ export async function sprintSummaryRoutes(app: FastifyInstance) {
         return reply.send(result);
       } catch (error) {
         console.error('Sprint summary generation error:', error);
-        return reply.status(500).send({
+        const classified = classifyAIError(error);
+        return reply.status(classified.status === 429 ? 429 : 500).send({
           success: false,
           error: {
-            code: 'GENERATION_FAILED',
-            message: error instanceof Error ? error.message : 'Failed to generate sprint summary',
+            code: classified.code === 'AI_ERROR' ? 'GENERATION_FAILED' : classified.code,
+            message:
+              classified.code === 'RATE_LIMIT_EXCEEDED'
+                ? classified.message
+                : 'Failed to generate sprint summary. Please try again.',
+            retryable: classified.retryable,
           },
         });
       }

@@ -24,6 +24,18 @@ const ERROR_MESSAGES: Record<string, ErrorMessageConfig> = {
     retryable: true,
     suggestion: 'Wait a moment and try again.',
   },
+  RATE_LIMIT_EXCEEDED: {
+    title: 'Rate limit exceeded',
+    message: 'Too many requests to the AI provider.',
+    retryable: true,
+    suggestion: 'Wait a moment and try again.',
+  },
+  GENERATION_FAILED: {
+    title: 'Generation failed',
+    message: 'Failed to generate the AI summary.',
+    retryable: true,
+    suggestion: 'Please try again in a few moments.',
+  },
   INVALID_API_KEY: {
     title: 'Invalid API key',
     message: 'The API key for this provider is invalid or missing.',
@@ -248,34 +260,44 @@ export function getErrorMessage(
 
   const code = error.code ?? 'UNKNOWN_ERROR';
   const message = error.message ?? '';
+  const lower = message.toLowerCase();
 
-  // Detect rate limit from message patterns (Google, OpenAI, Anthropic all use 429)
-  if (
-    code === 'STREAM_ERROR' &&
-    (message.includes('429') ||
-      message.includes('Too Many Requests') ||
-      message.includes('rate limit') ||
-      message.includes('quota'))
-  ) {
-    const retryMatch = message.match(/retry in (\d+\.?\d*)s/);
+  const isRateLimitCode =
+    code === 'STREAM_ERROR' || code === 'RATE_LIMIT_EXCEEDED' || code === 'RATE_LIMIT';
+  const isRateLimitMessage =
+    message.includes('429') ||
+    message.includes('Too Many Requests') ||
+    lower.includes('rate limit') ||
+    lower.includes('quota');
+
+  if (isRateLimitCode || isRateLimitMessage) {
+    // Quota exceeded (no retry delay) gets its own copy
+    if (
+      (code === 'STREAM_ERROR' || isRateLimitMessage) &&
+      lower.includes('quota') &&
+      !/retry/i.test(message)
+    ) {
+      return {
+        title: 'Quota exceeded',
+        message: 'You have exceeded your API quota for this provider.',
+        retryable: true,
+        suggestion: 'Wait a moment and try again, or upgrade your plan.',
+      };
+    }
+
+    const retryMatch = message.match(/(?:retry in|retry after|wait)\s+(\d+\.?\d*)\s*s/i);
     const retrySeconds = retryMatch ? Math.ceil(Number(retryMatch[1])) : undefined;
+    const config =
+      code === 'GITHUB_RATE_LIMIT'
+        ? ERROR_MESSAGES.GITHUB_RATE_LIMIT
+        : ERROR_MESSAGES.RATE_LIMIT_EXCEEDED;
     return {
-      title: 'Rate limit exceeded',
-      message: 'Too many requests to the AI provider.',
+      title: config.title,
+      message: config.message,
       retryable: true,
       suggestion: retrySeconds
         ? `Please wait ${retrySeconds} seconds and try again.`
-        : 'Wait a moment and try again.',
-    };
-  }
-
-  // Detect quota exceeded from message patterns
-  if (code === 'STREAM_ERROR' && (message.includes('quota') || message.includes('Quota'))) {
-    return {
-      title: 'Quota exceeded',
-      message: 'You have exceeded your API quota for this provider.',
-      retryable: true,
-      suggestion: 'Wait a moment and try again, or upgrade your plan.',
+        : (config.suggestion ?? 'Wait a moment and try again.'),
     };
   }
 

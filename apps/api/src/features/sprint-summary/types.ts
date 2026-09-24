@@ -72,6 +72,7 @@ export interface SprintSummaryResponse {
   error?: {
     code: string;
     message: string;
+    retryable?: boolean;
   };
   latencyMs?: number;
   provider?: string;
