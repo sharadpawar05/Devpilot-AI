@@ -1,6 +1,9 @@
 import type { ReleaseNotesRequest, ReleaseNotesResponse, ReleaseTag } from './types';
+import { ApiError } from '@/lib/api-error';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
+
+export class ReleaseNotesApiError extends ApiError {}
 
 async function authFetch(
   url: string,
@@ -24,8 +27,15 @@ async function authFetch(
 
   if (!res.ok) {
     const errorBody = await res.json().catch(() => ({}));
-    const message = errorBody?.error?.message || `Request failed with status ${res.status}`;
-    throw new Error(message);
+    const err = errorBody?.error ?? {};
+    throw new ReleaseNotesApiError(err.message || `Request failed with status ${res.status}`, {
+      code: err.code,
+      retryable: err.retryable,
+      feature: err.feature,
+      used: err.used,
+      limit: err.limit,
+      resetAt: err.resetAt,
+    });
   }
 
   return res;

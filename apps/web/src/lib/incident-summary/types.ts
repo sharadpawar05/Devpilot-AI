@@ -68,6 +68,10 @@ export interface IncidentSummaryResponse {
   error?: {
     code: string;
     message: string;
+    feature?: string;
+    used?: number;
+    limit?: number;
+    resetAt?: string;
   };
   latencyMs?: number;
   provider?: string;

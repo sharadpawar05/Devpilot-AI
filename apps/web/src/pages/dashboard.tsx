@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/auth';
 import { useGitHub } from '@/hooks/use-github';
 import { useDashboard } from '@/hooks/use-dashboard';
+import { useRepoOverview } from '@/lib/repo-overview';
 import { HeroSection } from '@/components/dashboard/HeroSection';
 import { QuickActions } from '@/components/dashboard/QuickActions';
 import { GitHubWidget } from '@/components/dashboard/GitHubWidget';
@@ -11,6 +12,8 @@ import { RecentActivity } from '@/components/dashboard/RecentActivity';
 import { WorkspaceStatus } from '@/components/dashboard/WorkspaceStatus';
 import { TipsCard } from '@/components/dashboard/TipsCard';
 import { EmptyState } from '@/components/dashboard/EmptyState';
+import { HealthSnapshotCard } from '@/components/dashboard/HealthSnapshotCard';
+import { NeedsAttentionCard } from '@/components/dashboard/NeedsAttentionCard';
 import { DashboardFullSkeleton } from '@/components/dashboard/skeletons';
 import { aiHistoryApi } from '@/lib/ai-history';
 
@@ -32,6 +35,30 @@ export function DashboardPage() {
     lastActivityAt: null as string | null,
   });
 
+  const activeRepoFullName = useMemo(() => {
+    return gh.selectedRepoName || gh.repositories[0]?.full_name || null;
+  }, [gh.selectedRepoName, gh.repositories]);
+
+  const [healthOwner, healthRepo] = useMemo(() => {
+    if (!activeRepoFullName) return ['', ''];
+    const [owner, repo] = activeRepoFullName.split('/');
+    return [owner || '', repo || ''];
+  }, [activeRepoFullName]);
+
+  const {
+    data: overview,
+    isLoading: healthLoading,
+    isError: healthIsError,
+    error: healthError,
+    refetch: refetchHealth,
+  } = useRepoOverview(healthOwner, healthRepo);
+
+  const healthErrorMessage = healthIsError
+    ? healthError instanceof Error
+      ? healthError.message
+      : 'Failed to load health data.'
+    : null;
+
   useEffect(() => {
     if (!token) return;
 
@@ -39,7 +66,6 @@ export function DashboardPage() {
       try {
         const result = await aiHistoryApi.listSessions(token, {}, { page: 1, pageSize: 100 });
         const sessions = result.sessions;
-        const totalTokens = sessions.reduce((sum, s) => sum + s.totalTokens, 0);
         const totalLatency = sessions.reduce((sum, s) => sum + s.totalLatency, 0);
         const reviewSessions = sessions.filter(
           (s) => s.workflowType === 'code-review' || s.workflowType === 'pr-review',
@@ -58,7 +84,7 @@ export function DashboardPage() {
             reviewSessions.length > 0
               ? `${Math.round(totalLatency / reviewSessions.length / 1000)}s`
               : '< 30s',
-          tokensUsed: totalTokens,
+          tokensUsed: 0,
           githubRepos: gh.repositories.length,
           connectedSince: dashboardData?.github?.connectedAt ?? null,
           lastSyncedAt: gh.connected ? new Date().toISOString() : null,
@@ -128,6 +154,27 @@ export function DashboardPage() {
         lastActivityAt={stats.lastActivityAt}
       />
 
+      <div className="grid gap-6 lg:grid-cols-2">
+        <HealthSnapshotCard
+          repoFullName={activeRepoFullName}
+          health={overview?.health ?? null}
+          isLoading={healthLoading}
+          error={healthErrorMessage}
+          onRetry={() => {
+            void refetchHealth();
+          }}
+        />
+        <NeedsAttentionCard
+          details={overview?.health?.details ?? null}
+          isLoading={healthLoading}
+          error={healthErrorMessage}
+          onRetry={() => {
+            void refetchHealth();
+          }}
+          hasRepo={!!activeRepoFullName}
+        />
+      </div>
+
       <QuickActions />
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -137,7 +184,6 @@ export function DashboardPage() {
             aiRequestsToday={stats.aiRequestsToday}
             totalReviews={stats.totalReviews}
             avgReviewTime={stats.avgReviewTime}
-            tokensUsed={stats.tokensUsed}
             githubRepos={stats.githubRepos}
             openPRs={gh.pulls.length}
             connectedSince={stats.connectedSince}

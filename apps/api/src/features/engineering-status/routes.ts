@@ -56,6 +56,12 @@ export async function engineeringStatusRoutes(app: FastifyInstance) {
         }
       }
 
+      // Reject new repository activation before expensive AI work.
+      const repoAccess = await usageService.ensureRepositoryAccess(auth.sub, owner, repo);
+      if (!repoAccess.allowed && repoAccess.details) {
+        return sendUsageLimitReached(reply, repoAccess.details);
+      }
+
       // Atomically consume AI report + AI credits before generation
       const consume = await usageService.consumeWithCredits(auth.sub, 'AI_REPORT', 'AI_REPORT');
       if (!consume.allowed && consume.details) {

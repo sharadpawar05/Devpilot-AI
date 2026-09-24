@@ -1,16 +1,17 @@
 import type { EngineeringStatusRequest, EngineeringStatusResponse } from './types';
+import { ApiError, toApiError } from '@/lib/api-error';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
 
-export class EngineeringStatusApiError extends Error {
-  code?: string;
-  retryable?: boolean;
-
-  constructor(message: string, code?: string, retryable?: boolean) {
-    super(message);
+export class EngineeringStatusApiError extends ApiError {
+  constructor(
+    message: string,
+    code?: string,
+    retryable?: boolean,
+    options: { feature?: string; used?: number; limit?: number; resetAt?: string } = {},
+  ) {
+    super(message, { code, retryable, ...options });
     this.name = 'EngineeringStatusApiError';
-    this.code = code;
-    this.retryable = retryable ?? true;
   }
 }
 
@@ -27,11 +28,17 @@ async function authFetch(
   const res = await fetch(url, { ...options, headers, credentials: 'include' });
   if (!res.ok) {
     const errorBody = await res.json().catch(() => ({}));
-    const message = errorBody?.error?.message || `Request failed with status ${res.status}`;
+    const err = errorBody?.error ?? {};
     throw new EngineeringStatusApiError(
-      message,
-      errorBody?.error?.code,
-      errorBody?.error?.retryable,
+      err.message || `Request failed with status ${res.status}`,
+      err.code,
+      err.retryable,
+      {
+        feature: err.feature,
+        used: err.used,
+        limit: err.limit,
+        resetAt: err.resetAt,
+      },
     );
   }
   return res;
@@ -49,3 +56,5 @@ export const engineeringStatusApi = {
     return res.json();
   },
 };
+
+export { toApiError };

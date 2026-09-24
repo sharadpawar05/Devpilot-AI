@@ -539,6 +539,7 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
 
       const { owner, repo } = parsed.data;
 
+      let consumed = false;
       try {
         // Get current commit SHA for cache key
         const commitSha = await repositoryIntelligenceService.getLatestCommitSha(
@@ -547,7 +548,7 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
           repo,
         );
 
-        // Check cache first
+        // Check cache first — cached results consume no quota
         if (commitSha) {
           const cached = await usageService.getHealthCache(auth.sub, owner, repo, commitSha);
           if (cached) {
@@ -576,6 +577,7 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
         if (!consume.allowed && consume.details) {
           return sendUsageLimitReached(reply, consume.details);
         }
+        consumed = true;
 
         // Run health analysis
         const health = await repositoryIntelligenceService.getHealth(auth.sub, owner, repo);
@@ -604,8 +606,10 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
 
         return reply.send({ success: true, data: health });
       } catch (error: unknown) {
-        // Refund any quota consumed before failure
-        await usageService.refundWithCredits(auth.sub, 'HEALTH_SCAN', 'HEALTH_SCAN');
+        // Refund only if this request actually consumed a health scan quota.
+        if (consumed) {
+          await usageService.refundWithCredits(auth.sub, 'HEALTH_SCAN', 'HEALTH_SCAN');
+        }
         const err = error as { status?: number; message?: string };
         return reply.status(err.status || 500).send({
           success: false,

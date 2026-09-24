@@ -26,6 +26,8 @@ import { useGitHub } from '@/hooks/use-github';
 import { useEngineeringStatus } from '@/lib/engineering-status';
 import { renderMarkdown } from '@/lib/markdown';
 import { getErrorMessage } from '@/lib/error-messages';
+import { useUsageLimitModal } from '@/hooks/use-usage-limit-modal';
+import { UsageLimitModal } from '@/components/UsageLimitModal';
 import { cn } from '@/lib/utils';
 import type {
   EngineeringStatusData,
@@ -382,9 +384,15 @@ export default function EngineeringStatusPage() {
   }, [result]);
 
   const canGenerate = selectedRepo && !generateMutation.isPending;
+  const usageLimit = useUsageLimitModal(generateMutation.error);
 
   return (
     <div className="w-full px-6 py-6 space-y-6">
+      <UsageLimitModal
+        details={usageLimit.details}
+        open={usageLimit.open}
+        onOpenChange={usageLimit.setOpen}
+      />
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Engineering Status Report</h1>
         <p className="text-sm text-muted-foreground">
@@ -522,6 +530,7 @@ export default function EngineeringStatusPage() {
           </Button>
         </div>
         {generateMutation.isError &&
+          !usageLimit.isLimitError &&
           (() => {
             const err = generateMutation.error;
             const code =

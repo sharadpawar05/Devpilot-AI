@@ -24,6 +24,9 @@ import { Button } from '@/components/ui/button';
 import { useGitHub } from '@/hooks/use-github';
 import { useReleaseNotes, useReleaseTags } from '@/lib/release-notes';
 import { renderMarkdown } from '@/lib/markdown';
+import { getErrorMessage } from '@/lib/error-messages';
+import { useUsageLimitModal } from '@/hooks/use-usage-limit-modal';
+import { UsageLimitModal } from '@/components/UsageLimitModal';
 import { cn } from '@/lib/utils';
 import type { ReleaseNotesData, ReleaseNoteItem, ReleaseContributor } from '@/lib/release-notes';
 
@@ -214,9 +217,15 @@ export default function ReleaseNotesPage() {
 
   const canGenerate =
     selectedRepo && (previousTag || currentTag || useDateRange) && !generateMutation.isPending;
+  const usageLimit = useUsageLimitModal(generateMutation.error);
 
   return (
     <div className="w-full px-6 py-6 space-y-6">
+      <UsageLimitModal
+        details={usageLimit.details}
+        open={usageLimit.open}
+        onOpenChange={usageLimit.setOpen}
+      />
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Release Notes</h1>
@@ -378,9 +387,20 @@ export default function ReleaseNotesPage() {
           </Button>
         </div>
 
-        {generateMutation.isError && (
+        {generateMutation.isError && !usageLimit.isLimitError && (
           <div className="mt-4 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
-            {generateMutation.error?.message || 'Failed to generate release notes'}
+            {(() => {
+              const friendly = getErrorMessage({
+                code: (generateMutation.error as { code?: string } | undefined)?.code,
+                message: generateMutation.error?.message,
+              });
+              return (
+                <>
+                  <p className="font-medium">{friendly.title}</p>
+                  <p>{friendly.message}</p>
+                </>
+              );
+            })()}
           </div>
         )}
       </div>

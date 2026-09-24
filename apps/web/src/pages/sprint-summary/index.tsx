@@ -23,6 +23,8 @@ import { useGitHub } from '@/hooks/use-github';
 import { useSprintSummary } from '@/lib/sprint-summary';
 import { renderMarkdown } from '@/lib/markdown';
 import { getErrorMessage } from '@/lib/error-messages';
+import { useUsageLimitModal } from '@/hooks/use-usage-limit-modal';
+import { UsageLimitModal } from '@/components/UsageLimitModal';
 import { cn } from '@/lib/utils';
 import type {
   SprintSummaryData,
@@ -321,9 +323,15 @@ export default function SprintSummaryPage() {
   }, [result, startDate, endDate, owner, repo]);
 
   const canGenerate = selectedRepo && startDate && endDate && !generateMutation.isPending;
+  const usageLimit = useUsageLimitModal(generateMutation.error);
 
   return (
     <div className="w-full px-6 py-6 space-y-6">
+      <UsageLimitModal
+        details={usageLimit.details}
+        open={usageLimit.open}
+        onOpenChange={usageLimit.setOpen}
+      />
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Sprint Summary</h1>
@@ -447,6 +455,7 @@ export default function SprintSummaryPage() {
         </div>
 
         {generateMutation.isError &&
+          !usageLimit.isLimitError &&
           (() => {
             const err = generateMutation.error;
             const code =

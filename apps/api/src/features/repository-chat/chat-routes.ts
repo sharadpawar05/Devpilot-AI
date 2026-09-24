@@ -120,6 +120,12 @@ export async function repositoryChatRoutes(app: FastifyInstance) {
           });
         }
 
+        // Reject activating a new repository beyond the plan limit before indexing.
+        const repoAccess = await usageService.ensureRepositoryAccess(auth.sub, owner, repo);
+        if (!repoAccess.allowed && repoAccess.details) {
+          return sendUsageLimitReached(reply, repoAccess.details);
+        }
+
         await repositoryStatusService.markIndexing(auth.sub, owner, repo, branch);
 
         repositoryIndexer.index(auth.sub, owner, repo, branch).catch(async (err) => {
@@ -221,6 +227,12 @@ export async function repositoryChatRoutes(app: FastifyInstance) {
 
       const { owner, repo, branch, question, conversationHistory, provider, model, fileFilter } =
         parsed.data;
+
+      // Chat requires an index; if somehow reached for a non-active repo, enforce limit.
+      const repoAccess = await usageService.ensureRepositoryAccess(auth.sub, owner, repo);
+      if (!repoAccess.allowed && repoAccess.details) {
+        return sendUsageLimitReached(reply, repoAccess.details);
+      }
 
       const index = await repositoryIndexer.getIndex(auth.sub, owner, repo, branch);
       if (!index) {
