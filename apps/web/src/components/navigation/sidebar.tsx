@@ -116,9 +116,10 @@ export function Sidebar() {
       <aside
         id="app-sidebar"
         aria-label="Main sidebar"
+        data-collapsed={collapsed || undefined}
         className={cn(
-          'flex h-full shrink-0 flex-col border-r bg-card/60 transition-[width] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]',
-          collapsed ? 'w-[68px]' : 'w-[248px]',
+          'nav-container flex h-full shrink-0 flex-col border-r bg-card/60',
+          collapsed ? 'w-16' : 'w-64',
         )}
       >
         <SidebarContent />
