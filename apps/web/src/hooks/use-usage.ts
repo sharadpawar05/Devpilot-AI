@@ -5,11 +5,29 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
 
 export interface UsageData {
   plan: string;
-  period: string;
-  repositories: { used: number; limit: number };
-  healthScans: { used: number; limit: number };
-  aiReports: { used: number; limit: number };
-  aiChat: { used: number; limit: number };
+  periodStart: string;
+  periodEnd: string;
+  usage: {
+    aiCredits: number;
+    healthScans: number;
+    aiReports: number;
+    chatMessages: number;
+    repositories: number;
+  };
+  limits: {
+    aiCredits: number;
+    healthScans: number;
+    aiReports: number;
+    chatMessages: number;
+    repositories: number;
+  };
+  remaining: {
+    aiCredits: number;
+    healthScans: number;
+    aiReports: number;
+    chatMessages: number;
+    repositories: number;
+  };
 }
 
 async function fetchUsage(token: string): Promise<UsageData> {

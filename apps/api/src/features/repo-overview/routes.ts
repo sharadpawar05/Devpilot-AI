@@ -7,7 +7,7 @@ import { repoOverviewService } from './overview-service';
 import { generatorService } from './generator-service';
 import { repositoryAnalyzer } from './analyzer-service';
 import { sanitizeError, createErrorResponse } from '@/core/errors/sanitize';
-import { usageService } from '@/core/usage';
+import { usageService, sendUsageLimitReached } from '@/core/usage';
 import type { HealthActionType } from './types';
 
 const overviewQuerySchema = z.object({
@@ -421,16 +421,10 @@ Keep each section concise (2-4 sentences). Use markdown headers and bullet point
 
       const { owner, repo, actionType } = parsed.data;
 
-      // Check AI report limit
-      const limitCheck = await usageService.checkAiReportLimit(auth.sub);
-      if (!limitCheck.allowed) {
-        return reply.status(403).send({
-          success: false,
-          error: {
-            code: 'PLAN_LIMIT_REACHED',
-            message: `Free plan allows up to ${limitCheck.limit} AI reports per month. You have used ${limitCheck.used}/${limitCheck.limit}.`,
-          },
-        });
+      // Atomically consume AI report + AI credits before generation
+      const consume = await usageService.consumeWithCredits(auth.sub, 'AI_REPORT', 'AI_REPORT');
+      if (!consume.allowed && consume.details) {
+        return sendUsageLimitReached(reply, consume.details);
       }
 
       try {
@@ -441,11 +435,9 @@ Keep each section concise (2-4 sentences). Use markdown headers and bullet point
           actionType as HealthActionType,
         );
 
-        // Increment usage after successful generation
-        await usageService.incrementAiReport(auth.sub);
-
         return reply.send({ success: true, data: result });
       } catch (error: unknown) {
+        await usageService.refundWithCredits(auth.sub, 'AI_REPORT', 'AI_REPORT');
         const sanitized = sanitizeError(
           error,
           'GENERATION_ERROR',

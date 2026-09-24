@@ -1,6 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { aiService } from '@/core/ai/service';
+import { authenticate } from '@/core/auth/middleware';
+import { usageService, sendUsageLimitReached } from '@/core/usage';
 import { PromptRegistry, loadMarkdownPrompts } from '@devpilot/ai-prompts';
 
 const registry = new PromptRegistry();
@@ -50,6 +52,7 @@ export async function codeReviewRoutes(app: FastifyInstance) {
   }>(
     '/code-review',
     {
+      preHandler: [authenticate],
       schema: {
         description: 'AI-powered code review with structured feedback',
         tags: ['ai'],
@@ -92,6 +95,7 @@ export async function codeReviewRoutes(app: FastifyInstance) {
       },
     },
     async (request, reply) => {
+      const auth = (request as { auth: { sub: string } }).auth;
       const parsed = codeReviewSchema.safeParse(request.body);
 
       if (!parsed.success) {
@@ -127,6 +131,12 @@ export async function codeReviewRoutes(app: FastifyInstance) {
         });
       }
 
+      // Atomically consume AI report + AI credits before generation
+      const consume = await usageService.consumeWithCredits(auth.sub, 'AI_REPORT', 'AI_REPORT');
+      if (!consume.allowed && consume.details) {
+        return sendUsageLimitReached(reply, consume.details);
+      }
+
       let rendered;
       try {
         rendered = registry.render('prompt_code_review', {
@@ -140,6 +150,7 @@ export async function codeReviewRoutes(app: FastifyInstance) {
           isDeep: reviewDepth === 'Deep' ? 'yes' : undefined,
         });
       } catch (error) {
+        await usageService.refundWithCredits(auth.sub, 'AI_REPORT', 'AI_REPORT');
         const message = error instanceof Error ? error.message : String(error);
         app.log.error({ err: error }, 'Prompt rendering failed');
         return reply.status(500).send({
@@ -163,6 +174,16 @@ export async function codeReviewRoutes(app: FastifyInstance) {
 
         const totalTokens = result.tokens.total || result.tokens.input + result.tokens.output;
 
+        await usageService.recordAIUsageEvent({
+          userId: auth.sub,
+          feature: 'CODE_REVIEW',
+          model: result.model,
+          inputTokens: result.tokens.input,
+          outputTokens: result.tokens.output,
+          creditsConsumed: 3,
+          estimatedCostUsd: result.cost?.totalCost ?? 0,
+        });
+
         return reply.send({
           success: true,
           provider: result.provider,
@@ -177,6 +198,7 @@ export async function codeReviewRoutes(app: FastifyInstance) {
           },
         });
       } catch (error) {
+        await usageService.refundWithCredits(auth.sub, 'AI_REPORT', 'AI_REPORT');
         const message = error instanceof Error ? error.message : String(error);
         const code_ =
           error && typeof error === 'object' && 'code' in error

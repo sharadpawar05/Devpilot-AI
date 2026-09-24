@@ -119,6 +119,7 @@ model User {
   aiHistorySessions AIHistorySession[]
   repoHealthSnapshots RepoHealthSnapshot[]
   userUsages       UserUsage[]
+  aiUsageEvents    AIUsageEvent[]
 
   @@index([supabaseUserId])
   @@index([email])
@@ -292,18 +293,38 @@ model RepoHealthSnapshot {
 }
 
 model UserUsage {
-  id              String   @id @default(uuid()) @db.Uuid
-  userId          String   @db.Uuid
-  period          String   // "YYYY-MM" format
-  healthScanCount Int      @default(0)
-  aiReportCount   Int      @default(0)
-  aiChatCount     Int      @default(0)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id               String   @id @default(uuid()) @db.Uuid
+  userId           String   @db.Uuid
+  periodStart      DateTime
+  periodEnd        DateTime
+  aiCreditsUsed    Int      @default(0)
+  healthScansUsed  Int      @default(0)
+  aiReportsUsed    Int      @default(0)
+  chatMessagesUsed Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, period])
+  @@unique([userId, periodStart])
   @@index([userId])
   @@map("user_usage")
+}
+
+model AIUsageEvent {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @db.Uuid
+  feature           String
+  model             String
+  inputTokens       Int      @default(0)
+  outputTokens      Int      @default(0)
+  creditsConsumed   Int      @default(0)
+  estimatedCostUsd  Float    @default(0)
+  createdAt         DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([feature])
+  @@map("ai_usage_events")
 }

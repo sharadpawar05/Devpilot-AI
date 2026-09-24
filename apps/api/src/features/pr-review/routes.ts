@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { authenticate } from '@/core/auth';
 import { aiService } from '@/core/ai/service';
 import { classifyAIError } from '@/core/ai/classify-error';
+import { usageService, sendUsageLimitReached } from '@/core/usage';
 import { PromptRegistry, loadMarkdownPrompts } from '@devpilot/ai-prompts';
 import { repositoryIntelligenceService } from '@/features/repo-intelligence';
 
@@ -233,6 +234,12 @@ export async function prReviewRoutes(app: FastifyInstance) {
 
       const effectiveMaxTokens = DEPTH_MAX_TOKENS[reviewDepth] ?? 2048;
 
+      // Atomically consume AI report + AI credits before generation
+      const consume = await usageService.consumeWithCredits(auth.sub, 'AI_REPORT', 'AI_REPORT');
+      if (!consume.allowed && consume.details) {
+        return sendUsageLimitReached(reply, consume.details);
+      }
+
       try {
         const result = await aiService.generate(rendered.userPrompt, rendered.systemPrompt, {
           provider,
@@ -241,6 +248,16 @@ export async function prReviewRoutes(app: FastifyInstance) {
         });
 
         const totalTokens = result.tokens.total || result.tokens.input + result.tokens.output;
+
+        await usageService.recordAIUsageEvent({
+          userId: auth.sub,
+          feature: 'PR_REVIEW',
+          model: result.model,
+          inputTokens: result.tokens.input,
+          outputTokens: result.tokens.output,
+          creditsConsumed: 3,
+          estimatedCostUsd: result.cost?.totalCost ?? 0,
+        });
 
         return reply.send({
           success: true,
@@ -266,6 +283,7 @@ export async function prReviewRoutes(app: FastifyInstance) {
           },
         });
       } catch (error) {
+        await usageService.refundWithCredits(auth.sub, 'AI_REPORT', 'AI_REPORT');
         app.log.error({ err: error, provider }, 'GitHub PR review failed');
         const errorResponse = classifyAIError(error);
         return reply.status(errorResponse.status).send({
@@ -384,6 +402,12 @@ export async function prReviewRoutes(app: FastifyInstance) {
         });
       }
 
+      // Atomically consume AI report + AI credits before generation
+      const consume = await usageService.consumeWithCredits(auth.sub, 'AI_REPORT', 'AI_REPORT');
+      if (!consume.allowed && consume.details) {
+        return sendUsageLimitReached(reply, consume.details);
+      }
+
       try {
         const result = await aiService.generate(rendered.userPrompt, rendered.systemPrompt, {
           provider,
@@ -392,6 +416,16 @@ export async function prReviewRoutes(app: FastifyInstance) {
         });
 
         const totalTokens = result.tokens.total || result.tokens.input + result.tokens.output;
+
+        await usageService.recordAIUsageEvent({
+          userId: auth.sub,
+          feature: 'PR_ANALYSIS',
+          model: result.model,
+          inputTokens: result.tokens.input,
+          outputTokens: result.tokens.output,
+          creditsConsumed: 3,
+          estimatedCostUsd: result.cost?.totalCost ?? 0,
+        });
 
         return reply.send({
           success: true,
@@ -417,6 +451,7 @@ export async function prReviewRoutes(app: FastifyInstance) {
           },
         });
       } catch (error) {
+        await usageService.refundWithCredits(auth.sub, 'AI_REPORT', 'AI_REPORT');
         app.log.error({ err: error, provider }, 'GitHub PR analyze failed');
         const errorResponse = classifyAIError(error);
         return reply.status(errorResponse.status).send({

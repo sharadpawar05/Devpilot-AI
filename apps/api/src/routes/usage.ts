@@ -8,7 +8,7 @@ export async function usageRoutes(app: FastifyInstance) {
     {
       preHandler: [authenticate],
       schema: {
-        description: 'Get current user usage stats',
+        description: 'Get current user usage stats, plan limits, and remaining quota',
         tags: ['usage'],
         security: [{ bearerAuth: [] }],
       },
@@ -17,7 +17,7 @@ export async function usageRoutes(app: FastifyInstance) {
       const auth = (request as { auth: { sub: string } }).auth;
 
       try {
-        const usage = await usageService.getUsage(auth.sub);
+        const usage = await usageService.getUsageSummary(auth.sub);
         return reply.send({ success: true, data: usage });
       } catch (error) {
         request.log.error({ err: error }, 'Failed to fetch usage');

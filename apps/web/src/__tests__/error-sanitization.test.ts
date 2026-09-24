@@ -51,6 +51,14 @@ describe('Error Message Sanitization', () => {
       expect(result.retryable).toBe(true);
     });
 
+    it('should return friendly message for USAGE_LIMIT_REACHED', () => {
+      const result = getErrorMessage({ code: 'USAGE_LIMIT_REACHED' });
+
+      expect(result.title).toBe('Usage limit reached');
+      expect(result.retryable).toBe(false);
+      expect(result.suggestion).toContain('Upgrade');
+    });
+
     it('should return friendly message for DATABASE_TIMEOUT', () => {
       const result = getErrorMessage({ code: 'DATABASE_TIMEOUT' });
 

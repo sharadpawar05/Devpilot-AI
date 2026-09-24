@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { authenticate } from '@/core/auth/middleware';
 import { repositoryIntelligenceService } from './repository-service';
-import { usageService } from '@/core/usage';
+import { usageService, sendUsageLimitReached } from '@/core/usage';
 
 const querySchema = z.object({
   owner: z.string().min(1),
@@ -567,23 +567,21 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
           }
         }
 
-        // Check usage limit before running new scan
-        const limitCheck = await usageService.checkHealthScanLimit(auth.sub);
-        if (!limitCheck.allowed) {
-          return reply.status(403).send({
-            success: false,
-            error: {
-              code: 'PLAN_LIMIT_REACHED',
-              message: `Free plan allows up to ${limitCheck.limit} health scans per month. You have used ${limitCheck.used}/${limitCheck.limit}.`,
-            },
-          });
+        // Atomically consume health scan + AI credits before running new scan
+        const consume = await usageService.consumeWithCredits(
+          auth.sub,
+          'HEALTH_SCAN',
+          'HEALTH_SCAN',
+        );
+        if (!consume.allowed && consume.details) {
+          return sendUsageLimitReached(reply, consume.details);
         }
 
         // Run health analysis
         const health = await repositoryIntelligenceService.getHealth(auth.sub, owner, repo);
 
-        // Increment usage after successful scan
-        await usageService.incrementHealthScan(auth.sub);
+        // Refund quota if analysis failed after consumption
+        // (getHealth throws on failure, so refund happens in catch)
 
         // Save to cache if we have commit SHA
         if (commitSha) {
@@ -606,6 +604,8 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
 
         return reply.send({ success: true, data: health });
       } catch (error: unknown) {
+        // Refund any quota consumed before failure
+        await usageService.refundWithCredits(auth.sub, 'HEALTH_SCAN', 'HEALTH_SCAN');
         const err = error as { status?: number; message?: string };
         return reply.status(err.status || 500).send({
           success: false,

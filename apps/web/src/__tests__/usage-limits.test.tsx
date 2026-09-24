@@ -94,12 +94,18 @@ describe('UsageLimits', () => {
   it('should render usage data', () => {
     mockUseUsage.mockReturnValue(
       mockSuccess({
-        plan: 'free',
-        period: '2026-08',
-        repositories: { used: 2, limit: 3 },
-        healthScans: { used: 3, limit: 5 },
-        aiReports: { used: 1, limit: 5 },
-        aiChat: { used: 10, limit: 20 },
+        plan: 'FREE',
+        periodStart: '2026-09-01T00:00:00.000Z',
+        periodEnd: '2026-10-01T00:00:00.000Z',
+        usage: { aiCredits: 20, healthScans: 3, aiReports: 1, chatMessages: 10, repositories: 2 },
+        limits: { aiCredits: 50, healthScans: 5, aiReports: 5, chatMessages: 20, repositories: 3 },
+        remaining: {
+          aiCredits: 30,
+          healthScans: 2,
+          aiReports: 4,
+          chatMessages: 10,
+          repositories: 1,
+        },
       }) as ReturnType<typeof useUsage>,
     );
 
@@ -109,22 +115,23 @@ describe('UsageLimits', () => {
     expect(screen.getByText('1 / 5')).toBeTruthy();
     expect(screen.getByText('10 / 20')).toBeTruthy();
     expect(screen.getByText('2 / 3')).toBeTruthy();
+    expect(screen.getByText('20 / 50')).toBeTruthy();
   });
 
   it('should show limit reached message when at limit', () => {
     mockUseUsage.mockReturnValue(
       mockSuccess({
-        plan: 'free',
-        period: '2026-08',
-        repositories: { used: 3, limit: 3 },
-        healthScans: { used: 5, limit: 5 },
-        aiReports: { used: 5, limit: 5 },
-        aiChat: { used: 20, limit: 20 },
+        plan: 'FREE',
+        periodStart: '2026-09-01T00:00:00.000Z',
+        periodEnd: '2026-10-01T00:00:00.000Z',
+        usage: { aiCredits: 50, healthScans: 5, aiReports: 5, chatMessages: 20, repositories: 3 },
+        limits: { aiCredits: 50, healthScans: 5, aiReports: 5, chatMessages: 20, repositories: 3 },
+        remaining: { aiCredits: 0, healthScans: 0, aiReports: 0, chatMessages: 0, repositories: 0 },
       }) as ReturnType<typeof useUsage>,
     );
 
     render(<UsageLimits />);
-    const limitMessages = screen.getAllByText('Free plan limit reached');
+    const limitMessages = screen.getAllByText('Plan limit reached');
     expect(limitMessages.length).toBeGreaterThan(0);
   });
 });

@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { authenticate } from '@/core/auth/middleware';
 import { releaseNotesService } from './release-notes-service';
-import { usageService } from '@/core/usage';
+import { usageService, sendUsageLimitReached } from '@/core/usage';
 
 const releaseNotesSchema = z.object({
   owner: z.string().min(1),
@@ -61,16 +61,10 @@ export async function releaseNotesRoutes(app: FastifyInstance) {
         }
       }
 
-      // Check AI report limit
-      const limitCheck = await usageService.checkAiReportLimit(auth.sub);
-      if (!limitCheck.allowed) {
-        return reply.status(403).send({
-          success: false,
-          error: {
-            code: 'PLAN_LIMIT_REACHED',
-            message: `Free plan allows up to ${limitCheck.limit} AI reports per month. You have used ${limitCheck.used}/${limitCheck.limit}.`,
-          },
-        });
+      // Atomically consume AI report + AI credits before generation
+      const consume = await usageService.consumeWithCredits(auth.sub, 'AI_REPORT', 'AI_REPORT');
+      if (!consume.allowed && consume.details) {
+        return sendUsageLimitReached(reply, consume.details);
       }
 
       const result = await releaseNotesService.generateReleaseNotes(auth.sub, {
@@ -84,11 +78,9 @@ export async function releaseNotesRoutes(app: FastifyInstance) {
       });
 
       if (!result.success) {
+        await usageService.refundWithCredits(auth.sub, 'AI_REPORT', 'AI_REPORT');
         return reply.status(500).send(result);
       }
-
-      // Increment usage after successful generation
-      await usageService.incrementAiReport(auth.sub);
 
       return reply.send(result);
     },

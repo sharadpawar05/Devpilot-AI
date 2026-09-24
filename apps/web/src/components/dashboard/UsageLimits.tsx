@@ -10,41 +10,52 @@ export const UsageLimits = memo(function UsageLimits() {
   const isNearLimit = (used: number, limit: number) => used >= limit * 0.8;
   const isAtLimit = (used: number, limit: number) => used >= limit;
 
+  const periodLabel = usage.periodStart
+    ? usage.periodStart.slice(0, 7)
+    : ((usage as { period?: string }).period ?? '');
+
   return (
     <div className="rounded-2xl border border-input bg-card p-6 shadow-sm">
       <div className="mb-4 flex items-center gap-2">
         <BarChart3 className="h-4 w-4 text-muted-foreground" />
         <h3 className="text-sm font-semibold">Usage this month</h3>
-        <span className="ml-auto text-[10px] text-muted-foreground">{usage.period}</span>
+        <span className="ml-auto text-[10px] text-muted-foreground">{periodLabel}</span>
       </div>
       <div className="space-y-3">
         <UsageRow
+          label="AI credits"
+          used={usage.usage.aiCredits}
+          limit={usage.limits.aiCredits}
+          nearLimit={isNearLimit(usage.usage.aiCredits, usage.limits.aiCredits)}
+          atLimit={isAtLimit(usage.usage.aiCredits, usage.limits.aiCredits)}
+        />
+        <UsageRow
           label="Health scans"
-          used={usage.healthScans.used}
-          limit={usage.healthScans.limit}
-          nearLimit={isNearLimit(usage.healthScans.used, usage.healthScans.limit)}
-          atLimit={isAtLimit(usage.healthScans.used, usage.healthScans.limit)}
+          used={usage.usage.healthScans}
+          limit={usage.limits.healthScans}
+          nearLimit={isNearLimit(usage.usage.healthScans, usage.limits.healthScans)}
+          atLimit={isAtLimit(usage.usage.healthScans, usage.limits.healthScans)}
         />
         <UsageRow
           label="AI reports"
-          used={usage.aiReports.used}
-          limit={usage.aiReports.limit}
-          nearLimit={isNearLimit(usage.aiReports.used, usage.aiReports.limit)}
-          atLimit={isAtLimit(usage.aiReports.used, usage.aiReports.limit)}
+          used={usage.usage.aiReports}
+          limit={usage.limits.aiReports}
+          nearLimit={isNearLimit(usage.usage.aiReports, usage.limits.aiReports)}
+          atLimit={isAtLimit(usage.usage.aiReports, usage.limits.aiReports)}
         />
         <UsageRow
-          label="AI chat"
-          used={usage.aiChat.used}
-          limit={usage.aiChat.limit}
-          nearLimit={isNearLimit(usage.aiChat.used, usage.aiChat.limit)}
-          atLimit={isAtLimit(usage.aiChat.used, usage.aiChat.limit)}
+          label="Repository chat"
+          used={usage.usage.chatMessages}
+          limit={usage.limits.chatMessages}
+          nearLimit={isNearLimit(usage.usage.chatMessages, usage.limits.chatMessages)}
+          atLimit={isAtLimit(usage.usage.chatMessages, usage.limits.chatMessages)}
         />
         <UsageRow
           label="Repositories"
-          used={usage.repositories.used}
-          limit={usage.repositories.limit}
-          nearLimit={isNearLimit(usage.repositories.used, usage.repositories.limit)}
-          atLimit={isAtLimit(usage.repositories.used, usage.repositories.limit)}
+          used={usage.usage.repositories}
+          limit={usage.limits.repositories}
+          nearLimit={isNearLimit(usage.usage.repositories, usage.limits.repositories)}
+          atLimit={isAtLimit(usage.usage.repositories, usage.limits.repositories)}
         />
       </div>
     </div>
@@ -64,7 +75,7 @@ function UsageRow({
   nearLimit: boolean;
   atLimit: boolean;
 }) {
-  const percentage = Math.min((used / limit) * 100, 100);
+  const percentage = limit > 0 ? Math.min((used / limit) * 100, 100) : 0;
   return (
     <div>
       <div className="flex items-center justify-between text-xs">
@@ -92,7 +103,7 @@ function UsageRow({
       {atLimit && (
         <div className="mt-1 flex items-center gap-1 text-[10px] text-red-600 dark:text-red-400">
           <AlertTriangle className="h-3 w-3" />
-          Free plan limit reached
+          Plan limit reached
         </div>
       )}
     </div>

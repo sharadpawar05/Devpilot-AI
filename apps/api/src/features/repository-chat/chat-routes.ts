@@ -8,7 +8,7 @@ import { repositoryStatusService } from './status';
 import { buildTreeSummary, findFilesByKeywords } from './parser';
 import { db } from '@/core/db';
 import { config } from '@devpilot/config';
-import { usageService } from '@/core/usage';
+import { usageService, sendUsageLimitReached } from '@/core/usage';
 
 const MAX_FILE_SIZE = 50_000;
 const MAX_CONTEXT_FILES = 15;
@@ -326,16 +326,14 @@ Question: ${question}`;
       const maxTokens = isReportRequest || isDetailedRequest ? 4096 : 1500;
       const selectedModel = model || config.ai.defaultModel;
 
-      // Check AI chat limit
-      const limitCheck = await usageService.checkAiChatLimit(auth.sub);
-      if (!limitCheck.allowed) {
-        return reply.status(403).send({
-          success: false,
-          error: {
-            code: 'PLAN_LIMIT_REACHED',
-            message: `Free plan allows up to ${limitCheck.limit} AI chat requests per month. You have used ${limitCheck.used}/${limitCheck.limit}.`,
-          },
-        });
+      // Atomically consume chat message + AI credits before generation
+      const consume = await usageService.consumeWithCredits(
+        auth.sub,
+        'CHAT_MESSAGE',
+        'REPOSITORY_CHAT',
+      );
+      if (!consume.allowed && consume.details) {
+        return sendUsageLimitReached(reply, consume.details);
       }
 
       try {
@@ -345,8 +343,15 @@ Question: ${question}`;
           maxTokens,
         });
 
-        // Increment usage after successful response
-        await usageService.incrementAiChat(auth.sub);
+        await usageService.recordAIUsageEvent({
+          userId: auth.sub,
+          feature: 'REPOSITORY_CHAT',
+          model: response.model,
+          inputTokens: response.tokens.input,
+          outputTokens: response.tokens.output,
+          creditsConsumed: 5,
+          estimatedCostUsd: response.cost?.totalCost ?? 0,
+        });
 
         return reply.send({
           success: true,
@@ -359,6 +364,7 @@ Question: ${question}`;
           treeSummary: treeSummary.slice(0, 2000),
         });
       } catch (error: unknown) {
+        await usageService.refundWithCredits(auth.sub, 'CHAT_MESSAGE', 'REPOSITORY_CHAT');
         const err = error as { message?: string; code?: string };
         return reply.status(502).send({
           success: false,
