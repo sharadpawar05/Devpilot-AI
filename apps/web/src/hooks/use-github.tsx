@@ -36,6 +36,10 @@ interface GitHubRepo {
   language: string | null;
   updated_at: string;
   html_url: string;
+  stargazers_count?: number;
+  forks_count?: number;
+  /** Repository size in KB (GitHub API units) */
+  size?: number;
 }
 
 interface GitHubBranch {

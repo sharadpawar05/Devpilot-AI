@@ -36,6 +36,7 @@ import {
   FullPageSkeleton,
   TechnologyStackCard,
 } from '@/components/repo-overview';
+import { RepositoryGrid } from '@/components/repository';
 import { RepositoryIntelligencePanel } from '@/components/repo-intelligence';
 import type { RepoOverviewData, TechnologyStack } from '@/lib/repo-overview';
 
@@ -297,21 +298,45 @@ export default function RepositoryOverviewPage() {
 
   if (!selectedRepo) {
     return (
-      <div className="w-full px-6 py-20 flex flex-col items-center justify-center">
-        <div className="rounded-lg border border-dashed bg-card p-12 text-center w-full max-w-lg">
-          <FolderOpen className="mx-auto mb-4 h-12 w-12 text-muted-foreground/50" />
-          <h2 className="mb-2 text-lg font-semibold">Repository Overview</h2>
-          <p className="mb-6 text-sm text-muted-foreground">
-            Select a repository to view its overview, file structure, languages, and health score.
-          </p>
-          <RepoSelector
-            repositories={gh.repositories}
-            branches={gh.branches || []}
-            selectedRepo={selectedRepo}
-            selectedBranch={selectedBranch}
-            onRepoChange={handleRepoChange}
-            onBranchChange={handleBranchChange}
-          />
+      <div className="w-full px-6 py-12">
+        <div className="mx-auto max-w-4xl space-y-8">
+          <div className="text-center">
+            <FolderOpen className="mx-auto mb-4 h-12 w-12 text-muted-foreground/50" />
+            <h2 className="mb-2 text-lg font-semibold">Repository Overview</h2>
+            <p className="mx-auto max-w-md text-sm text-muted-foreground">
+              Select a repository to view its overview, file structure, languages, and health score.
+            </p>
+            <div className="mt-6 flex justify-center">
+              <RepoSelector
+                repositories={gh.repositories}
+                branches={gh.branches || []}
+                selectedRepo={selectedRepo}
+                selectedBranch={selectedBranch}
+                onRepoChange={handleRepoChange}
+                onBranchChange={handleBranchChange}
+              />
+            </div>
+          </div>
+
+          <div>
+            <h3 className="mb-3 text-sm font-medium text-muted-foreground">Browse repositories</h3>
+            <RepositoryGrid
+              repositories={gh.repositories}
+              selectedRepo={selectedRepo}
+              onSelect={handleRepoChange}
+              onChat={(fullName) => {
+                handleRepoChange(fullName);
+                navigate('/repository-chat');
+              }}
+              onReview={(fullName) => {
+                handleRepoChange(fullName);
+                navigate('/code-review');
+              }}
+              onAnalyze={(fullName) => handleRepoChange(fullName)}
+              loading={gh.loading}
+              skeletonCount={6}
+            />
+          </div>
         </div>
       </div>
     );
