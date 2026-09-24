@@ -47,7 +47,7 @@ export function SidebarHeader() {
         <button
           onClick={toggleCollapsed}
           className={cn(
-            'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-all duration-300 hover:bg-[#f3f4f6] hover:text-foreground active:scale-95',
+            'nav-toggle flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-all duration-300 hover:bg-[#f3f4f6] hover:text-foreground active:scale-95',
             collapsed ? 'mx-auto' : 'ml-auto',
           )}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}

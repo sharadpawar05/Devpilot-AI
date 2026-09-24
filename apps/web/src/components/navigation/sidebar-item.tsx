@@ -47,15 +47,11 @@ export function SidebarItem({ label, href, icon: Icon, badge, disabled }: Sideba
         {badge != null && isCollapsedView && <span className="nav-badge">{badge}</span>}
       </span>
 
-      {!isCollapsedView && (
-        <>
-          <span className="nav-label flex-1 truncate">{label}</span>
-          {badge != null && (
-            <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary/10 px-1.5 text-xs font-medium text-primary">
-              {badge}
-            </span>
-          )}
-        </>
+      <span className="nav-label flex-1 truncate">{label}</span>
+      {badge != null && !isCollapsedView && (
+        <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary/10 px-1.5 text-xs font-medium text-primary">
+          {badge}
+        </span>
       )}
     </Link>
   );
