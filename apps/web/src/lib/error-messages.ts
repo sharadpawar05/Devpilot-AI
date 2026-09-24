@@ -186,6 +186,18 @@ const ERROR_MESSAGES: Record<string, ErrorMessageConfig> = {
     retryable: true,
     suggestion: 'Please try again.',
   },
+  USAGE_LIMIT_REACHED: {
+    title: 'Usage limit reached',
+    message: 'You have reached your plan usage limit for this feature.',
+    retryable: false,
+    suggestion: 'Upgrade your plan or wait until the next billing period.',
+  },
+  PLAN_LIMIT_REACHED: {
+    title: 'Usage limit reached',
+    message: 'You have reached your plan usage limit for this feature.',
+    retryable: false,
+    suggestion: 'Upgrade your plan or wait until the next billing period.',
+  },
 };
 
 const DEFAULT_ERROR: ErrorMessageConfig = {
