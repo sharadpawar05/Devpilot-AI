@@ -202,6 +202,8 @@ export function RepositoryChatLayout({
     selectedFile,
   };
 
+  const [ownerPart = '', repoPart = ''] = selectedRepoFullName.split('/');
+
   return (
     <SplitViewLayout
       className="h-full"
@@ -219,7 +221,14 @@ export function RepositoryChatLayout({
         {
           id: 'preview',
           label: 'Preview',
-          content: <FilePreviewPanel file={selectedFile ?? null} />,
+          content: (
+            <FilePreviewPanel
+              file={selectedFile ?? null}
+              owner={ownerPart}
+              repo={repoPart}
+              branch={selectedBranch}
+            />
+          ),
           defaultSize: 28,
           minSize: 15,
           maxSize: 50,

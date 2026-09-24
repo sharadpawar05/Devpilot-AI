@@ -1,56 +1,37 @@
-import { FileCode, Eye, Sparkles } from 'lucide-react';
+import { useFileContent } from '@/lib/repo-intelligence/queries';
+import { CodePreview } from '@/components/code-preview';
 
 interface FilePreviewPanelProps {
   file: string | null;
+  owner?: string;
+  repo?: string;
+  branch?: string;
 }
 
-export function FilePreviewPanel({ file }: FilePreviewPanelProps) {
+export function FilePreviewPanel({ file, owner = '', repo = '', branch }: FilePreviewPanelProps) {
+  const { data, isLoading, isFetching, error, refetch, isError } = useFileContent(
+    owner,
+    repo,
+    file,
+    branch,
+  );
+
   if (!file) {
-    return (
-      <div
-        className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center"
-        role="status"
-        aria-label="No file selected"
-      >
-        <div className="rounded-2xl border border-dashed bg-muted/30 p-4 animate-scale-in">
-          <Eye className="h-8 w-8 text-muted-foreground/60" aria-hidden />
-        </div>
-        <p className="text-sm font-medium">No file selected</p>
-        <p className="max-w-[240px] text-xs text-muted-foreground">
-          Select a file in the explorer to preview it here.
-        </p>
-      </div>
-    );
+    return <CodePreview file={null} />;
   }
 
-  const fileName = file.split('/').pop() ?? file;
-  const dirName = file.includes('/') ? file.slice(0, file.lastIndexOf('/')) : '';
+  const hasContext = !!owner && !!repo;
+  const loading = isLoading || (isFetching && !data);
+  const errorMessage = isError ? error?.message || 'Unable to load file content.' : null;
 
   return (
-    <div className="flex h-full min-h-0 flex-col animate-fade-in">
-      <div className="flex items-center gap-2 border-b bg-card/50 px-4 py-2.5">
-        <FileCode className="h-4 w-4 shrink-0 text-primary" aria-hidden />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium" title={file}>
-            {fileName}
-          </p>
-          {dirName && (
-            <p className="truncate text-xs text-muted-foreground" title={dirName}>
-              {dirName}
-            </p>
-          )}
-        </div>
-      </div>
-      <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
-        <div className="rounded-2xl border border-dashed bg-muted/30 p-4">
-          <Sparkles className="h-8 w-8 text-primary/60" aria-hidden />
-        </div>
-        <p className="text-sm font-medium">Preview ready</p>
-        <p className="max-w-[260px] text-xs text-muted-foreground">
-          Ask the chat about <span className="font-mono text-foreground">{fileName}</span> to get
-          insights, explanations, and suggestions.
-        </p>
-      </div>
-    </div>
+    <CodePreview
+      file={file}
+      content={data?.content ?? null}
+      isLoading={loading && hasContext}
+      error={errorMessage}
+      onRetry={() => void refetch()}
+      className="h-full"
+    />
   );
 }

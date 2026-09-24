@@ -16,6 +16,7 @@ import type {
   CommitActivity,
   FileTreeNode,
   RepositoryIntelligence,
+  FileContent,
 } from './types';
 
 // ─── Query Key Factories ─────────────────────────────────────────────────────
@@ -52,6 +53,8 @@ export const intelligenceKeys = {
     [...intelligenceKeys.all, 'analyze', owner, repo, branch] as const,
   readme: (owner: string, repo: string) =>
     [...intelligenceKeys.all, 'readme', owner, repo] as const,
+  fileContent: (owner: string, repo: string, path: string, branch?: string) =>
+    [...intelligenceKeys.all, 'file-content', owner, repo, path, branch] as const,
 };
 
 // ─── Overview Hook ───────────────────────────────────────────────────────────
@@ -355,6 +358,32 @@ export function useRepositoryReadme(owner: string, repo: string) {
     },
     enabled: !!owner && !!repo && !!token,
     staleTime: 10 * 60 * 1000,
+    retry: 1,
+  });
+}
+
+// ─── File Content Hook ──────────────────────────────────────────────────────
+
+export function useFileContent(owner: string, repo: string, path: string | null, branch?: string) {
+  const { session } = useAuth();
+  const token = session?.accessToken;
+
+  return useQuery<FileContent, Error>({
+    queryKey: intelligenceKeys.fileContent(owner, repo, path ?? '', branch),
+    queryFn: async () => {
+      const result = await repositoryIntelligenceApi.getFileContent(
+        owner,
+        repo,
+        path ?? '',
+        token,
+        branch,
+      );
+      if (!result.success || !result.data)
+        throw new Error(result.error || 'Failed to fetch file content');
+      return result.data;
+    },
+    enabled: !!owner && !!repo && !!path && !!token,
+    staleTime: 60 * 1000,
     retry: 1,
   });
 }
