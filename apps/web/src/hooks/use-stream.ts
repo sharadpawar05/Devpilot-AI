@@ -33,6 +33,8 @@ export interface StreamOptions {
   temperature?: number;
   maxTokens?: number;
   metadata?: Record<string, unknown>;
+  /** Bearer token required by POST /stream */
+  token?: string;
   onStart?: () => void;
   onToken?: (token: string) => void;
   onComplete?: (metadata: StreamState['metadata'], content: string) => Promise<void> | void;
@@ -87,6 +89,16 @@ export function useStreamSession() {
 
       options.onStart?.();
 
+      if (!options.token) {
+        const authError = {
+          code: 'UNAUTHORIZED',
+          message: 'You must be signed in to use this feature.',
+        };
+        setState((prev) => ({ ...prev, error: authError, isStreaming: false }));
+        options.onError?.(authError);
+        return;
+      }
+
       const abortController = new AbortController();
       abortControllerRef.current = abortController;
 
@@ -103,7 +115,10 @@ export function useStreamSession() {
 
       fetch(`${API_BASE_URL}/stream`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${options.token}`,
+        },
         body: JSON.stringify(body),
         signal: abortController.signal,
       })
@@ -168,12 +183,10 @@ export function useStreamSession() {
                     await options.onComplete?.(metadata, fullContent);
                     setState((prev) => ({ ...prev, isStreaming: false }));
                   } else if (chunk.type === 'error') {
-                    const finalContent = contentBufferRef.current;
                     flushBatch();
                     const error = chunk.error || { code: 'UNKNOWN', message: 'Unknown error' };
                     setState((prev) => ({
                       ...prev,
-                      content: prev.content + finalContent,
                       error,
                       isStreaming: false,
                     }));

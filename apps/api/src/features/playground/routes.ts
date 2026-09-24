@@ -1,6 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { aiService } from '@/core/ai/service';
+import { authenticate } from '@/core/auth';
+import { usageService, sendUsageLimitReached } from '@/core/usage';
 
 const chatRequestSchema = z.object({
   provider: z.enum(['gemini', 'openai', 'anthropic', 'openrouter']).default('gemini'),
@@ -18,9 +20,11 @@ export async function aiRoutes(app: FastifyInstance) {
   }>(
     '/ai/chat',
     {
+      preHandler: [authenticate],
       schema: {
         description: 'Send a chat prompt to an AI provider',
         tags: ['ai'],
+        security: [{ bearerAuth: [] }],
         body: {
           type: 'object',
           required: ['model', 'prompt'],
@@ -55,6 +59,8 @@ export async function aiRoutes(app: FastifyInstance) {
       },
     },
     async (request, reply) => {
+      const auth = (request as { auth: { sub: string } }).auth;
+
       const parsed = chatRequestSchema.safeParse(request.body);
 
       if (!parsed.success) {
@@ -80,6 +86,15 @@ export async function aiRoutes(app: FastifyInstance) {
         });
       }
 
+      const consume = await usageService.consumeWithCredits(
+        auth.sub,
+        'CHAT_MESSAGE',
+        'SIMPLE_CHAT',
+      );
+      if (!consume.allowed && consume.details) {
+        return sendUsageLimitReached(reply, consume.details);
+      }
+
       try {
         const result = await aiService.generate(prompt, undefined, {
           provider,
@@ -101,6 +116,8 @@ export async function aiRoutes(app: FastifyInstance) {
           },
         });
       } catch (error) {
+        await usageService.refundWithCredits(auth.sub, 'CHAT_MESSAGE', 'SIMPLE_CHAT');
+
         const message = error instanceof Error ? error.message : String(error);
         const code =
           error && typeof error === 'object' && 'code' in error

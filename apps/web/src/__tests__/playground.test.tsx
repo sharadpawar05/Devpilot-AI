@@ -54,6 +54,7 @@ vi.mock('@/lib/ai-history', () => ({
   aiHistoryApi: {
     createSession: vi.fn().mockResolvedValue(null),
     addMessage: vi.fn().mockResolvedValue(null),
+    appendMessages: vi.fn().mockResolvedValue(null),
     getSession: vi.fn().mockResolvedValue(null),
   },
   aiHistoryStorage: {
@@ -436,9 +437,33 @@ describe('Playground Flow - 10 Steps', () => {
   describe('Step 7: Retry', () => {
     it('should allow retry after error without page refresh', async () => {
       const mockStartStream = vi.fn();
+      const mockReset = vi.fn();
 
-      // First call - error
-      vi.mocked(useStreamSession).mockReturnValueOnce({
+      vi.mocked(useStreamSession).mockReturnValue({
+        content: '',
+        isStreaming: false,
+        error: null,
+        metadata: null,
+        startStream: mockStartStream,
+        stopStream: vi.fn(),
+        reset: mockReset,
+      });
+
+      const { rerender } = render(<PlaygroundPage />);
+
+      const textarea = screen.getByPlaceholderText(/enter your prompt here/i);
+      fireEvent.change(textarea, { target: { value: 'Hello' } });
+
+      const generateButton = screen.getByText('Generate').closest('button');
+      expect(generateButton).not.toBeNull();
+      fireEvent.click(generateButton as HTMLButtonElement);
+
+      expect(mockStartStream).toHaveBeenCalledWith(expect.objectContaining({ prompt: 'Hello' }));
+      // Prompt is cleared after submit
+      expect(textarea).toHaveValue('');
+
+      // Switch to error state (same component instance — lastPromptRef persists)
+      vi.mocked(useStreamSession).mockReturnValue({
         content: '',
         isStreaming: false,
         error: {
@@ -448,33 +473,19 @@ describe('Playground Flow - 10 Steps', () => {
         metadata: null,
         startStream: mockStartStream,
         stopStream: vi.fn(),
-        reset: vi.fn(),
-      });
-
-      const { rerender } = render(<PlaygroundPage />);
-
-      const textarea = screen.getByPlaceholderText(/enter your prompt here/i);
-      fireEvent.change(textarea, { target: { value: 'Hello' } });
-
-      // Second call - success
-      vi.mocked(useStreamSession).mockReturnValueOnce({
-        content: 'Success after retry',
-        isStreaming: false,
-        error: null,
-        metadata: {
-          provider: 'gemini',
-          model: 'gemini-3.6-flash',
-          latencyMs: 1000,
-          tokens: { input: 5, output: 10, total: 15 },
-        },
-        startStream: mockStartStream,
-        stopStream: vi.fn(),
-        reset: vi.fn(),
+        reset: mockReset,
       });
 
       rerender(<PlaygroundPage />);
 
-      expect(screen.getByText('Success after retry')).toBeInTheDocument();
+      const retryButton = screen.getByRole('button', { name: /retry/i });
+      fireEvent.click(retryButton);
+
+      expect(mockReset).toHaveBeenCalled();
+      expect(mockStartStream).toHaveBeenCalledTimes(2);
+      expect(mockStartStream).toHaveBeenLastCalledWith(
+        expect.objectContaining({ prompt: 'Hello' }),
+      );
     });
   });
 
@@ -631,15 +642,15 @@ describe('Playground Flow - 10 Steps', () => {
         expect(screen.getByText('New')).toBeInTheDocument();
       });
 
-      // Form should be hidden when viewing history
-      expect(screen.queryByPlaceholderText(/enter your prompt here/i)).not.toBeInTheDocument();
+      // Form stays visible so the conversation can be continued
+      expect(screen.getByPlaceholderText(/enter your prompt here/i)).toBeInTheDocument();
 
       // Clicking New should clear the session
       const clearButton = screen.getByText('New');
       await user.click(clearButton);
 
       expect(mockReset).toHaveBeenCalled();
-      // After clearing, form should be visible again
+      // After clearing, form should still be visible
       await waitFor(() => {
         expect(screen.getByPlaceholderText(/enter your prompt here/i)).toBeInTheDocument();
       });
@@ -889,6 +900,38 @@ describe('Playground Flow - 10 Steps', () => {
       ).toBeInTheDocument();
       // Should have retry button for retryable errors
       expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
+    });
+
+    it('should apply template from ?template= query param', async () => {
+      vi.mocked(useSearchParams).mockReturnValue([
+        new URLSearchParams({ template: 'write-tests' }),
+        vi.fn(),
+      ]);
+
+      render(<PlaygroundPage />);
+
+      await waitFor(() => {
+        const textarea = screen.getByPlaceholderText(/enter your prompt here/i);
+        expect((textarea as HTMLTextAreaElement).value).toContain('unit tests');
+      });
+
+      vi.mocked(useSearchParams).mockReturnValue([new URLSearchParams(), vi.fn()]);
+    });
+
+    it('should apply documentation template from ?template=documentation', async () => {
+      vi.mocked(useSearchParams).mockReturnValue([
+        new URLSearchParams({ template: 'documentation' }),
+        vi.fn(),
+      ]);
+
+      render(<PlaygroundPage />);
+
+      await waitFor(() => {
+        const textarea = screen.getByPlaceholderText(/enter your prompt here/i);
+        expect((textarea as HTMLTextAreaElement).value.toLowerCase()).toContain('documentation');
+      });
+
+      vi.mocked(useSearchParams).mockReturnValue([new URLSearchParams(), vi.fn()]);
     });
   });
 });

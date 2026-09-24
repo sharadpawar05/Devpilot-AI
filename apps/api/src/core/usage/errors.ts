@@ -16,7 +16,7 @@ const FEATURE_MESSAGES: Record<UsageFeature, (d: UsageLimitErrorDetails) => stri
   HEALTH_SCAN: (d) =>
     `Health scan limit reached. Your plan includes ${d.limit} scans per month. Upgrade or wait until reset.`,
   CHAT_MESSAGE: (d) =>
-    `Repository chat limit reached. Your plan includes ${d.limit} messages per month. Upgrade or wait until reset.`,
+    `Chat message limit reached. Your plan includes ${d.limit} messages per month. Upgrade or wait until reset.`,
   AI_CREDITS: (d) =>
     `AI credit limit reached. Your plan includes ${d.limit} credits per month. Upgrade or wait until reset.`,
 };

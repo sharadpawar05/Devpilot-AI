@@ -401,10 +401,10 @@ function executeHandler(
       navigate('/playground');
       break;
     case 'ai:gen-docs':
-      navigate('/playground?template=readme-generator');
+      navigate('/playground?template=documentation');
       break;
     case 'ai:gen-tests':
-      navigate('/playground?template=generate-tests');
+      navigate('/playground?template=write-tests');
       break;
     case 'hist:continue':
       navigate('/history');

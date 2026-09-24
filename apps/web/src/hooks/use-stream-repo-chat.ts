@@ -50,6 +50,7 @@ export function useStreamRepoChat() {
           provider: params.provider || 'gemini',
           model: params.model,
           prompt: params.question,
+          token,
           context: {
             owner: params.owner,
             repo: params.repo,
