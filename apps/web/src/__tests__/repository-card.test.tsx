@@ -48,28 +48,12 @@ describe('RepositoryCard', () => {
     expect(onSelect).toHaveBeenCalledWith('acme/devpilot');
   });
 
-  it('exposes quick actions for chat, review, and analyze', () => {
-    const onChat = vi.fn();
-    const onReview = vi.fn();
-    const onAnalyze = vi.fn();
-    render(
-      <RepositoryCard repo={baseRepo} onChat={onChat} onReview={onReview} onAnalyze={onAnalyze} />,
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: /chat repository/i }));
-    fireEvent.click(screen.getByRole('button', { name: /review repository/i }));
-    fireEvent.click(screen.getByRole('button', { name: /analyze repository/i }));
-
-    expect(onChat).toHaveBeenCalledWith('acme/devpilot');
-    expect(onReview).toHaveBeenCalledWith('acme/devpilot');
-    expect(onAnalyze).toHaveBeenCalledWith('acme/devpilot');
-  });
-
-  it('links to GitHub', () => {
+  it('does not render hover quick actions', () => {
     render(<RepositoryCard repo={baseRepo} />);
-    const link = screen.getByRole('link', { name: /open acme\/devpilot on github/i });
-    expect(link).toHaveAttribute('href', 'https://github.com/acme/devpilot');
-    expect(link).toHaveAttribute('target', '_blank');
+    expect(screen.queryByTestId('repo-quick-actions')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /chat repository/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /review repository/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /analyze repository/i })).not.toBeInTheDocument();
   });
 });
 

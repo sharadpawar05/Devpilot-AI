@@ -108,7 +108,6 @@ export function RepositorySelectionState({
               repositories={gh.repositories}
               selectedRepo={selectedRepoFullName}
               onSelect={handleRepoChange}
-              onChat={handleRepoChange}
               loading={gh.loading}
               skeletonCount={3}
               limit={9}

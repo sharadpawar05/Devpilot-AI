@@ -1,9 +1,9 @@
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
-import { RepositoryCard, type RepositoryCardActions } from './RepositoryCard';
+import { RepositoryCard } from './RepositoryCard';
 import type { GitHubRepo } from '@/hooks/use-github';
 
-export interface RepositoryGridProps extends RepositoryCardActions {
+export interface RepositoryGridProps {
   repositories: GitHubRepo[];
   selectedRepo?: string;
   onSelect?: (fullName: string) => void;
@@ -29,7 +29,7 @@ export function RepositoryGridSkeleton({
       aria-label="Loading repositories"
     >
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="h-[152px] rounded-xl border border-input bg-card p-4 shadow-sm">
+        <div key={i} className="h-[112px] rounded-xl border border-input bg-card p-4 shadow-sm">
           <div className="flex items-start gap-3">
             <Skeleton className="h-10 w-10 shrink-0 rounded-lg" />
             <div className="min-w-0 flex-1 space-y-2">
@@ -42,11 +42,6 @@ export function RepositoryGridSkeleton({
             <Skeleton className="h-3 w-12" />
             <Skeleton className="h-3 w-14" />
           </div>
-          <div className="mt-4 flex gap-2">
-            <Skeleton className="h-7 w-16 rounded-md" />
-            <Skeleton className="h-7 w-18 rounded-md" />
-            <Skeleton className="h-7 w-18 rounded-md" />
-          </div>
         </div>
       ))}
     </div>
@@ -57,9 +52,6 @@ export function RepositoryGrid({
   repositories,
   selectedRepo,
   onSelect,
-  onChat,
-  onReview,
-  onAnalyze,
   loading,
   skeletonCount = 6,
   limit,
@@ -99,9 +91,6 @@ export function RepositoryGrid({
             repo={repo}
             selected={selectedRepo === repo.full_name}
             onSelect={onSelect}
-            onChat={onChat}
-            onReview={onReview}
-            onAnalyze={onAnalyze}
             className="h-full"
           />
         </div>

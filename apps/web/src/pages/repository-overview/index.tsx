@@ -324,15 +324,6 @@ export default function RepositoryOverviewPage() {
               repositories={gh.repositories}
               selectedRepo={selectedRepo}
               onSelect={handleRepoChange}
-              onChat={(fullName) => {
-                handleRepoChange(fullName);
-                navigate('/repository-chat');
-              }}
-              onReview={(fullName) => {
-                handleRepoChange(fullName);
-                navigate('/code-review');
-              }}
-              onAnalyze={(fullName) => handleRepoChange(fullName)}
               loading={gh.loading}
               skeletonCount={6}
             />
