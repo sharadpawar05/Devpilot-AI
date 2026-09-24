@@ -2,6 +2,18 @@ import type { EngineeringStatusRequest, EngineeringStatusResponse } from './type
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
 
+export class EngineeringStatusApiError extends Error {
+  code?: string;
+  retryable?: boolean;
+
+  constructor(message: string, code?: string, retryable?: boolean) {
+    super(message);
+    this.name = 'EngineeringStatusApiError';
+    this.code = code;
+    this.retryable = retryable ?? true;
+  }
+}
+
 async function authFetch(
   url: string,
   token?: string,
@@ -15,7 +27,12 @@ async function authFetch(
   const res = await fetch(url, { ...options, headers, credentials: 'include' });
   if (!res.ok) {
     const errorBody = await res.json().catch(() => ({}));
-    throw new Error(errorBody?.error?.message || `Request failed with status ${res.status}`);
+    const message = errorBody?.error?.message || `Request failed with status ${res.status}`;
+    throw new EngineeringStatusApiError(
+      message,
+      errorBody?.error?.code,
+      errorBody?.error?.retryable,
+    );
   }
   return res;
 }

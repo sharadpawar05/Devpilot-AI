@@ -1,5 +1,6 @@
 import { repositoryIntelligenceService } from '@/features/repo-intelligence';
 import { aiService } from '@/core/ai/service';
+import { classifyAIError } from '@/core/ai/classify-error';
 import type {
   EngineeringStatusRequest,
   EngineeringStatusResponse,
@@ -104,10 +105,18 @@ export class EngineeringStatusService {
         model: result.model,
       };
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
+      const classified = classifyAIError(error);
+      console.error('Engineering status AI generation failed:', error);
       return {
         success: false,
-        error: { code: 'GENERATION_FAILED', message: `Failed to generate report: ${message}` },
+        error: {
+          code: classified.code,
+          message:
+            classified.code === 'RATE_LIMIT_EXCEEDED'
+              ? classified.message
+              : `Failed to generate report. ${classified.message}`,
+          retryable: classified.retryable,
+        },
         latencyMs: Date.now() - startTime,
       };
     }

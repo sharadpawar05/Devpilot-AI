@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { getErrorMessage } from '@/lib/error-messages';
+import { EngineeringStatusApiError } from '@/lib/engineering-status/api';
 
 describe('Error Message Sanitization', () => {
   describe('getErrorMessage', () => {
@@ -120,6 +121,36 @@ describe('Error Message Sanitization', () => {
       expect(byRawMessage.message).not.toContain('generativelanguage.googleapis.com');
       expect(byRawMessage.message).not.toContain('quotaValue');
       expect(byRawMessage.suggestion).toContain('42');
+    });
+
+    it('should sanitize Gemini 429 errors for engineering status report', () => {
+      const raw = `[GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent: [429 Too Many Requests] You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. * Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-3.6-flash Please retry in 31.182946158s. [{"@type":"type.googleapis.com/google.rpc.Help"}]`;
+
+      const apiError = new EngineeringStatusApiError(raw, 'GENERATION_FAILED', true);
+      const friendly = getErrorMessage({
+        code: apiError.code,
+        message: apiError.message,
+      });
+
+      expect(friendly.title).toBe('Rate limit exceeded');
+      expect(friendly.retryable).toBe(true);
+      expect(friendly.message).not.toContain('GoogleGenerativeAI');
+      expect(friendly.message).not.toContain('generativelanguage.googleapis.com');
+      expect(friendly.message).not.toContain('429');
+      expect(friendly.suggestion).toContain('32');
+
+      const classified = new EngineeringStatusApiError(
+        'Rate limit exceeded. Please wait 31 seconds and try again.',
+        'RATE_LIMIT_EXCEEDED',
+        true,
+      );
+      const byCode = getErrorMessage({
+        code: classified.code,
+        message: classified.message,
+      });
+      expect(byCode.title).toBe('Rate limit exceeded');
+      expect(byCode.retryable).toBe(true);
+      expect(byCode.message).not.toContain('GoogleGenerativeAI');
     });
 
     it('should provide suggestions for retryable errors', () => {

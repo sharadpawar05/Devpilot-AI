@@ -79,7 +79,8 @@ export async function engineeringStatusRoutes(app: FastifyInstance) {
       });
 
       if (!result.success) {
-        return reply.status(500).send(result);
+        const status = result.error?.code === 'RATE_LIMIT_EXCEEDED' ? 429 : 500;
+        return reply.status(status).send(result);
       }
 
       // Increment usage after successful generation
