@@ -1,9 +1,8 @@
-import { memo, useState } from 'react';
+import { memo } from 'react';
 import {
   Brain,
   RefreshCw,
   FileCode,
-  FolderOpen,
   Package,
   FlaskConical,
   Paintbrush,
@@ -11,12 +10,10 @@ import {
   Wrench,
   Search,
   FileText,
-  ChevronDown,
-  ChevronRight,
   Database,
 } from 'lucide-react';
 import { useRepositoryIntelligence, useInvalidateIntelligence } from '@/lib/repo-intelligence';
-import type { DetectedTechnology, FolderNode, ProjectType } from '@/lib/repo-intelligence';
+import type { DetectedTechnology, ProjectType } from '@/lib/repo-intelligence';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
@@ -78,51 +75,6 @@ function TechBadge({ tech }: { tech: DetectedTechnology }) {
       {tech.name}
       {tech.version && <span className="text-[10px] opacity-60">v{tech.version}</span>}
     </span>
-  );
-}
-
-function FolderTree({ nodes, depth = 0 }: { nodes: FolderNode[]; depth?: number }) {
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-
-  const toggle = (name: string) => {
-    setExpanded((prev) => ({ ...prev, [name]: !prev[name] }));
-  };
-
-  if (depth > 2) return null;
-
-  return (
-    <div className={cn('font-mono text-xs', depth > 0 && 'ml-4 mt-0.5')}>
-      {nodes.map((node) => (
-        <div key={node.name}>
-          <button
-            onClick={() => node.type === 'directory' && toggle(node.name)}
-            className="flex items-center gap-1 py-0.5 text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {node.type === 'directory' ? (
-              expanded[node.name] ? (
-                <ChevronDown className="h-3 w-3 shrink-0" />
-              ) : (
-                <ChevronRight className="h-3 w-3 shrink-0" />
-              )
-            ) : (
-              <span className="w-3" />
-            )}
-            {node.type === 'directory' ? (
-              <FolderOpen className="h-3 w-3 text-blue-500 shrink-0" />
-            ) : (
-              <FileText className="h-3 w-3 text-muted-foreground shrink-0" />
-            )}
-            <span>
-              {node.name}
-              {node.type === 'directory' ? '/' : ''}
-            </span>
-          </button>
-          {node.type === 'directory' && expanded[node.name] && node.children && (
-            <FolderTree nodes={node.children} depth={depth + 1} />
-          )}
-        </div>
-      ))}
-    </div>
   );
 }
 
@@ -338,19 +290,6 @@ export const RepositoryIntelligencePanel = memo(function RepositoryIntelligenceP
                 <span className="ml-auto text-muted-foreground shrink-0">{f.purpose}</span>
               </div>
             ))}
-          </div>
-        </div>
-      )}
-
-      {/* Folder Tree */}
-      {intelligence.folderTreeSummary.length > 0 && (
-        <div className="mt-4 space-y-2">
-          <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-            <FolderOpen className="h-3.5 w-3.5" />
-            Structure
-          </div>
-          <div className="rounded-lg bg-muted/30 p-3 max-h-48 overflow-y-auto">
-            <FolderTree nodes={intelligence.folderTreeSummary} />
           </div>
         </div>
       )}

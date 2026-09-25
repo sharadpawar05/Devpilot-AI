@@ -70,12 +70,14 @@ export interface RepositoryMetadata {
 export interface RepositoryStatistics {
   totalFiles: number;
   totalDirectories: number;
-  totalBranches: number;
-  totalCommits: number;
-  totalPullRequests: number;
-  totalIssues: number;
-  totalReleases: number;
-  totalContributors: number;
+  totalBranches: number | null;
+  totalCommits: number | null;
+  totalPullRequests: number | null;
+  totalIssues: number | null;
+  totalReleases: number | null;
+  totalContributors: number | null;
+  openPullRequests: number | null;
+  openIssues: number | null;
   languageBreakdown: Record<string, number>;
 }
 

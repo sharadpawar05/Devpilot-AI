@@ -483,6 +483,8 @@ describe('UsageService', () => {
       expect(summary.usage).toHaveProperty('aiCredits');
       expect(summary.usage).toHaveProperty('repositories');
       expect(summary.remaining.aiCredits).toBe(50);
+      expect(summary.creditCosts.AI_REPORT).toBe(3);
+      expect(summary.creditCosts.HEALTH_SCAN).toBe(15);
     });
 
     it('remaining is always max(limit - used, 0)', async () => {

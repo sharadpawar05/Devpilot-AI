@@ -30,6 +30,15 @@ export interface UsageData {
     chatMessages: number;
     repositories: number;
   };
+  creditCosts?: {
+    SIMPLE_CHAT: number;
+    REPOSITORY_CHAT: number;
+    AI_REPORT: number;
+    PR_REVIEW: number;
+    REPOSITORY_OVERVIEW: number;
+    HEALTH_SCAN: number;
+    ARCHITECTURE_ANALYSIS: number;
+  };
 }
 
 async function fetchUsage(token: string): Promise<UsageData> {

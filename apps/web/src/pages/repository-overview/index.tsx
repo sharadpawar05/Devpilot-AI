@@ -1,8 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import {
   RefreshCw,
-  Star,
-  GitFork,
   AlertCircle,
   Users,
   Scale,
@@ -18,12 +16,18 @@ import {
   Loader2,
   ChevronDown,
   Bot,
+  BarChart3,
+  GitCommitHorizontal,
+  GitPullRequest,
+  HardDrive,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/auth';
 import { useGitHub } from '@/hooks/use-github';
+import { useUsage } from '@/hooks/use-usage';
 import { repoOverviewApi } from '@/lib/repo-overview/api';
+import { useRepositoryStatistics } from '@/lib/repo-intelligence';
 import { renderMarkdown } from '@/lib/markdown';
 import { cn } from '@/lib/utils';
 import { getErrorMessage } from '@/lib/error-messages';
@@ -35,7 +39,6 @@ import {
   LanguageBar,
   CompactHealthScore,
   FileTree,
-  ContributorList,
   FullPageSkeleton,
   TechnologyStackCard,
 } from '@/components/repo-overview';
@@ -49,12 +52,8 @@ function formatSize(kb: number): string {
   return `${kb} KB`;
 }
 
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
+function formatCount(value: number | null | undefined): string {
+  return typeof value === 'number' ? value.toLocaleString() : '—';
 }
 
 function timeAgo(dateStr: string): string {
@@ -168,6 +167,8 @@ export default function RepositoryOverviewPage() {
   const owner = selectedRepo.split('/')[0] || '';
   const repo = selectedRepo.split('/')[1] || '';
   const summaryUsageLimit = useUsageLimitModal(summaryError);
+  const { data: usageData } = useUsage();
+  const { data: stats } = useRepositoryStatistics(owner, repo);
 
   useEffect(() => {
     try {
@@ -317,6 +318,18 @@ export default function RepositoryOverviewPage() {
   }, []);
 
   const metadata = overviewData?.metadata;
+  const health = overviewData?.health;
+  const hasHealthData = !!health && (health.score > 0 || (health.details?.length ?? 0) > 0);
+  const contributors = overviewData?.contributors ?? [];
+  const visibleContributors = contributors.slice(0, 8);
+  const hiddenContributors = Math.max(
+    (stats?.totalContributors ?? contributors.length) - visibleContributors.length,
+    0,
+  );
+  const hasTechStack =
+    !!techStack &&
+    Object.values(techStack).some((items) => Array.isArray(items) && items.length > 0);
+  const creditCost = usageData?.creditCosts?.AI_REPORT;
 
   if (!selectedRepo) {
     return (
@@ -477,82 +490,103 @@ export default function RepositoryOverviewPage() {
               <FolderOpen className="h-3 w-3" />
               {metadata.default_branch}
             </span>
+            {metadata.topics.slice(0, 6).map((topic) => (
+              <span
+                key={topic}
+                className="inline-flex items-center rounded-full border border-dashed bg-background px-2.5 py-0.5 text-xs font-medium text-muted-foreground"
+              >
+                {topic}
+              </span>
+            ))}
           </div>
         </div>
       )}
 
-      {/* Metrics Grid */}
+      {/* Engineering Metrics */}
       {metadata && (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <MetricCard
-            label="Stars"
-            value={metadata.stargazers_count.toLocaleString()}
-            icon={<Star className="h-4 w-4" />}
-          />
-          <MetricCard
-            label="Forks"
-            value={metadata.forks_count.toLocaleString()}
-            icon={<GitFork className="h-4 w-4" />}
-          />
-          <MetricCard
-            label="Open Issues"
-            value={metadata.open_issues_count.toLocaleString()}
-            icon={<AlertCircle className="h-4 w-4" />}
-          />
-          <MetricCard
-            label="Watchers"
-            value={metadata.watchers_count.toLocaleString()}
-            icon={<Eye className="h-4 w-4" />}
-          />
-          <MetricCard
-            label="Size"
-            value={formatSize(metadata.size)}
-            icon={<FolderOpen className="h-4 w-4" />}
-          />
-          <MetricCard
-            label="Primary Language"
-            value={metadata.language || 'Unknown'}
-            icon={<Code className="h-4 w-4" />}
-          />
-          <MetricCard
-            label="License"
-            value={metadata.license?.spdx_id || 'None'}
-            icon={<Scale className="h-4 w-4" />}
-          />
-          <MetricCard
-            label="Created"
-            value={formatDate(metadata.created_at)}
-            icon={<Clock className="h-4 w-4" />}
-          />
+        <div className="space-y-3">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <BarChart3 className="h-5 w-5 text-muted-foreground" />
+            Engineering Metrics
+          </h2>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <MetricCard
+              label="Files"
+              value={formatCount(overviewData?.totalFiles)}
+              icon={<FileText className="h-4 w-4" />}
+            />
+            <MetricCard
+              label="Directories"
+              value={formatCount(overviewData?.totalDirectories)}
+              icon={<FolderOpen className="h-4 w-4" />}
+            />
+            <MetricCard
+              label="Commits"
+              value={formatCount(stats?.totalCommits)}
+              icon={<GitCommitHorizontal className="h-4 w-4" />}
+            />
+            <MetricCard
+              label="Contributors"
+              value={formatCount(stats?.totalContributors)}
+              icon={<Users className="h-4 w-4" />}
+            />
+            <MetricCard
+              label="Open PRs"
+              value={formatCount(stats?.openPullRequests)}
+              icon={<GitPullRequest className="h-4 w-4" />}
+            />
+            <MetricCard
+              label="Open Issues"
+              value={formatCount(stats?.openIssues)}
+              icon={<AlertCircle className="h-4 w-4" />}
+            />
+            <MetricCard
+              label="Size"
+              value={formatSize(metadata.size)}
+              icon={<HardDrive className="h-4 w-4" />}
+            />
+            <MetricCard
+              label="Primary Language"
+              value={metadata.language || '—'}
+              icon={<Code className="h-4 w-4" />}
+            />
+          </div>
         </div>
       )}
 
       {/* AI Summary */}
       <div className="rounded-lg border bg-card p-6">
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-lg font-semibold flex items-center gap-2">
             <Bot className="h-5 w-5 text-muted-foreground" />
             Repository Summary
           </h2>
-          {!summary && !isGeneratingSummary && (
-            <Button variant="outline" size="sm" onClick={generateSummary} disabled={!metadata}>
-              <Zap className="mr-1.5 h-3.5 w-3.5" />
-              Generate Summary
-            </Button>
-          )}
-          {summary && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={generateSummary}
-              disabled={isGeneratingSummary}
-            >
-              <RefreshCw
-                className={cn('mr-1.5 h-3.5 w-3.5', isGeneratingSummary && 'animate-spin')}
-              />
-              Regenerate
-            </Button>
-          )}
+          <div className="flex items-center gap-3">
+            {typeof creditCost === 'number' && !isGeneratingSummary && (
+              <span className="text-xs text-muted-foreground">
+                Costs {creditCost} AI credit{creditCost === 1 ? '' : 's'}
+              </span>
+            )}
+            {!summary && !isGeneratingSummary && (
+              <Button variant="outline" size="sm" onClick={generateSummary} disabled={!metadata}>
+                <Zap className="mr-1.5 h-3.5 w-3.5" />
+                Generate Summary
+              </Button>
+            )}
+            {summary && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={generateSummary}
+                disabled={isGeneratingSummary}
+              >
+                <RefreshCw
+                  className={cn('mr-1.5 h-3.5 w-3.5', isGeneratingSummary && 'animate-spin')}
+                />
+                Regenerate
+              </Button>
+            )}
+          </div>
         </div>
 
         {isGeneratingSummary && (
@@ -600,23 +634,10 @@ export default function RepositoryOverviewPage() {
         )}
       </div>
 
-      {/* Technology Stack */}
-      {(techStack || isAnalyzing) && (
-        <TechnologyStackCard
-          stack={techStack || {}}
-          className={isAnalyzing ? 'animate-pulse' : ''}
-        />
-      )}
-
-      {/* Repository Intelligence */}
-      {owner && repo && (
-        <RepositoryIntelligencePanel owner={owner} repo={repo} branch={selectedBranch} />
-      )}
-
-      {/* Content Grid: Structure + Languages + Health */}
-      <div className="grid gap-6 lg:grid-cols-3">
+      {/* Structure | Technology Stack */}
+      <div className="grid gap-6 lg:grid-cols-2">
         {/* Repository Structure */}
-        <div className="lg:col-span-1 rounded-lg border bg-card p-6">
+        <div className="rounded-lg border bg-card p-6">
           <h2 className="mb-4 text-lg font-semibold flex items-center gap-2">
             <FolderOpen className="h-5 w-5 text-muted-foreground" />
             Structure
@@ -640,85 +661,95 @@ export default function RepositoryOverviewPage() {
           )}
         </div>
 
-        {/* Languages + Health */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Language Breakdown */}
-          <div className="rounded-lg border bg-card p-6">
-            <h2 className="mb-4 text-lg font-semibold flex items-center gap-2">
-              <Code className="h-5 w-5 text-muted-foreground" />
-              Programming Languages
-            </h2>
-            <p className="mb-3 text-xs text-muted-foreground">GitHub language statistics</p>
-            {overviewData?.languages && Object.keys(overviewData.languages).length > 0 ? (
-              <LanguageBar languages={overviewData.languages} />
-            ) : (
-              <p className="text-sm text-muted-foreground text-center py-4">
-                {isLoading ? 'Loading...' : 'No language data available'}
-              </p>
-            )}
-          </div>
-
-          {/* Health Score */}
-          <div className="rounded-lg border bg-card p-6">
-            <h2 className="mb-4 text-lg font-semibold flex items-center gap-2">
-              <Shield className="h-5 w-5 text-muted-foreground" />
-              Repository Health
-            </h2>
-            {overviewData?.health ? (
-              <CompactHealthScore
-                health={overviewData.health}
-                onViewDetails={() =>
-                  navigate(
-                    `/health-overview?repo=${encodeURIComponent(selectedRepo)}&branch=${encodeURIComponent(selectedBranch)}`,
-                  )
-                }
-              />
-            ) : (
-              <p className="text-sm text-muted-foreground text-center py-4">
-                {isLoading ? 'Loading...' : 'No health data available'}
-              </p>
-            )}
-          </div>
-
-          {/* Contributors */}
-          <div className="rounded-lg border bg-card p-6">
-            <h2 className="mb-4 text-lg font-semibold flex items-center gap-2">
-              <Users className="h-5 w-5 text-muted-foreground" />
-              Contributors
-            </h2>
-            {overviewData?.contributors && overviewData.contributors.length > 0 ? (
-              <div className="space-y-4">
-                <ContributorList contributors={overviewData.contributors} maxDisplay={12} />
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {overviewData.contributors.slice(0, 6).map((c) => (
-                    <a
-                      key={c.login}
-                      href={c.html_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 rounded-md border bg-background p-2 text-sm transition-colors hover:bg-accent"
-                    >
-                      <img
-                        src={c.avatar_url}
-                        alt={c.login}
-                        className="h-6 w-6 rounded-full"
-                        loading="lazy"
-                      />
-                      <span className="truncate font-medium">{c.login}</span>
-                      <span className="ml-auto text-xs text-muted-foreground">
-                        {c.contributions}
-                      </span>
-                    </a>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground text-center py-4">
-                No contributors data available
-              </p>
-            )}
-          </div>
+        {/* Technology Stack + Repository Intelligence */}
+        <div className="space-y-6">
+          {(isAnalyzing || hasTechStack) && (
+            <TechnologyStackCard
+              stack={techStack || {}}
+              className={isAnalyzing ? 'animate-pulse' : ''}
+            />
+          )}
+          {owner && repo && (
+            <RepositoryIntelligencePanel owner={owner} repo={repo} branch={selectedBranch} />
+          )}
         </div>
+      </div>
+
+      {/* Language Breakdown | Repository Health */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Language Breakdown */}
+        <div className="rounded-lg border bg-card p-6">
+          <h2 className="mb-4 text-lg font-semibold flex items-center gap-2">
+            <Code className="h-5 w-5 text-muted-foreground" />
+            Language Breakdown
+          </h2>
+          <p className="mb-3 text-xs text-muted-foreground">GitHub language statistics</p>
+          {overviewData?.languages && Object.keys(overviewData.languages).length > 0 ? (
+            <LanguageBar languages={overviewData.languages} />
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              {isLoading ? 'Loading...' : 'No language data available'}
+            </p>
+          )}
+        </div>
+
+        {/* Repository Health */}
+        <div className="rounded-lg border bg-card p-6">
+          <h2 className="mb-4 text-lg font-semibold flex items-center gap-2">
+            <Shield className="h-5 w-5 text-muted-foreground" />
+            Repository Health
+          </h2>
+          {hasHealthData && health ? (
+            <CompactHealthScore
+              health={health}
+              onViewDetails={() =>
+                navigate(
+                  `/health-overview?repo=${encodeURIComponent(selectedRepo)}&branch=${encodeURIComponent(selectedBranch)}`,
+                )
+              }
+            />
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              {isLoading ? 'Loading...' : 'No health data available'}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Contributors */}
+      <div className="rounded-lg border bg-card p-6">
+        <h2 className="mb-4 text-lg font-semibold flex items-center gap-2">
+          <Users className="h-5 w-5 text-muted-foreground" />
+          Contributors
+        </h2>
+        {visibleContributors.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {visibleContributors.map((c) => (
+              <a
+                key={c.login}
+                href={c.html_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-md border bg-background px-2.5 py-1.5 text-sm transition-colors hover:bg-accent"
+              >
+                <img src={c.avatar_url} alt="" className="h-5 w-5 rounded-full" loading="lazy" />
+                <span className="font-medium">{c.login}</span>
+                <span className="text-xs text-muted-foreground">
+                  / {c.contributions.toLocaleString()} commits
+                </span>
+              </a>
+            ))}
+            {hiddenContributors > 0 && (
+              <span className="inline-flex items-center px-2.5 py-1.5 text-xs text-muted-foreground">
+                +{hiddenContributors} more
+              </span>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground text-center py-4">
+            No contributors data available
+          </p>
+        )}
       </div>
 
       {/* File Detail Panel */}

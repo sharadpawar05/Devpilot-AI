@@ -2247,32 +2247,82 @@ export class RepositoryIntelligenceService {
 
   // ─── Repository Statistics ───────────────────────────────────────────────
 
+  private async countTotal(
+    fetchPage: () => Promise<{
+      data: unknown[];
+      headers: Record<string, string | number | undefined>;
+    }>,
+  ): Promise<number | null> {
+    try {
+      const { data, headers } = await fetchPage();
+      const match = String(headers.link || '').match(/[?&]page=(\d+)>;\s*rel="last"/);
+      return match ? Number(match[1]) : data.length;
+    } catch (error) {
+      if ((error as { status?: number }).status === 409) return 0;
+      return null;
+    }
+  }
+
   async getStatistics(userId: string, owner: string, repo: string): Promise<RepositoryStatistics> {
     const key = cacheKey([owner, repo, 'statistics']);
     const cached = this.get<RepositoryStatistics>(key, STATS_CACHE_TTL);
     if (cached) return cached;
 
-    const [languages, contributors, branches, pulls, issues, releases] = await Promise.all([
+    const octokit = await getOctokit(userId);
+    const defaultBranch = await this.getDefaultBranch(userId, owner, repo);
+
+    const [
+      languages,
+      tree,
+      totalBranches,
+      totalCommits,
+      totalPullRequests,
+      totalIssues,
+      openPullRequests,
+      openIssuesIncludingPrs,
+      totalReleases,
+      totalContributors,
+    ] = await Promise.all([
       this.getLanguages(userId, owner, repo),
-      this.getContributors(userId, owner, repo, 100),
-      this.getBranches(userId, owner, repo),
-      this.getPullRequests(userId, owner, repo, 'all', 1),
-      this.getIssues(userId, owner, repo, 'all', 1),
-      this.getReleases(userId, owner, repo, 1),
+      this.getFileTree(userId, owner, repo),
+      this.countTotal(() => octokit.rest.repos.listBranches({ owner, repo, per_page: 1 })),
+      this.countTotal(() =>
+        octokit.rest.repos.listCommits({
+          owner,
+          repo,
+          sha: defaultBranch || undefined,
+          per_page: 1,
+        }),
+      ),
+      this.countTotal(() => octokit.rest.pulls.list({ owner, repo, state: 'all', per_page: 1 })),
+      this.countTotal(() =>
+        octokit.rest.issues.listForRepo({ owner, repo, state: 'all', per_page: 1 }),
+      ),
+      this.countTotal(() => octokit.rest.pulls.list({ owner, repo, state: 'open', per_page: 1 })),
+      this.countTotal(() =>
+        octokit.rest.issues.listForRepo({ owner, repo, state: 'open', per_page: 1 }),
+      ),
+      this.countTotal(() => octokit.rest.repos.listReleases({ owner, repo, per_page: 1 })),
+      this.countTotal(() => octokit.rest.repos.listContributors({ owner, repo, per_page: 1 })),
     ]);
 
-    const tree = await this.getFileTree(userId, owner, repo);
     const countResult = this.countNodes(tree);
+    const openIssues =
+      openIssuesIncludingPrs !== null && openPullRequests !== null
+        ? Math.max(0, openIssuesIncludingPrs - openPullRequests)
+        : null;
 
     const statistics: RepositoryStatistics = {
       totalFiles: countResult.files,
       totalDirectories: countResult.directories,
-      totalBranches: branches.length,
-      totalCommits: 0, // Requires separate API call, set to 0 for stats overview
-      totalPullRequests: pulls.length,
-      totalIssues: issues.length,
-      totalReleases: releases.length,
-      totalContributors: contributors.length,
+      totalBranches,
+      totalCommits,
+      totalPullRequests,
+      totalIssues,
+      totalReleases,
+      totalContributors,
+      openPullRequests,
+      openIssues,
       languageBreakdown: languages,
     };
 
