@@ -40,6 +40,7 @@ export interface UsageSummary {
     chatMessages: number;
     repositories: number;
   };
+  creditCosts: Record<AICreditCostKey, number>;
 }
 
 export interface QuotaCheckResult {
@@ -582,6 +583,7 @@ class UsageService {
         repositories: limits.repositories,
       },
       remaining,
+      creditCosts: { ...AI_CREDIT_COSTS },
     };
   }
 

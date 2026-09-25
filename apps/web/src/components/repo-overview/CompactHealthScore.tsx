@@ -1,4 +1,4 @@
-import { Activity, AlertTriangle, XCircle, CheckCircle2 } from 'lucide-react';
+import { Activity, AlertTriangle, XCircle, CheckCircle2, ShieldAlert } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TrendBadge } from './TrendBadge';
 import type { RepoHealthCheck } from '@/lib/repo-overview';
@@ -31,7 +31,17 @@ interface CompactHealthScoreProps {
 export function CompactHealthScore({ health, onViewDetails }: CompactHealthScoreProps) {
   if (!health) return null;
 
-  const { score = 0, passedCount = 0, failedCount = 0, criticalCount = 0 } = health;
+  const {
+    score = 0,
+    passedCount = 0,
+    failedCount = 0,
+    warningCount = 0,
+    criticalCount = 0,
+  } = health;
+  const securityFindings = (health.details ?? []).reduce(
+    (sum, d) => sum + (d.quality?.vulnerabilityCount ?? 0),
+    0,
+  );
   const circumference = 2 * Math.PI * 28;
   const offset = circumference - (score / 100) * circumference;
 
@@ -78,7 +88,7 @@ export function CompactHealthScore({ health, onViewDetails }: CompactHealthScore
             </span>
             <TrendBadge trend={health.trend?.score ?? null} />
           </div>
-          <div className="mt-1.5 flex items-center gap-3 text-xs text-muted-foreground">
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">
               <CheckCircle2 className="h-3 w-3 text-emerald-500" />
               {passedCount} passed
@@ -89,23 +99,35 @@ export function CompactHealthScore({ health, onViewDetails }: CompactHealthScore
                 {failedCount} failed
               </span>
             )}
+            {warningCount > 0 && (
+              <span className="flex items-center gap-1">
+                <AlertTriangle className="h-3 w-3 text-amber-500" />
+                {warningCount} needs attention
+              </span>
+            )}
             {criticalCount > 0 && (
               <span className="flex items-center gap-1">
                 <AlertTriangle className="h-3 w-3 text-red-600" />
                 {criticalCount} critical
               </span>
             )}
+            {securityFindings > 0 && (
+              <span className="flex items-center gap-1">
+                <ShieldAlert className="h-3 w-3 text-red-500" />
+                {securityFindings} security findings
+              </span>
+            )}
           </div>
         </div>
 
-        {/* View details link */}
+        {/* View Health Overview link */}
         {onViewDetails && (
           <button
             type="button"
             onClick={onViewDetails}
             className="shrink-0 text-xs font-medium text-primary hover:underline"
           >
-            View Details
+            View Health Overview →
           </button>
         )}
       </div>

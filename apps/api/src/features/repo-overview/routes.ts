@@ -272,14 +272,21 @@ ${treeSummary || 'Not available'}
 README Content:
 ${readme || 'No README found'}
 
-Please provide:
-1. **Project Purpose**: What this project does and why it exists
-2. **Architecture**: High-level architecture and key components
-3. **Primary Technologies**: Main technologies, frameworks, and tools used
-4. **Strengths**: What the project does well
-5. **Potential Improvements**: Areas that could be enhanced
+Please structure the summary with exactly these markdown sections:
 
-Keep each section concise (2-4 sentences). Use markdown headers and bullet points.`;
+### What It Does
+What this project does and why it exists (2-3 sentences).
+
+### Architecture
+High-level structure and key components (2-4 sentences).
+
+### Main Technologies
+Primary languages, frameworks, and tools — bullet list.
+
+### Observations
+2-4 notable engineering observations (strengths and areas to watch) — bullet list.
+
+Keep each section concise. Do not add any other sections.`;
 
         const response = await aiService.generate(userPrompt, systemPrompt, {
           provider: 'gemini',
