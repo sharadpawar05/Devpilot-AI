@@ -81,7 +81,7 @@ export class SprintSummaryService {
       );
 
       const result = await aiService.generate(prompt.userPrompt, prompt.systemPrompt, {
-        provider: provider as 'gemini' | 'openai' | 'anthropic' | 'openrouter',
+        provider: provider as 'gemini' | 'openai' | 'anthropic' | 'openrouter' | 'groq',
         model: DEFAULT_MODEL,
         maxTokens: 4096,
       });

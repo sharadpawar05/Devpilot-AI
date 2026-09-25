@@ -274,8 +274,7 @@ export function getErrorMessage(
   const message = error.message ?? '';
   const lower = message.toLowerCase();
 
-  const isRateLimitCode =
-    code === 'STREAM_ERROR' || code === 'RATE_LIMIT_EXCEEDED' || code === 'RATE_LIMIT';
+  const isRateLimitCode = code === 'RATE_LIMIT_EXCEEDED' || code === 'RATE_LIMIT';
   const isRateLimitMessage =
     message.includes('429') ||
     message.includes('Too Many Requests') ||
@@ -284,11 +283,7 @@ export function getErrorMessage(
 
   if (isRateLimitCode || isRateLimitMessage) {
     // Quota exceeded (no retry delay) gets its own copy
-    if (
-      (code === 'STREAM_ERROR' || isRateLimitMessage) &&
-      lower.includes('quota') &&
-      !/retry/i.test(message)
-    ) {
+    if (isRateLimitMessage && lower.includes('quota') && !/retry/i.test(message)) {
       return {
         title: 'Quota exceeded',
         message: 'You have exceeded your API quota for this provider.',

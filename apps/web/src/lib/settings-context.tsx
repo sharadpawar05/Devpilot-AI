@@ -7,7 +7,7 @@ export type FontSize = 'small' | 'default' | 'large';
 export type AccentColor = 'blue' | 'purple' | 'green' | 'orange' | 'pink';
 export type DefaultReviewType = 'quick' | 'standard' | 'deep';
 export type DefaultReviewDepth = 'shallow' | 'moderate' | 'thorough';
-export type AIProvider = 'gemini' | 'openai' | 'anthropic' | 'openrouter';
+export type AIProvider = 'gemini' | 'openai' | 'anthropic' | 'openrouter' | 'groq';
 export type AIModel = string;
 
 export interface SettingsState {

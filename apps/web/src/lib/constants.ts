@@ -1,5 +1,6 @@
 export const PROVIDERS = [
   { value: 'gemini', label: 'Gemini' },
+  { value: 'groq', label: 'Groq' },
   { value: 'openai', label: 'OpenAI' },
   { value: 'anthropic', label: 'Anthropic' },
   { value: 'openrouter', label: 'OpenRouter' },

@@ -2,9 +2,6 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   AlertCircle,
-  History,
-  User,
-  Bot,
   ChevronDown,
   ChevronRight,
   Settings2,
@@ -26,8 +23,7 @@ import { useStreamingAbort, useCopyResponse } from '@/hooks/use-keyboard-shortcu
 import { useUserPreferences } from '@/hooks/use-user-preferences';
 import { useAuth } from '@/auth';
 import { aiHistoryApi } from '@/lib/ai-history';
-import { renderMarkdown } from '@/lib/markdown';
-import { cn } from '@/lib/utils';
+import { MarkdownRenderer } from '@/components/shared/MarkdownRenderer';
 import { getErrorMessage } from '@/lib/error-messages';
 import { WorkspaceLayout } from '@/components/workspace/WorkspaceLayout';
 import { PageHeader } from '@/components/workspace/PageHeader';
@@ -38,6 +34,7 @@ import type { AIHistorySession } from '@devpilot/types';
 
 const PROVIDERS = [
   { value: 'gemini', label: 'Google Gemini' },
+  { value: 'groq', label: 'Groq' },
   { value: 'openai', label: 'OpenAI' },
   { value: 'anthropic', label: 'Anthropic' },
   { value: 'openrouter', label: 'OpenRouter' },
@@ -45,6 +42,10 @@ const PROVIDERS = [
 
 const MODELS: Record<string, { value: string; label: string }[]> = {
   gemini: [{ value: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash' }],
+  groq: [
+    { value: 'qwen/qwen3.8-27b', label: 'Qwen 3.8 27B' },
+    { value: 'openai/gpt-oss-20b', label: 'GPT-OSS 20B' },
+  ],
   openai: [
     { value: 'gpt-4o', label: 'GPT-4o' },
     { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' },
@@ -167,6 +168,19 @@ export function PlaygroundPage() {
         setCurrentSession(session);
         setProvider(session.provider);
         setModel(session.model);
+        const lastResponse = [...session.messages].reverse().find((m) => m.role === 'assistant');
+        setResult(
+          lastResponse
+            ? {
+                success: true,
+                provider: session.provider,
+                model: session.model,
+                response: lastResponse.content,
+                latencyMs: lastResponse.latency,
+                usage: { input: 0, output: 0, total: lastResponse.tokens },
+              }
+            : null,
+        );
       }
     } catch {
       // Session load failed silently
@@ -271,8 +285,6 @@ export function PlaygroundPage() {
           }
         },
       });
-
-      setPrompt('');
     },
     [
       isGenerating,
@@ -562,119 +574,25 @@ export function PlaygroundPage() {
     </>
   );
 
-  const sessionMessages = currentSession?.messages ?? [];
-  const showConversation =
-    sessionMessages.length > 0 || (currentSession !== null && (isStreaming || hasResponse));
-
-  const displayMessages: AIHistorySession['messages'] = [...sessionMessages];
-  if (currentSession && isStreaming && lastPromptRef.current) {
-    displayMessages.push({
-      id: 'pending-user',
-      role: 'user',
-      content: lastPromptRef.current,
-      latency: 0,
-      tokens: 0,
-      timestamp: new Date().toISOString(),
-    });
-    if (stream.content) {
-      displayMessages.push({
-        id: 'pending-assistant',
-        role: 'assistant',
-        content: stream.content,
-        latency: 0,
-        tokens: 0,
-        timestamp: new Date().toISOString(),
-      });
-    }
-  }
-
   const rightPanel = (
     <>
-      {showConversation ? (
-        <div ref={responseRef} className="mx-auto max-w-3xl flex-1 overflow-y-auto px-6 py-6">
-          <div className="mb-4 flex items-center gap-2 text-sm font-medium text-muted-foreground">
-            <History className="h-4 w-4" />
-            Conversation History
-          </div>
-          <div className="space-y-3">
-            {displayMessages.map((message) => (
-              <div
-                key={message.id}
-                className={cn(
-                  'flex gap-3 rounded-lg p-3',
-                  message.role === 'user' ? 'bg-muted/50' : 'bg-background',
-                )}
-              >
-                <div
-                  className={cn(
-                    'flex h-6 w-6 shrink-0 items-center justify-center rounded-full',
-                    message.role === 'user'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted text-muted-foreground',
-                  )}
-                >
-                  {message.role === 'user' ? (
-                    <User className="h-3 w-3" />
-                  ) : (
-                    <Bot className="h-3 w-3" />
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-medium text-muted-foreground">
-                    {message.role === 'user' ? 'You' : 'Assistant'}
-                  </p>
-                  <div
-                    className="mt-1 prose prose-xs max-w-none text-sm"
-                    dangerouslySetInnerHTML={{
-                      __html: renderMarkdown(message.content),
-                    }}
-                  />
-                  {message.id === 'pending-assistant' && isStreaming && (
-                    <span className="inline-block h-4 w-0.5 animate-pulse bg-foreground/70" />
-                  )}
-                </div>
-              </div>
-            ))}
-            {isStreaming && !stream.content && <PlaygroundLoadingSteps className="flex-1" />}
-          </div>
+      {!hasResponse && !isStreaming && !stream.error && (
+        <div className="flex h-full flex-col items-center justify-center p-8">
+          <EmptyState
+            title="No response yet"
+            description="Write a prompt and click Generate to see the AI response here."
+            variant="playground"
+            features={PLAYGROUND_FEATURES}
+            hints={[`${provider} / ${model}`, 'Ctrl+Enter to send']}
+          />
         </div>
-      ) : (
-        <>
-          {!hasResponse && !isStreaming && (
-            <div className="flex h-full flex-col items-center justify-center p-8">
-              <EmptyState
-                title="No response yet"
-                description="Write a prompt and click Generate to see the AI response here."
-                variant="playground"
-                features={PLAYGROUND_FEATURES}
-                hints={[`${provider} / ${model}`, 'Ctrl+Enter to send']}
-              />
-            </div>
-          )}
-          {isStreaming && !responseContent && <PlaygroundLoadingSteps className="flex-1" />}
-          {hasResponse && (
-            <div ref={responseRef} className="flex-1 overflow-y-auto">
-              <div className="mx-auto max-w-3xl px-6 py-6">
-                <div
-                  className="prose prose-sm max-w-none dark:prose-invert"
-                  dangerouslySetInnerHTML={{
-                    __html: renderMarkdown(responseContent),
-                  }}
-                />
-                {isStreaming && (
-                  <span className="inline-block h-4 w-0.5 animate-pulse bg-foreground/70" />
-                )}
-              </div>
-            </div>
-          )}
-        </>
       )}
       {stream.error && (
-        <div className="mx-auto max-w-3xl px-6 py-6">
+        <div className="flex h-full flex-col items-center justify-center p-8">
           {(() => {
             const errorInfo = getErrorMessage(stream.error);
             return (
-              <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+              <div className="w-full max-w-lg rounded-lg border border-destructive/50 bg-destructive/10 p-4">
                 <div className="flex items-start gap-3">
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
                   <div className="flex-1">
@@ -696,6 +614,17 @@ export function PlaygroundPage() {
               </div>
             );
           })()}
+        </div>
+      )}
+      {isStreaming && !responseContent && <PlaygroundLoadingSteps className="flex-1" />}
+      {hasResponse && (
+        <div ref={responseRef} className="flex-1 overflow-y-auto">
+          <div className="mx-auto max-w-3xl px-6 py-6">
+            <MarkdownRenderer content={responseContent} className="text-[15px] leading-7" />
+            {isStreaming && (
+              <span className="inline-block h-4 w-0.5 animate-pulse bg-foreground/70" />
+            )}
+          </div>
         </div>
       )}
     </>

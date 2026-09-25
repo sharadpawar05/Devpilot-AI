@@ -4,6 +4,7 @@ import {
   OpenAIProvider,
   AnthropicProvider,
   OpenRouterProvider,
+  GroqProvider,
 } from '@devpilot/ai-providers';
 import type { AIProvider, AIProviderConfig } from '@devpilot/ai-providers';
 
@@ -14,6 +15,7 @@ const PROVIDER_CONSTRUCTORS: Record<AIProviderName, ProviderConstructor> = {
   openai: OpenAIProvider,
   anthropic: AnthropicProvider,
   openrouter: OpenRouterProvider,
+  groq: GroqProvider,
 };
 
 export class ProviderFactory {

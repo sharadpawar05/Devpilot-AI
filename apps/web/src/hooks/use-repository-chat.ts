@@ -215,7 +215,9 @@ export function useRepositoryChat(token: string | undefined) {
             model,
           }),
         });
-        const data: ChatResponse = await res.json();
+        const data: ChatResponse & {
+          error?: { code?: string; message?: string };
+        } = await res.json();
         if (data.success) {
           const assistantMsg: ChatMessage = {
             id: crypto.randomUUID(),
@@ -259,7 +261,7 @@ export function useRepositoryChat(token: string | undefined) {
 
           return assistantMsg;
         }
-        setError(data.success === false ? 'Failed to get response' : 'Unknown error');
+        setError(data.error?.message || 'Failed to get response');
         return null;
       } catch {
         setError('Failed to connect to server');
@@ -317,7 +319,9 @@ export function useRepositoryChat(token: string | undefined) {
           model,
         }),
       });
-      const data: ChatResponse = await res.json();
+      const data: ChatResponse & {
+        error?: { code?: string; message?: string };
+      } = await res.json();
       if (data.success) {
         const assistantMsg: ChatMessage = {
           id: crypto.randomUUID(),
@@ -362,7 +366,7 @@ export function useRepositoryChat(token: string | undefined) {
 
         return assistantMsg;
       }
-      setError(data.success === false ? 'Failed to get response' : 'Unknown error');
+      setError(data.error?.message || 'Failed to get response');
       return null;
     } catch {
       setError('Failed to connect to server');

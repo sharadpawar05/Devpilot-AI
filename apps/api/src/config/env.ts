@@ -17,6 +17,11 @@ const envSchema = z.object({
   GITHUB_CLIENT_SECRET: z.string().default(''),
   GITHUB_REDIRECT_URI: z.string().default('http://localhost:3000/github'),
   GEMINI_API_KEY: z.string().default(''),
+  OPENAI_API_KEY: z.string().default(''),
+  ANTHROPIC_API_KEY: z.string().default(''),
+  OPENROUTER_API_KEY: z.string().default(''),
+  GROAK_API_KEY: z.string().default(''),
+  GROQ_API_KEY: z.string().default(''),
   AI_DEFAULT_MODEL: z.string().default('gemini-3.6-flash'),
 });
 

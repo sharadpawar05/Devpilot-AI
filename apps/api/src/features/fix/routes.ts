@@ -10,7 +10,7 @@ const fixRequestSchema = z.object({
   code: z.string().min(1, 'Code is required').max(100000, 'Code too long'),
   language: z.string().min(1, 'Language is required'),
   reviewContext: z.string().max(20000).optional(),
-  provider: z.enum(['gemini', 'openai', 'anthropic', 'openrouter']).default('gemini'),
+  provider: z.enum(['gemini', 'openai', 'anthropic', 'openrouter', 'groq']).default('gemini'),
   model: z.string().min(1).optional(),
   temperature: z.number().min(0).max(2).optional(),
   maxTokens: z.number().min(1).max(100000).optional(),
@@ -23,6 +23,7 @@ const DEFAULT_MODELS: Record<string, string> = {
   openai: 'gpt-4o',
   anthropic: 'claude-3.5-sonnet',
   openrouter: 'gpt-4',
+  groq: 'qwen/qwen3.8-27b',
 };
 
 export async function fixRoutes(app: FastifyInstance) {
@@ -41,7 +42,10 @@ export async function fixRoutes(app: FastifyInstance) {
             code: { type: 'string', minLength: 1, maxLength: 100000 },
             language: { type: 'string', minLength: 1 },
             reviewContext: { type: 'string', maxLength: 20000 },
-            provider: { type: 'string', enum: ['gemini', 'openai', 'anthropic', 'openrouter'] },
+            provider: {
+              type: 'string',
+              enum: ['gemini', 'openai', 'anthropic', 'openrouter', 'groq'],
+            },
             model: { type: 'string', minLength: 1 },
             temperature: { type: 'number', minimum: 0, maximum: 2 },
             maxTokens: { type: 'number', minimum: 1, maximum: 100000 },

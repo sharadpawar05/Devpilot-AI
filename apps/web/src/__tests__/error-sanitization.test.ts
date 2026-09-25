@@ -154,6 +154,26 @@ describe('Error Message Sanitization', () => {
       expect(byRawMessage.suggestion).toContain('42');
     });
 
+    it('should map classified stream rate-limit errors without treating all STREAM_ERROR as rate limits', () => {
+      const classified = getErrorMessage({
+        code: 'RATE_LIMIT_EXCEEDED',
+        message: 'Rate limit exceeded. Please wait 58 seconds and try again.',
+      });
+      expect(classified.title).toBe('Rate limit exceeded');
+      expect(classified.message).toBe('Too many requests to the AI provider.');
+      expect(classified.suggestion).toContain('58');
+      expect(classified.message).not.toContain('GoogleGenerativeAI');
+      expect(classified.message).not.toContain('429');
+
+      const genericStream = getErrorMessage({
+        code: 'STREAM_ERROR',
+        message: 'The connection dropped mid-response.',
+      });
+      expect(genericStream.title).toBe('Stream interrupted');
+      expect(genericStream.message).toBe('The response stream was interrupted.');
+      expect(genericStream.retryable).toBe(true);
+    });
+
     it('should sanitize Gemini 429 errors for engineering status report', () => {
       const raw = `[GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent: [429 Too Many Requests] You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. * Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-3.6-flash Please retry in 31.182946158s. [{"@type":"type.googleapis.com/google.rpc.Help"}]`;
 

@@ -10,7 +10,7 @@ const incidentSummarySchema = z.object({
   branch: z.string().default('main'),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD format'),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD format'),
-  provider: z.enum(['gemini', 'openai', 'anthropic', 'openrouter']).default('gemini'),
+  provider: z.enum(['gemini', 'openai', 'anthropic', 'openrouter', 'groq']).default('gemini'),
 });
 
 export async function incidentSummaryRoutes(app: FastifyInstance) {

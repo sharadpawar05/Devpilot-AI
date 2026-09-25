@@ -9,7 +9,7 @@ export type WorkflowType =
   | 'security-review'
   | 'architecture-review';
 
-export type AIProviderName = 'gemini' | 'openai' | 'anthropic' | 'openrouter';
+export type AIProviderName = 'gemini' | 'openai' | 'anthropic' | 'openrouter' | 'groq';
 
 export type AIModel =
   | 'gemini-3.6-flash'
@@ -18,7 +18,9 @@ export type AIModel =
   | 'claude-sonnet-4-20250514'
   | 'claude-3-5-haiku-20241022'
   | 'anthropic/claude-sonnet-4'
-  | 'anthropic/claude-3.5-haiku';
+  | 'anthropic/claude-3.5-haiku'
+  | 'qwen/qwen3.8-27b'
+  | 'openai/gpt-oss-20b';
 
 export interface AIHistoryMessage {
   id: string;

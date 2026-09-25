@@ -5,8 +5,89 @@ export interface AIErrorResponse {
   retryable: boolean;
 }
 
+const CODE_STATUS: Record<string, number> = {
+  RATE_LIMIT_EXCEEDED: 429,
+  AUTHENTICATION_ERROR: 401,
+  INVALID_API_KEY: 401,
+  MODEL_NOT_FOUND: 400,
+  CONTEXT_LENGTH_EXCEEDED: 400,
+  INVALID_REQUEST: 400,
+  PROVIDER_UNAVAILABLE: 503,
+  PROVIDER_NOT_IMPLEMENTED: 501,
+  NOT_IMPLEMENTED: 501,
+  TIMEOUT: 504,
+  NETWORK_ERROR: 502,
+  STREAM_ERROR: 502,
+  RETRY_ERROR: 502,
+  NO_RESULT: 502,
+  AI_ERROR: 502,
+  UNKNOWN_ERROR: 502,
+};
+
+const AI_ERROR_CODES = new Set(Object.keys(CODE_STATUS));
+
 export function classifyAIError(error: unknown): AIErrorResponse {
-  const rawMessage = error instanceof Error ? error.message : String(error);
+  if (error && typeof error === 'object') {
+    const structured = error as {
+      code?: unknown;
+      message?: unknown;
+      retryable?: unknown;
+      statusCode?: number;
+    };
+    const code = typeof structured.code === 'string' ? structured.code : undefined;
+    const message =
+      typeof structured.message === 'string' && structured.message
+        ? structured.message
+        : error instanceof Error
+          ? error.message
+          : String(error);
+
+    if (code && AI_ERROR_CODES.has(code) && code !== 'UNKNOWN_ERROR' && code !== 'AI_ERROR') {
+      const status = structured.statusCode ?? CODE_STATUS[code] ?? 502;
+      const friendly = messageForCode(code);
+      const clean = cleanAIErrorMessage(message);
+      return {
+        status,
+        code,
+        message: friendly || clean || message,
+        retryable: structured.retryable !== false,
+      };
+    }
+
+    return classifyByMessage(message);
+  }
+
+  return classifyByMessage(String(error));
+}
+
+function messageForCode(code: string): string | undefined {
+  switch (code) {
+    case 'RATE_LIMIT_EXCEEDED':
+      return 'Rate limit exceeded. Please wait a moment and try again.';
+    case 'AUTHENTICATION_ERROR':
+    case 'INVALID_API_KEY':
+      return 'Invalid API key. Please check your provider settings.';
+    case 'MODEL_NOT_FOUND':
+      return 'The selected model is not available. Please try a different provider.';
+    case 'PROVIDER_UNAVAILABLE':
+      return 'The selected AI provider is not configured or unavailable.';
+    case 'TIMEOUT':
+      return 'The AI provider timed out. Please try again.';
+    case 'NETWORK_ERROR':
+      return 'Could not reach the AI provider. Please try again.';
+    case 'CONTEXT_LENGTH_EXCEEDED':
+      return 'The content is too long for the AI model. Try reviewing fewer files.';
+    case 'NOT_IMPLEMENTED':
+    case 'PROVIDER_NOT_IMPLEMENTED':
+      return 'This provider is not yet implemented. Please try a different one.';
+    case 'INVALID_REQUEST':
+      return 'The AI provider rejected the request. Please adjust your input and try again.';
+    default:
+      return undefined;
+  }
+}
+
+function classifyByMessage(rawMessage: string): AIErrorResponse {
   const lowerMsg = rawMessage.toLowerCase();
 
   if (

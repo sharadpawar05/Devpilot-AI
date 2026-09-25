@@ -91,15 +91,32 @@ export class GatewayService {
     } catch (error) {
       this.recordError(providerName);
 
-      const aiError =
-        error instanceof AIGatewayError
-          ? error
-          : new AIGatewayError({
-              code: 'UNKNOWN_ERROR',
-              message: error instanceof Error ? error.message : String(error),
-              provider: providerName,
-              retryable: false,
-            });
+      let aiError: AIGatewayError;
+      if (error instanceof AIGatewayError) {
+        aiError = error;
+      } else if (error && typeof error === 'object' && 'code' in error && 'message' in error) {
+        const structured = error as {
+          code: string;
+          message: string;
+          retryable?: boolean;
+          statusCode?: number;
+          provider?: AIProviderName;
+        };
+        aiError = new AIGatewayError({
+          code: structured.code as never,
+          message: structured.message,
+          provider: structured.provider ?? providerName,
+          statusCode: structured.statusCode,
+          retryable: structured.retryable ?? false,
+        });
+      } else {
+        aiError = new AIGatewayError({
+          code: 'UNKNOWN_ERROR',
+          message: error instanceof Error ? error.message : String(error),
+          provider: providerName,
+          retryable: false,
+        });
+      }
 
       if (this.config.enableRequestLogging) {
         this.logger.log({

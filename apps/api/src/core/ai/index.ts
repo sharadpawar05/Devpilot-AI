@@ -1,6 +1,7 @@
 export { aiService } from './service';
 export { workflowEngine, AIWorkflowEngine } from './workflow/engine';
 export { WorkflowType } from './workflow/types';
+export { classifyAIError, type AIErrorResponse } from './classify-error';
 export type {
   WorkflowRequest,
   WorkflowResponse,

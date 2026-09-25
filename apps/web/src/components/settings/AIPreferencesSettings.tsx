@@ -7,6 +7,7 @@ import { Switch } from '@/components/ui/switch';
 
 const PROVIDERS = [
   { value: 'gemini', label: 'Google Gemini' },
+  { value: 'groq', label: 'Groq' },
   { value: 'openai', label: 'OpenAI' },
   { value: 'anthropic', label: 'Anthropic' },
   { value: 'openrouter', label: 'OpenRouter' },
@@ -14,6 +15,10 @@ const PROVIDERS = [
 
 const MODELS: Record<string, { value: string; label: string }[]> = {
   gemini: [{ value: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash' }],
+  groq: [
+    { value: 'qwen/qwen3.8-27b', label: 'Qwen 3.8 27B' },
+    { value: 'openai/gpt-oss-20b', label: 'GPT-OSS 20B' },
+  ],
   openai: [
     { value: 'gpt-4o', label: 'GPT-4o' },
     { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },

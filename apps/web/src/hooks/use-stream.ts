@@ -134,11 +134,13 @@ export function useStreamSession() {
           const decoder = new TextDecoder();
           let buffer = '';
           let done = false;
+          let receivedError = false;
 
           while (!done) {
             const result = await reader.read();
             done = result.done;
             if (done) break;
+            if (receivedError) continue;
             const value = result.value;
 
             buffer += decoder.decode(value, { stream: true });
@@ -162,6 +164,7 @@ export function useStreamSession() {
                       batchTimerRef.current = setTimeout(flushBatch, BATCH_INTERVAL);
                     }
                   } else if (chunk.type === 'metadata') {
+                    if (receivedError) continue;
                     const remainingBuffer = contentBufferRef.current;
                     contentBufferRef.current = '';
                     if (batchTimerRef.current) {
@@ -183,6 +186,7 @@ export function useStreamSession() {
                     await options.onComplete?.(metadata, fullContent);
                     setState((prev) => ({ ...prev, isStreaming: false }));
                   } else if (chunk.type === 'error') {
+                    receivedError = true;
                     flushBatch();
                     const error = chunk.error || { code: 'UNKNOWN', message: 'Unknown error' };
                     setState((prev) => ({
@@ -192,6 +196,7 @@ export function useStreamSession() {
                     }));
                     options.onError?.(error);
                   } else if (chunk.type === 'done') {
+                    if (receivedError) continue;
                     flushBatch();
                     setState((prev) => ({ ...prev, isStreaming: false }));
                   }
@@ -203,7 +208,9 @@ export function useStreamSession() {
           }
 
           flushBatch();
-          setState((prev) => ({ ...prev, isStreaming: false }));
+          if (!receivedError) {
+            setState((prev) => ({ ...prev, isStreaming: false }));
+          }
         })
         .catch((error) => {
           if (error.name === 'AbortError') return;

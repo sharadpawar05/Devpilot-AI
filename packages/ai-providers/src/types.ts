@@ -1,4 +1,4 @@
-export type AIProviderName = 'gemini' | 'openai' | 'anthropic' | 'openrouter';
+export type AIProviderName = 'gemini' | 'openai' | 'anthropic' | 'openrouter' | 'groq';
 
 export type AIModel =
   | 'gemini-3.6-flash'
@@ -9,7 +9,9 @@ export type AIModel =
   | 'claude-3-opus'
   | 'claude-3-sonnet'
   | 'claude-3-haiku'
-  | 'claude-3.5-sonnet';
+  | 'claude-3.5-sonnet'
+  | 'qwen/qwen3.8-27b'
+  | 'openai/gpt-oss-20b';
 
 export interface TokenUsage {
   input: number;

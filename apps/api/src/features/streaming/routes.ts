@@ -5,6 +5,7 @@ import { WorkflowType } from '@/core/ai/workflow/types';
 import { getEnv } from '@/config';
 import { authenticate } from '@/core/auth';
 import { aiService } from '@/core/ai/service';
+import { classifyAIError } from '@/core/ai/classify-error';
 import {
   usageService,
   sendUsageLimitReached,
@@ -25,7 +26,7 @@ const streamRequestSchema = z.object({
     'SECURITY_REVIEW',
     'ARCHITECTURE_REVIEW',
   ]),
-  provider: z.enum(['gemini', 'openai', 'anthropic', 'openrouter']).default('gemini'),
+  provider: z.enum(['gemini', 'openai', 'anthropic', 'openrouter', 'groq']).default('gemini'),
   model: z.string().optional(),
   prompt: z.string().optional(),
   context: z.record(z.unknown()).default({}),
@@ -89,6 +90,19 @@ async function refundStreamQuota(sub: string, workflowType: StreamRequest['workf
   }
 }
 
+function toClassifiedStreamError(
+  message: string,
+  provider: string,
+): { code: string; message: string; provider: string; retryable: boolean } {
+  const classified = classifyAIError(new Error(message));
+  return {
+    code: classified.code,
+    message: classified.message,
+    provider,
+    retryable: classified.retryable,
+  };
+}
+
 export async function streamingRoutes(app: FastifyInstance) {
   app.post<{
     Body: StreamRequest;
@@ -105,7 +119,10 @@ export async function streamingRoutes(app: FastifyInstance) {
           required: ['workflowType'],
           properties: {
             workflowType: { type: 'string', enum: Object.values(WorkflowType) },
-            provider: { type: 'string', enum: ['gemini', 'openai', 'anthropic', 'openrouter'] },
+            provider: {
+              type: 'string',
+              enum: ['gemini', 'openai', 'anthropic', 'openrouter', 'groq'],
+            },
             model: { type: 'string' },
             prompt: { type: 'string' },
             context: { type: 'object' },
@@ -178,6 +195,8 @@ export async function streamingRoutes(app: FastifyInstance) {
         reply.raw.write(`data: ${JSON.stringify(data)}\n\n`);
       };
 
+      let streamFailed = false;
+
       try {
         const stream = workflowEngine.executeStream({
           workflowType: workflowType as WorkflowType,
@@ -191,25 +210,42 @@ export async function streamingRoutes(app: FastifyInstance) {
         });
 
         for await (const chunk of stream) {
+          if (chunk.type === 'error') {
+            streamFailed = true;
+            sendEvent({
+              type: 'error',
+              error: toClassifiedStreamError(
+                chunk.error?.message ?? 'The AI provider returned an error.',
+                chunk.provider ?? provider,
+              ),
+            });
+            break;
+          }
           sendEvent(chunk);
         }
 
-        sendEvent({ type: 'done' });
+        if (streamFailed) {
+          await refundStreamQuota(auth.sub, workflowType);
+        } else {
+          sendEvent({ type: 'done' });
+        }
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        const code =
-          error && typeof error === 'object' && 'code' in error
-            ? String((error as { code: unknown }).code)
-            : 'STREAM_ERROR';
-
+        const classified = classifyAIError(error);
+        request.log.error({ err: error, provider, workflowType }, 'AI stream failed');
         sendEvent({
           type: 'error',
-          error: { code, message },
+          error: {
+            code: classified.code,
+            message: classified.message,
+            provider,
+            retryable: classified.retryable,
+          },
         });
         await refundStreamQuota(auth.sub, workflowType);
       }
 
       reply.raw.end();
+      return reply;
     },
   );
 }

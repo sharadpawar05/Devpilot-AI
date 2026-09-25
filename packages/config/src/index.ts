@@ -14,6 +14,9 @@ const envSchema = z.object({
   OPENAI_API_KEY: z.string().default(''),
   ANTHROPIC_API_KEY: z.string().default(''),
   OPENROUTER_API_KEY: z.string().default(''),
+  /** Groq key — accepts GROAK_API_KEY (current .env name) or GROQ_API_KEY */
+  GROAK_API_KEY: z.string().default(''),
+  GROQ_API_KEY: z.string().default(''),
   AI_DEFAULT_MODEL: z.string().default('gemini-3.6-flash'),
   AI_MAX_TOKENS: z.coerce.number().default(4096),
 });
@@ -100,6 +103,9 @@ export const config = {
     },
     get openrouterApiKey() {
       return getEnv().OPENROUTER_API_KEY;
+    },
+    get groqApiKey() {
+      return getEnv().GROAK_API_KEY || getEnv().GROQ_API_KEY;
     },
     get defaultModel() {
       return getEnv().AI_DEFAULT_MODEL;

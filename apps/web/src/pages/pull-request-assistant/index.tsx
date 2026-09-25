@@ -725,6 +725,7 @@ export function PullRequestAssistantPage() {
                     className={`${selectClass} appearance-none pr-10`}
                   >
                     <option value="gemini">Gemini</option>
+                    <option value="groq">Groq</option>
                     <option value="openai">OpenAI</option>
                     <option value="anthropic">Anthropic</option>
                   </select>

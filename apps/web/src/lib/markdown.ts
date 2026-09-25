@@ -82,10 +82,17 @@ export function renderMarkdown(text: string): string {
     '<code class="rounded bg-muted px-1.5 py-0.5 font-mono text-sm">$1</code>',
   );
 
-  // Headers
+  // Headers (more # first so #### is not consumed by ###)
+  html = html.replace(/^##### (.+)$/gm, '<h5 class="mt-3 mb-1.5 text-sm font-semibold">$1</h5>');
+  html = html.replace(/^#### (.+)$/gm, '<h4 class="mt-3 mb-1.5 text-base font-semibold">$1</h4>');
   html = html.replace(/^### (.+)$/gm, '<h3 class="mt-4 mb-2 text-base font-semibold">$1</h3>');
   html = html.replace(/^## (.+)$/gm, '<h2 class="mt-5 mb-2 text-lg font-bold">$1</h2>');
   html = html.replace(/^# (.+)$/gm, '<h1 class="mt-6 mb-3 text-xl font-bold">$1</h1>');
+
+  // Normalize * / + unordered-list markers to - (before emphasis, so lone * bullets
+  // are not treated as italics; **bold** is untouched because no space follows *)
+  html = html.replace(/^\* (?!\*)(.+)$/gm, '- $1');
+  html = html.replace(/^\+ (.+)$/gm, '- $1');
 
   // Bold and italic
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');

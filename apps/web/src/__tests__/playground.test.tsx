@@ -391,6 +391,32 @@ describe('Playground Flow - 10 Steps', () => {
       expect(screen.getByText('Model not available')).toBeInTheDocument();
       // Should show the friendly message from config, not the raw error
       expect(screen.getByText('The selected model is not available.')).toBeInTheDocument();
+      // Empty state should not compete with the error
+      expect(screen.queryByText('No response yet')).not.toBeInTheDocument();
+    });
+
+    it('should show classified provider rate-limit stream errors', async () => {
+      vi.mocked(useStreamSession).mockReturnValue({
+        content: '',
+        isStreaming: false,
+        error: {
+          code: 'RATE_LIMIT_EXCEEDED',
+          message: 'Rate limit exceeded. Please wait 58 seconds and try again.',
+        },
+        metadata: null,
+        startStream: vi.fn(),
+        stopStream: vi.fn(),
+        reset: vi.fn(),
+      });
+
+      render(<PlaygroundPage />);
+
+      expect(screen.getByText('Rate limit exceeded')).toBeInTheDocument();
+      expect(screen.getByText('Too many requests to the AI provider.')).toBeInTheDocument();
+      expect(screen.getByText('Please wait 58 seconds and try again.')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
+      expect(screen.queryByText('No response yet')).not.toBeInTheDocument();
+      expect(screen.queryByText('GoogleGenerativeAI')).not.toBeInTheDocument();
     });
 
     it('should display error in sticky footer', async () => {
@@ -459,8 +485,8 @@ describe('Playground Flow - 10 Steps', () => {
       fireEvent.click(generateButton as HTMLButtonElement);
 
       expect(mockStartStream).toHaveBeenCalledWith(expect.objectContaining({ prompt: 'Hello' }));
-      // Prompt is cleared after submit
-      expect(textarea).toHaveValue('');
+      // Prompt is preserved after submit
+      expect(textarea).toHaveValue('Hello');
 
       // Switch to error state (same component instance — lastPromptRef persists)
       vi.mocked(useStreamSession).mockReturnValue({
@@ -490,7 +516,7 @@ describe('Playground Flow - 10 Steps', () => {
   });
 
   describe('Step 8: History', () => {
-    it('should show Playground history section', async () => {
+    it('should restore session response without showing You section', async () => {
       vi.mocked(aiHistoryApi.getSession).mockResolvedValue({
         id: 'session-1',
         workflowType: 'playground',
@@ -533,8 +559,13 @@ describe('Playground Flow - 10 Steps', () => {
       render(<PlaygroundPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Conversation History')).toBeInTheDocument();
+        expect(screen.getByText('Hi there!')).toBeInTheDocument();
       });
+
+      // Only the response is shown — no "You" section or conversation thread
+      expect(screen.queryByText('Conversation History')).not.toBeInTheDocument();
+      expect(screen.queryByText('You')).not.toBeInTheDocument();
+      expect(screen.queryByText('Hello')).not.toBeInTheDocument();
 
       // Reset for other tests
       vi.mocked(useSearchParams).mockReturnValue([new URLSearchParams(), vi.fn()]);
@@ -583,9 +614,10 @@ describe('Playground Flow - 10 Steps', () => {
       render(<PlaygroundPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('What is AI?')).toBeInTheDocument();
         expect(screen.getByText('AI is artificial intelligence.')).toBeInTheDocument();
       });
+      // Response only — user prompt is not rendered as a chat bubble
+      expect(screen.queryByText('What is AI?')).not.toBeInTheDocument();
 
       // Reset for other tests
       vi.mocked(useSearchParams).mockReturnValue([new URLSearchParams(), vi.fn()]);

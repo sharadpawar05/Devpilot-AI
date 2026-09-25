@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { authenticate } from '@/core/auth';
 import { repositoryIntelligenceService } from '@/features/repo-intelligence';
 import { aiService } from '@/core/ai/service';
+import { classifyAIError } from '@/core/ai/classify-error';
 import { repositoryIndexer } from './indexer';
 import { repositoryStatusService } from './status';
 import { buildTreeSummary, findFilesByKeywords } from './parser';
@@ -12,6 +13,14 @@ import { usageService, sendUsageLimitReached } from '@/core/usage';
 
 const MAX_FILE_SIZE = 50_000;
 const MAX_CONTEXT_FILES = 15;
+
+const PROVIDER_DEFAULT_MODELS: Record<string, string> = {
+  gemini: 'gemini-3.6-flash',
+  groq: 'qwen/qwen3.8-27b',
+  openai: 'gpt-4o',
+  anthropic: 'claude-3.5-sonnet',
+  openrouter: 'gpt-4',
+};
 
 async function ensureUserExists(supabaseUserId: string, email?: string): Promise<void> {
   const existing = await db.user.findUnique({
@@ -49,7 +58,7 @@ const chatSchema = z.object({
     )
     .optional()
     .default([]),
-  provider: z.enum(['gemini', 'openai', 'anthropic', 'openrouter']).default('gemini'),
+  provider: z.enum(['gemini', 'openai', 'anthropic', 'openrouter', 'groq']).default('gemini'),
   model: z.string().optional(),
   fileFilter: z.string().optional(),
 });
@@ -228,6 +237,17 @@ export async function repositoryChatRoutes(app: FastifyInstance) {
       const { owner, repo, branch, question, conversationHistory, provider, model, fileFilter } =
         parsed.data;
 
+      const availableProviders = aiService.getAvailableProviders();
+      if (!availableProviders.includes(provider)) {
+        return reply.status(400).send({
+          success: false,
+          error: {
+            code: 'PROVIDER_UNAVAILABLE',
+            message: `Provider '${provider}' is not configured. Available: ${availableProviders.join(', ') || 'none'}. Set the corresponding API key in your .env file.`,
+          },
+        });
+      }
+
       // Chat requires an index; if somehow reached for a non-active repo, enforce limit.
       const repoAccess = await usageService.ensureRepositoryAccess(auth.sub, owner, repo);
       if (!repoAccess.allowed && repoAccess.details) {
@@ -336,7 +356,8 @@ Question: ${question}`;
         questionLower.includes('in-depth');
 
       const maxTokens = isReportRequest || isDetailedRequest ? 4096 : 1500;
-      const selectedModel = model || config.ai.defaultModel;
+      const selectedModel =
+        model || PROVIDER_DEFAULT_MODELS[provider] || config.ai.defaultModel || 'gemini-3.6-flash';
 
       // Atomically consume chat message + AI credits before generation
       const consume = await usageService.consumeWithCredits(
@@ -350,7 +371,7 @@ Question: ${question}`;
 
       try {
         const response = await aiService.generate(userPrompt, systemPrompt, {
-          provider: provider as 'gemini' | 'openai' | 'anthropic' | 'openrouter',
+          provider: provider as 'gemini' | 'openai' | 'anthropic' | 'openrouter' | 'groq',
           model: selectedModel as never,
           maxTokens,
         });
@@ -377,12 +398,13 @@ Question: ${question}`;
         });
       } catch (error: unknown) {
         await usageService.refundWithCredits(auth.sub, 'CHAT_MESSAGE', 'REPOSITORY_CHAT');
-        const err = error as { message?: string; code?: string };
-        return reply.status(502).send({
+        const classified = classifyAIError(error);
+        app.log.error({ err: error, provider, model: selectedModel }, 'Repository chat AI failed');
+        return reply.status(classified.status).send({
           success: false,
           error: {
-            code: err.code || 'AI_ERROR',
-            message: err.message || 'Failed to generate response',
+            code: classified.code,
+            message: classified.message,
           },
         });
       }

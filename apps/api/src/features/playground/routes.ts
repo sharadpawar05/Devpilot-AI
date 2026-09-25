@@ -2,10 +2,11 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { aiService } from '@/core/ai/service';
 import { authenticate } from '@/core/auth';
+import { classifyAIError } from '@/core/ai/classify-error';
 import { usageService, sendUsageLimitReached } from '@/core/usage';
 
 const chatRequestSchema = z.object({
-  provider: z.enum(['gemini', 'openai', 'anthropic', 'openrouter']).default('gemini'),
+  provider: z.enum(['gemini', 'openai', 'anthropic', 'openrouter', 'groq']).default('gemini'),
   model: z.string().min(1, 'Model is required'),
   prompt: z.string().min(1, 'Prompt is required').max(100000, 'Prompt too long'),
   temperature: z.number().min(0).max(2).optional(),
@@ -29,7 +30,10 @@ export async function aiRoutes(app: FastifyInstance) {
           type: 'object',
           required: ['model', 'prompt'],
           properties: {
-            provider: { type: 'string', enum: ['gemini', 'openai', 'anthropic', 'openrouter'] },
+            provider: {
+              type: 'string',
+              enum: ['gemini', 'openai', 'anthropic', 'openrouter', 'groq'],
+            },
             model: { type: 'string', minLength: 1 },
             prompt: { type: 'string', minLength: 1, maxLength: 100000 },
             temperature: { type: 'number', minimum: 0, maximum: 2 },
@@ -118,19 +122,14 @@ export async function aiRoutes(app: FastifyInstance) {
       } catch (error) {
         await usageService.refundWithCredits(auth.sub, 'CHAT_MESSAGE', 'SIMPLE_CHAT');
 
-        const message = error instanceof Error ? error.message : String(error);
-        const code =
-          error && typeof error === 'object' && 'code' in error
-            ? String((error as { code: unknown }).code)
-            : 'AI_ERROR';
-
+        const classified = classifyAIError(error);
         app.log.error({ err: error, provider, model }, 'AI generation failed');
 
-        return reply.status(502).send({
+        return reply.status(classified.status).send({
           success: false,
           error: {
-            code,
-            message,
+            code: classified.code,
+            message: classified.message,
           },
         });
       }
