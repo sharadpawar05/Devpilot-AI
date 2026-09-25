@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { authenticate } from '@/core/auth/middleware';
 import { repositoryIntelligenceService } from './repository-service';
+import { extractCoverage } from './health-trend';
 import { usageService, sendUsageLimitReached } from '@/core/usage';
 
 const querySchema = z.object({
@@ -552,6 +553,13 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
         if (commitSha) {
           const cached = await usageService.getHealthCache(auth.sub, owner, repo, commitSha);
           if (cached) {
+            const meta = await repositoryIntelligenceService.getHealthMeta(
+              auth.sub,
+              owner,
+              repo,
+              { score: cached.score, coverage: extractCoverage(cached.summary) },
+              { excludeCommitSha: commitSha, updatedAt: cached.createdAt.toISOString() },
+            );
             return reply.send({
               success: true,
               data: {
@@ -562,6 +570,8 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
                 summary: cached.summary as Record<string, unknown>,
                 scoreBreakdown: cached.scoreBreakdown as Record<string, unknown>,
                 details: cached.details as Record<string, unknown>,
+                updatedAt: meta.updatedAt,
+                trend: meta.trend,
                 cached: true,
               },
             });
@@ -614,6 +624,49 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
         return reply.status(err.status || 500).send({
           success: false,
           error: { message: err.message || 'Failed to fetch health' },
+        });
+      }
+    },
+  );
+
+  // ─── Health History ────────────────────────────────────────────────────────
+
+  app.get(
+    '/repo-intelligence/health/history',
+    {
+      preHandler: [authenticate],
+      schema: {
+        description: 'Get recent health score snapshots for trend charting',
+        tags: ['repo-intelligence'],
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (request, reply) => {
+      const auth = (request as { auth: { sub: string } }).auth;
+      const parsed = querySchema
+        .extend({ limit: z.coerce.number().int().min(1).max(90).default(30) })
+        .safeParse(request.query);
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send({ success: false, error: { message: parsed.error.errors[0]?.message } });
+      }
+
+      const { owner, repo, limit } = parsed.data;
+
+      try {
+        const points = await repositoryIntelligenceService.getHealthHistory(
+          auth.sub,
+          owner,
+          repo,
+          limit,
+        );
+        return reply.send({ success: true, data: { points } });
+      } catch (error: unknown) {
+        const err = error as { status?: number; message?: string };
+        return reply.status(err.status || 500).send({
+          success: false,
+          error: { message: err.message || 'Failed to fetch health history' },
         });
       }
     },

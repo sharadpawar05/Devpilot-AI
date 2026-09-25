@@ -27,6 +27,10 @@ import type {
 import { analyzeComplexity } from './complexity-analyzer';
 import { analyzeHotspots } from './hotspot-analyzer';
 import { analyzeDebt } from './debt-analyzer';
+import { computeHealthTrend, extractCoverage } from './health-trend';
+import type { HealthSnapshotPoint, HealthTrend } from './health-trend';
+import { parseCoverageReports } from './coverage-analyzer';
+import type { CoverageFile } from './coverage-analyzer';
 
 // ─── Cache Configuration ─────────────────────────────────────────────────────
 
@@ -729,16 +733,17 @@ export class RepositoryIntelligenceService {
     );
 
     // Fetch contents in parallel
-    const [readmeContent, coverageContent, ...workflowContents] = await Promise.all([
+    const [readmeContent, coverageResults, workflowContents] = await Promise.all([
       readmePath ? this.getFileContent(userId, owner, repo, readmePath) : Promise.resolve(null),
-      coveragePaths.length > 0
-        ? this.getFileContent(userId, owner, repo, coveragePaths[0])
-        : Promise.resolve(null),
-      ...workflowPaths.map((p) => this.getFileContent(userId, owner, repo, p)),
+      Promise.all(coveragePaths.map((p) => this.getFileContent(userId, owner, repo, p))),
+      Promise.all(workflowPaths.map((p) => this.getFileContent(userId, owner, repo, p))),
     ]);
 
-    // Analyze test coverage
-    const testCoverage = this.analyzeTestCoverage(coverageContent?.content, filePaths);
+    // Analyze test coverage from every committed report (JSON summary + lcov)
+    const coverageFiles: CoverageFile[] = coverageResults
+      .filter((r): r is FileContent => r !== null)
+      .map((r) => ({ path: r.path, content: r.content }));
+    const testCoverage = this.analyzeTestCoverage(coverageFiles, filePaths);
 
     // Analyze README quality
     const readmeQuality = this.analyzeReadmeQuality(readmeContent?.content);
@@ -963,7 +968,12 @@ export class RepositoryIntelligenceService {
         category: 'quality',
         status: testCoverage.status,
         passed: testCoverage.status === 'passed',
-        severity: testCoverage.status === 'not_measured' ? 'low' : 'high',
+        severity:
+          testCoverage.status === 'not_measured'
+            ? 'low'
+            : testCoverage.status === 'warning'
+              ? 'medium'
+              : 'high',
         failedDescription: testCoverage.description,
         whyItMatters:
           'Test coverage measures how much of your code is exercised by tests. Higher coverage reduces the risk of undetected regressions.',
@@ -1351,6 +1361,14 @@ export class RepositoryIntelligenceService {
       .filter((d) => d.scorePenalty > 0)
       .map((d) => ({ name: d.name, penalty: d.scorePenalty, category: d.category }));
 
+    // Resolve last-updated time + deltas vs the previous snapshot.
+    // Must run BEFORE the snapshot below is persisted so the previous snapshot
+    // is not compared against itself.
+    const healthMeta = await this.getHealthMeta(userId, owner, repo, {
+      score,
+      coverage: testCoverage.coverage ?? null,
+    });
+
     const health: RepositoryHealth = {
       score,
       passedCount,
@@ -1360,6 +1378,8 @@ export class RepositoryIntelligenceService {
       criticalCount,
       details,
       scoreBreakdown,
+      updatedAt: healthMeta.updatedAt,
+      trend: healthMeta.trend,
       summary: {
         structuralScore: Math.round(structuralScore),
         qualityScore: Math.round(qualityScore),
@@ -1385,6 +1405,89 @@ export class RepositoryIntelligenceService {
     });
 
     return health;
+  }
+
+  /**
+   * Resolves the last-updated timestamp and trend deltas for a health result.
+   *
+   * @param opts.updatedAt      Timestamp to report (e.g. cache hit createdAt)
+   * @param opts.excludeCommitSha Snapshot of the current commit to skip when
+   *                             picking the "previous" comparison point
+   */
+  async getHealthMeta(
+    userId: string,
+    owner: string,
+    repo: string,
+    current: { score: number; coverage: number | null },
+    opts: { updatedAt?: string; excludeCommitSha?: string } = {},
+  ): Promise<{ updatedAt: string; trend: HealthTrend | null }> {
+    const fallbackUpdatedAt = opts.updatedAt ?? new Date().toISOString();
+    try {
+      const localUserId = await resolveLocalUserId(userId);
+      const snapshots = await db.repoHealthSnapshot.findMany({
+        where: { userId: localUserId, owner, repo },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+        select: { commitSha: true, score: true, summary: true, createdAt: true },
+      });
+
+      const currentSnapshot = opts.excludeCommitSha
+        ? snapshots.find((s) => s.commitSha === opts.excludeCommitSha)
+        : undefined;
+      const updatedAt = opts.updatedAt ?? currentSnapshot?.createdAt.toISOString();
+
+      const previous = snapshots.find((s) => s.commitSha !== opts.excludeCommitSha);
+      const trend = previous
+        ? computeHealthTrend(
+            { score: current.score, coverage: current.coverage },
+            {
+              score: previous.score,
+              coverage: extractCoverage(previous.summary),
+              createdAt: previous.createdAt,
+            },
+          )
+        : null;
+
+      return { updatedAt: updatedAt ?? new Date().toISOString(), trend };
+    } catch {
+      return { updatedAt: fallbackUpdatedAt, trend: null };
+    }
+  }
+
+  /**
+   * Returns recent health snapshots (newest first) for trend charting.
+   */
+  async getHealthHistory(
+    userId: string,
+    owner: string,
+    repo: string,
+    limit = 30,
+  ): Promise<HealthSnapshotPoint[]> {
+    const localUserId = await resolveLocalUserId(userId);
+    const snapshots = await db.repoHealthSnapshot.findMany({
+      where: { userId: localUserId, owner, repo },
+      orderBy: { createdAt: 'desc' },
+      take: Math.max(1, Math.min(limit, 90)),
+      select: {
+        commitSha: true,
+        score: true,
+        passedCount: true,
+        failedCount: true,
+        criticalCount: true,
+        summary: true,
+        createdAt: true,
+      },
+    });
+
+    return snapshots.map((s) => ({
+      commitSha: s.commitSha,
+      score: s.score,
+      coverage: extractCoverage(s.summary),
+      passedCount: s.passedCount,
+      failedCount: s.failedCount,
+      criticalCount: s.criticalCount,
+      createdAt: s.createdAt.toISOString(),
+    }));
   }
 
   private async saveHealthSnapshot(
@@ -1422,7 +1525,7 @@ export class RepositoryIntelligenceService {
   // ─── Health Check Quality Analysis Helpers ──────────────────────────────────
 
   private analyzeTestCoverage(
-    coverageContent: string | undefined,
+    coverageFiles: CoverageFile[],
     filePaths: string[],
   ): {
     status: 'passed' | 'failed' | 'warning' | 'partial' | 'not_measured';
@@ -1457,18 +1560,7 @@ export class RepositoryIntelligenceService {
       };
     }
 
-    let coverage: number | undefined;
-
-    if (coverageContent) {
-      try {
-        const coverageData = JSON.parse(coverageContent);
-        if (coverageData.total?.statements?.pct !== undefined) {
-          coverage = coverageData.total.statements.pct;
-        }
-      } catch {
-        // Ignore parse errors
-      }
-    }
+    const coverage = parseCoverageReports(coverageFiles);
 
     if (coverage !== undefined) {
       if (coverage >= 80) {
@@ -1507,14 +1599,20 @@ export class RepositoryIntelligenceService {
       };
     }
 
-    // No coverage report found - report as NOT_MEASURED, not as a failure
+    // Tests exist but coverage cannot be determined — soft warning so the gap
+    // is visible (and lightly scored) instead of silently marked N/A.
     return {
-      status: 'not_measured',
-      description: `${testFileCount} test file(s) found but no coverage report available`,
+      status: 'warning',
+      description:
+        coverageFiles.length > 0
+          ? `${testFileCount} test file(s) found but the coverage report could not be parsed`
+          : `${testFileCount} test file(s) found but no coverage report available`,
       recommendation:
-        'Set up coverage reporting (e.g., vitest --coverage, jest --coverage) to measure test effectiveness.',
-      penalty: 0,
-      score: null,
+        coverageFiles.length > 0
+          ? 'Regenerate the coverage report in a supported format (coverage-summary.json or lcov.info).'
+          : 'Set up coverage reporting (e.g., vitest --coverage, jest --coverage) and commit the report to measure test effectiveness.',
+      penalty: 5,
+      score: 95,
       testCount: testFileCount,
       testFileCount,
     };

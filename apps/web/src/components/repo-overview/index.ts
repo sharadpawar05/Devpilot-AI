@@ -1,6 +1,7 @@
 export { MetricCard } from './MetricCard';
 export { LanguageBar } from './LanguageBar';
 export { HealthScore } from './HealthScore';
+export { TrendBadge, formatRelativeTime } from './TrendBadge';
 export { CompactHealthScore } from './CompactHealthScore';
 export { HealthDimensions } from './HealthDimensions';
 export { TopFindings } from './TopFindings';

@@ -8,9 +8,11 @@ import {
   CheckCircle2,
   XCircle,
   AlertTriangle,
+  Clock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { TrendBadge, formatRelativeTime } from '@/components/repo-overview';
 import type { RepoHealthCheck } from '@/lib/repo-overview';
 
 function getScoreColor(score: number): string {
@@ -196,9 +198,12 @@ export const HealthSnapshotCard = memo(function HealthSnapshotCard({
         </div>
 
         <div className="min-w-0 flex-1">
-          <p className={cn('text-sm font-semibold', getScoreColor(score))}>
-            {getScoreLabel(score)}
-          </p>
+          <div className="flex items-center gap-2">
+            <p className={cn('text-sm font-semibold', getScoreColor(score))}>
+              {getScoreLabel(score)}
+            </p>
+            <TrendBadge trend={health.trend?.score ?? null} />
+          </div>
           <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">
               <CheckCircle2 className="h-3 w-3 text-emerald-500" />
@@ -229,6 +234,12 @@ export const HealthSnapshotCard = memo(function HealthSnapshotCard({
               </span>
             )}
           </div>
+          {health.updatedAt && (
+            <p className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground">
+              <Clock className="h-3 w-3" />
+              Updated {formatRelativeTime(health.updatedAt)}
+            </p>
+          )}
         </div>
       </div>
 

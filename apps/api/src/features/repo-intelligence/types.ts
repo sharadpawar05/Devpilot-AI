@@ -1,3 +1,7 @@
+import type { HealthTrend } from './health-trend';
+
+export type { HealthTrend, HealthMetricTrend, HealthSnapshotPoint } from './health-trend';
+
 // ─── Project Classification ──────────────────────────────────────────────────
 
 export type ProjectType =
@@ -313,6 +317,10 @@ export interface RepositoryHealth {
   details: HealthCheckDetail[];
   scoreBreakdown: ScoreBreakdownItem[];
   summary: RepositoryHealthSummary;
+  /** ISO timestamp of when this health result was computed or scanned */
+  updatedAt: string;
+  /** Deltas vs the previous stored snapshot — null when no history exists yet */
+  trend?: HealthTrend | null;
 }
 
 export interface RepositoryHealthSummary {
