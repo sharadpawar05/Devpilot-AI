@@ -45,6 +45,14 @@ const DEPTH_MAX_TOKENS: Record<string, number> = {
 
 const MAX_DIFF_CHARS = 100_000;
 
+const PROVIDER_MAX_DIFF_CHARS: Record<string, number> = {
+  groq: 16_000,
+};
+
+function diffLimitFor(provider: string): number {
+  return PROVIDER_MAX_DIFF_CHARS[provider] ?? MAX_DIFF_CHARS;
+}
+
 function detectFileTypes(filenames: string[]): string {
   const frontendExts = new Set(['tsx', 'jsx', 'vue', 'svelte', 'css', 'scss', 'less', 'html']);
   const backendExts = new Set(['go', 'rs', 'java', 'py', 'rb', 'php', 'sql', 'graphql']);
@@ -202,8 +210,9 @@ export async function prReviewRoutes(app: FastifyInstance) {
         .join('\n\n');
 
       let truncated = false;
-      if (diffContent.length > MAX_DIFF_CHARS) {
-        diffContent = diffContent.slice(0, MAX_DIFF_CHARS);
+      const reviewDiffLimit = diffLimitFor(provider);
+      if (diffContent.length > reviewDiffLimit) {
+        diffContent = diffContent.slice(0, reviewDiffLimit);
         truncated = true;
       }
 
@@ -386,8 +395,9 @@ export async function prReviewRoutes(app: FastifyInstance) {
         .join('\n\n');
 
       let truncated = false;
-      if (diffContent.length > MAX_DIFF_CHARS) {
-        diffContent = diffContent.slice(0, MAX_DIFF_CHARS);
+      const analyzeDiffLimit = diffLimitFor(provider);
+      if (diffContent.length > analyzeDiffLimit) {
+        diffContent = diffContent.slice(0, analyzeDiffLimit);
         truncated = true;
       }
 
@@ -484,4 +494,4 @@ export async function prReviewRoutes(app: FastifyInstance) {
   );
 }
 
-export { analyzeSchema, detectFileTypes, detectLanguage };
+export { analyzeSchema, detectFileTypes, detectLanguage, diffLimitFor };

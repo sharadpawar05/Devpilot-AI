@@ -65,4 +65,34 @@ describe('classifyAIError', () => {
     expect(result.code).toBe('PROVIDER_UNAVAILABLE');
     expect(result.message).toContain('not configured');
   });
+
+  it('classifies Groq request-too-large ITPM errors with an actionable message', () => {
+    const result = classifyAIError({
+      code: 'INVALID_REQUEST',
+      message:
+        'Request too large for model `qwen/qwen3.8-27b` in organization `org_01hqhgh7z1f0japnyajgaaj6vy` service tier `on_demand` on input tokens per minute (ITPM): Limit 7000, Requested 12636, please reduce your message size and try again. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com',
+      provider: 'groq',
+      statusCode: 413,
+      retryable: false,
+    });
+    expect(result.status).toBe(413);
+    expect(result.code).toBe('INVALID_REQUEST');
+    expect(result.retryable).toBe(false);
+    expect(result.message).toBe(
+      'The request is too large for this AI provider. Try reviewing fewer files or a different provider.',
+    );
+    expect(result.message).not.toContain('ITPM');
+    expect(result.message).not.toContain('org_01');
+    expect(result.message).not.toContain('qwen');
+  });
+
+  it('classifies unstructured request-too-large messages as 413', () => {
+    const result = classifyAIError(
+      new Error('Request too large for model x on input tokens per minute (ITPM): Limit 7000'),
+    );
+    expect(result.status).toBe(413);
+    expect(result.code).toBe('INVALID_REQUEST');
+    expect(result.retryable).toBe(false);
+    expect(result.message).toContain('too large');
+  });
 });

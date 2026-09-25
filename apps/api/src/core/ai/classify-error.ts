@@ -44,7 +44,9 @@ export function classifyAIError(error: unknown): AIErrorResponse {
 
     if (code && AI_ERROR_CODES.has(code) && code !== 'UNKNOWN_ERROR' && code !== 'AI_ERROR') {
       const status = structured.statusCode ?? CODE_STATUS[code] ?? 502;
-      const friendly = messageForCode(code);
+      const friendly = isRequestTooLarge(message)
+        ? REQUEST_TOO_LARGE_MESSAGE
+        : messageForCode(code);
       const clean = cleanAIErrorMessage(message);
       return {
         status,
@@ -58,6 +60,18 @@ export function classifyAIError(error: unknown): AIErrorResponse {
   }
 
   return classifyByMessage(String(error));
+}
+
+const REQUEST_TOO_LARGE_MESSAGE =
+  'The request is too large for this AI provider. Try reviewing fewer files or a different provider.';
+
+function isRequestTooLarge(message: string): boolean {
+  const lower = message.toLowerCase();
+  return (
+    lower.includes('request too large') ||
+    lower.includes('input tokens per minute') ||
+    lower.includes('itpm')
+  );
 }
 
 function messageForCode(code: string): string | undefined {
@@ -138,8 +152,17 @@ function classifyByMessage(rawMessage: string): AIErrorResponse {
   if (lowerMsg.includes('not implemented')) {
     return {
       status: 501,
-      code: 'PROVIDER_NOT_IMPLEMENTED',
+      code: 'NOT_IMPLEMENTED',
       message: 'This provider is not yet implemented. Please try a different one.',
+      retryable: false,
+    };
+  }
+
+  if (isRequestTooLarge(rawMessage)) {
+    return {
+      status: 413,
+      code: 'INVALID_REQUEST',
+      message: REQUEST_TOO_LARGE_MESSAGE,
       retryable: false,
     };
   }
