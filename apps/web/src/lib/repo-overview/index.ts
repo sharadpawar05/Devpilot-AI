@@ -17,6 +17,8 @@ export type {
   ScoreBreakdownItem,
   HealthQualityMetrics,
   RepositoryHealthSummary,
+  HealthTrend,
+  HealthMetricTrend,
 } from './types';
 export type {
   GenerationResult,

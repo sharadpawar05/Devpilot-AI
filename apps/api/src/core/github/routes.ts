@@ -54,7 +54,8 @@ export async function githubRoutes(app: FastifyInstance) {
       const params = new URLSearchParams({
         client_id: env.GITHUB_CLIENT_ID,
         redirect_uri: env.GITHUB_REDIRECT_URI,
-        scope: 'read:user user:email repo',
+        // security_events: required for the Dependabot alerts API used by health checks
+        scope: 'read:user user:email repo security_events',
         state,
       });
 

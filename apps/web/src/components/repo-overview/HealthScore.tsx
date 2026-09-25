@@ -16,14 +16,17 @@ import {
   Package,
   Layers,
   Download,
+  FlaskConical,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { TrendBadge, formatRelativeTime } from './TrendBadge';
 import type {
   RepoHealthCheck,
   RepoHealthDetail,
   HealthSeverity,
   HealthCheckCategory,
   HealthActionType,
+  HealthTrend,
 } from '@/lib/repo-overview';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -263,6 +266,85 @@ function ScoreBreakdown({ summary }: { summary: NonNullable<RepoHealthCheck['sum
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+// ─── CoverageCard (coverage % + progress bar + trend) ───────────────────────
+
+function CoverageCard({
+  coverage,
+  trend,
+  testFileCount,
+}: {
+  coverage: number | null;
+  trend?: HealthTrend | null;
+  testFileCount?: number;
+}) {
+  const measured = coverage !== null;
+  const barColor = !measured
+    ? 'bg-muted'
+    : coverage >= 80
+      ? 'bg-emerald-500'
+      : coverage >= 60
+        ? 'bg-amber-500'
+        : 'bg-red-500';
+  const valueColor = !measured
+    ? 'text-muted-foreground'
+    : coverage >= 80
+      ? 'text-emerald-600 dark:text-emerald-400'
+      : coverage >= 60
+        ? 'text-amber-600 dark:text-amber-400'
+        : 'text-red-600 dark:text-red-400';
+  const clamped = measured ? Math.min(100, Math.max(0, coverage)) : 0;
+
+  return (
+    <div className="rounded-xl border bg-card p-4">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <FlaskConical className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-semibold">Code Coverage</span>
+        </div>
+        <div className="flex items-center gap-2">
+          {measured ? (
+            <span className={cn('text-sm font-bold tabular-nums', valueColor)}>
+              {Math.round(clamped)}%
+            </span>
+          ) : (
+            <span className="text-sm font-medium text-muted-foreground">Not measured</span>
+          )}
+          <TrendBadge trend={trend?.coverage ?? null} suffix="%" />
+        </div>
+      </div>
+
+      <div
+        className="mt-2.5 h-2 overflow-hidden rounded-full bg-muted"
+        role="progressbar"
+        aria-valuenow={Math.round(clamped)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={`Code coverage ${Math.round(clamped)}%`}
+      >
+        <div
+          className={cn('h-full rounded-full transition-all duration-500', barColor)}
+          style={{ width: `${clamped}%` }}
+        />
+      </div>
+
+      <div className="mt-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+        <span>
+          {measured
+            ? trend?.coverage
+              ? `Previously ${Math.round(trend.coverage.previous)}%`
+              : 'No previous measurement yet'
+            : 'Generate a coverage report (e.g. vitest --coverage) to measure'}
+        </span>
+        {testFileCount !== undefined && (
+          <span className="shrink-0">
+            {testFileCount} test file{testFileCount !== 1 ? 's' : ''}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -582,7 +664,7 @@ function QualityMetrics({
   quality: NonNullable<RepoHealthDetail['quality']>;
   name: string;
 }) {
-  if (name === 'Test Coverage' && quality.coverage !== undefined) {
+  if (name === 'Testing' && quality.coverage !== undefined) {
     return (
       <div className="flex items-center gap-2 text-xs">
         <span
@@ -604,11 +686,7 @@ function QualityMetrics({
     );
   }
 
-  if (
-    name === 'Test Coverage' &&
-    quality.coverage === undefined &&
-    quality.testFileCount !== undefined
-  ) {
+  if (name === 'Testing' && quality.coverage === undefined && quality.testFileCount !== undefined) {
     return (
       <div className="flex items-center gap-2 text-xs">
         <span className="font-mono font-semibold text-muted-foreground">No coverage data</span>
@@ -802,6 +880,8 @@ export function HealthScore({ health, onGenerate, onGenerateReport, className }:
     notMeasuredCount = 0,
     details = [],
     summary,
+    updatedAt,
+    trend,
   } = health || {};
   const circumference = 2 * Math.PI * 40;
   const offset = circumference - (score / 100) * circumference;
@@ -813,6 +893,15 @@ export function HealthScore({ health, onGenerate, onGenerateReport, className }:
     [details],
   );
   const qualityChecks = useMemo(() => details.filter((d) => d.category === 'quality'), [details]);
+
+  const { coverage, testFileCount } = useMemo(() => {
+    const coverageCheck = details.find((d) => d.id === 'test-coverage');
+    const value =
+      typeof summary?.testCoverage === 'number'
+        ? summary.testCoverage
+        : (coverageCheck?.quality?.coverage ?? null);
+    return { coverage: value, testFileCount: coverageCheck?.quality?.testFileCount };
+  }, [summary, details]);
 
   return (
     <div className={cn('space-y-5', className)}>
@@ -865,6 +954,7 @@ export function HealthScore({ health, onGenerate, onGenerateReport, className }:
               <h4 className={cn('text-xl font-bold', getScoreColor(score))}>
                 {getScoreLabel(score)}
               </h4>
+              <TrendBadge trend={trend?.score ?? null} />
             </div>
 
             {/* Summary counts */}
@@ -909,6 +999,13 @@ export function HealthScore({ health, onGenerate, onGenerateReport, className }:
               )}
             </div>
 
+            {updatedAt && (
+              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Clock className="h-3 w-3" />
+                Updated {formatRelativeTime(updatedAt)}
+              </p>
+            )}
+
             <p className="text-xs text-muted-foreground">
               {allPassed
                 ? 'Your repository follows most engineering best practices. No action required.'
@@ -938,6 +1035,9 @@ export function HealthScore({ health, onGenerate, onGenerateReport, className }:
           </div>
         )}
       </div>
+
+      {/* Code coverage — value + progress bar + trend */}
+      <CoverageCard coverage={coverage} trend={trend} testFileCount={testFileCount} />
 
       {/* Health check cards */}
       {allPassed ? (

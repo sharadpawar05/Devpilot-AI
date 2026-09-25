@@ -224,6 +224,7 @@ export default function HealthOverviewPage() {
       `**Branch:** ${metadata.default_branch}`,
       `**Language:** ${metadata.language || 'Unknown'}`,
       `**Generated:** ${now}`,
+      h.updatedAt ? `**Last updated:** ${h.updatedAt}` : '',
       '',
       `---`,
       '',
@@ -240,10 +241,20 @@ export default function HealthOverviewPage() {
                 ? 'Needs Attention'
                 : 'Needs Work'
       }`,
+      h.trend?.score
+        ? `**Change:** ${h.trend.score.change > 0 ? '+' : ''}${h.trend.score.change} vs previous scan (${h.trend.score.previous} → ${h.trend.score.current})`
+        : '',
       '',
       `- **${h.passedCount}** checks passed`,
       `- **${h.failedCount}** checks failed`,
       `- **${h.criticalCount}** critical issues`,
+      typeof h.summary.testCoverage === 'number'
+        ? `- **Code coverage:** ${Math.round(h.summary.testCoverage)}%${
+            h.trend?.coverage
+              ? ` (${h.trend.coverage.change > 0 ? '+' : ''}${h.trend.coverage.change}%)`
+              : ''
+          }`
+        : '',
       '',
       `## Score Breakdown`,
       '',

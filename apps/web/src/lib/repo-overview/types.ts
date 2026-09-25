@@ -168,6 +168,19 @@ export interface RepositoryHealthSummary {
   maintainabilityScore?: number;
 }
 
+export interface HealthMetricTrend {
+  current: number;
+  previous: number;
+  change: number;
+  direction: 'up' | 'down' | 'stable';
+}
+
+export interface HealthTrend {
+  score: HealthMetricTrend;
+  coverage: HealthMetricTrend | null;
+  previousAt: string;
+}
+
 export interface RepoHealthCheck {
   score: number;
   passedCount: number;
@@ -178,6 +191,8 @@ export interface RepoHealthCheck {
   details: RepoHealthDetail[];
   scoreBreakdown: ScoreBreakdownItem[];
   summary: RepositoryHealthSummary;
+  updatedAt?: string;
+  trend?: HealthTrend | null;
 }
 
 export interface RepoOverviewData {

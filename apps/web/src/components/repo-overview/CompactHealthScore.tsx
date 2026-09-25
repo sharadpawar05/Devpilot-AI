@@ -1,5 +1,6 @@
 import { Activity, AlertTriangle, XCircle, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { TrendBadge } from './TrendBadge';
 import type { RepoHealthCheck } from '@/lib/repo-overview';
 
 function getScoreColor(score: number): string {
@@ -75,6 +76,7 @@ export function CompactHealthScore({ health, onViewDetails }: CompactHealthScore
             <span className={cn('text-sm font-semibold', getScoreColor(score))}>
               {getScoreLabel(score)}
             </span>
+            <TrendBadge trend={health.trend?.score ?? null} />
           </div>
           <div className="mt-1.5 flex items-center gap-3 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">
