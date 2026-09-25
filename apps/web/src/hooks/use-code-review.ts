@@ -103,6 +103,7 @@ export function useCodeReview() {
             provider: request.provider || 'gemini',
             model: request.model,
             prompt: request.code,
+            token,
             context: {
               language: request.language,
               code: request.code,
@@ -187,7 +188,7 @@ export function useCodeReview() {
 
       return response;
     },
-    [stream, saveToHistory],
+    [stream, saveToHistory, token],
   );
 
   const mutate = useCallback(

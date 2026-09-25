@@ -41,4 +41,28 @@ describe('classifyAIError', () => {
     expect(result.message).not.toContain('GoogleGenerativeAI');
     expect(result.message).not.toContain('https://');
   });
+
+  it('classifies structured AIError codes without relying on message text', () => {
+    const result = classifyAIError({
+      code: 'RATE_LIMIT_EXCEEDED',
+      message: 'Groq rate limit exceeded. Please wait a moment and try again.',
+      provider: 'groq',
+      retryable: true,
+    });
+    expect(result.status).toBe(429);
+    expect(result.code).toBe('RATE_LIMIT_EXCEEDED');
+    expect(result.retryable).toBe(true);
+  });
+
+  it('classifies PROVIDER_UNAVAILABLE structured errors', () => {
+    const result = classifyAIError({
+      code: 'PROVIDER_UNAVAILABLE',
+      message: "Provider 'groq' is not initialized",
+      provider: 'groq',
+      retryable: false,
+    });
+    expect(result.status).toBe(503);
+    expect(result.code).toBe('PROVIDER_UNAVAILABLE');
+    expect(result.message).toContain('not configured');
+  });
 });

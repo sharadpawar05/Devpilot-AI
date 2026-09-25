@@ -23,7 +23,7 @@ const WORKFLOW_TYPES: WorkflowType[] = [
   'architecture-review',
 ];
 
-const PROVIDERS: AIProviderName[] = ['gemini', 'openai', 'anthropic', 'openrouter'];
+const PROVIDERS: AIProviderName[] = ['gemini', 'groq', 'openai', 'anthropic', 'openrouter'];
 
 export function FilterPanel({
   filters,

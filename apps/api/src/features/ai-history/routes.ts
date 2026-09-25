@@ -52,6 +52,20 @@ const updateSessionSchema = z.object({
   favorite: z.boolean().optional(),
 });
 
+const appendMessagesSchema = z.object({
+  messages: z
+    .array(
+      z.object({
+        role: z.enum(['user', 'assistant']),
+        content: z.string().min(1),
+        latency: z.number().optional().default(0),
+        tokens: z.number().optional().default(0),
+      }),
+    )
+    .min(1)
+    .max(50),
+});
+
 const listQuerySchema = z.object({
   page: z.coerce.number().min(1).default(1),
   pageSize: z.coerce.number().min(1).max(100).default(20),
@@ -478,6 +492,111 @@ export async function aiHistoryRoutes(app: FastifyInstance) {
         favorite: session.favorite,
         title: session.title,
         updatedAt: session.updatedAt.toISOString(),
+      });
+    },
+  );
+
+  app.post(
+    '/ai-history/sessions/:id/messages',
+    {
+      preHandler: [authenticate],
+      schema: {
+        description: 'Append messages to an AI history session',
+        tags: ['ai-history'],
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (request, reply) => {
+      const auth = (request as { auth: { sub: string } }).auth;
+      const { id } = request.params as { id: string };
+
+      const parsed = appendMessagesSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0].message },
+        });
+      }
+
+      const user = await db.user.findUnique({
+        where: { supabaseUserId: auth.sub },
+        select: { id: true },
+      });
+
+      if (!user) {
+        return reply.status(404).send({
+          success: false,
+          error: { code: 'USER_NOT_FOUND', message: 'User not found' },
+        });
+      }
+
+      const existing = await db.aIHistorySession.findFirst({
+        where: { id, userId: user.id },
+      });
+
+      if (!existing) {
+        return reply.status(404).send({
+          success: false,
+          error: { code: 'NOT_FOUND', message: 'Session not found' },
+        });
+      }
+
+      const { messages } = parsed.data;
+      const addedLatency = messages.reduce((sum, m) => sum + m.latency, 0);
+      const addedTokens = messages.reduce((sum, m) => sum + m.tokens, 0);
+
+      const session = await db.aIHistorySession.update({
+        where: { id },
+        data: {
+          totalLatency: { increment: addedLatency },
+          totalTokens: { increment: addedTokens },
+          messages: {
+            create: messages.map((m) => ({
+              role: m.role,
+              content: m.content,
+              latency: m.latency,
+              tokens: m.tokens,
+            })),
+          },
+        },
+        include: {
+          messages: { orderBy: { createdAt: 'asc' } },
+        },
+      });
+
+      return reply.send({
+        success: true,
+        id: session.id,
+        workflowType:
+          workflowTypeReverseMap[session.workflowType] || session.workflowType.toLowerCase(),
+        repository: session.repository,
+        title: session.title,
+        provider: session.provider,
+        model: session.model,
+        totalLatency: session.totalLatency,
+        totalTokens: session.totalTokens,
+        pinned: session.pinned,
+        archived: session.archived,
+        favorite: session.favorite,
+        createdAt: session.createdAt.toISOString(),
+        updatedAt: session.updatedAt.toISOString(),
+        messages: session.messages.map(
+          (m: {
+            id: string;
+            role: string;
+            content: string;
+            latency: number;
+            tokens: number;
+            createdAt: Date;
+          }) => ({
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            latency: m.latency,
+            tokens: m.tokens,
+            timestamp: m.createdAt.toISOString(),
+          }),
+        ),
       });
     },
   );

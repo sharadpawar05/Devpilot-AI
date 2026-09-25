@@ -22,6 +22,9 @@ interface ConversationStateProps {
   onFileClick?: (path: string) => void;
   error?: string | null;
   onRetry?: () => void;
+  provider?: string;
+  model?: string;
+  onProviderChange?: (provider: string, model: string) => void;
 }
 
 interface MessageGroup {
@@ -61,6 +64,9 @@ export function ConversationState({
   onFileClick,
   error,
   onRetry,
+  provider,
+  model,
+  onProviderChange,
 }: ConversationStateProps) {
   const [copied, setCopied] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -241,7 +247,14 @@ export function ConversationState({
         </div>
       )}
 
-      <ChatInput onSend={onSend} disabled={isChatting} placeholder="Ask a follow-up..." />
+      <ChatInput
+        onSend={onSend}
+        disabled={isChatting}
+        placeholder="Ask a follow-up..."
+        provider={provider}
+        model={model}
+        onProviderChange={onProviderChange}
+      />
     </div>
   );
 }

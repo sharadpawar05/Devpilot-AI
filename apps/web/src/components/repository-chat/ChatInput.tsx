@@ -2,12 +2,17 @@ import { useState } from 'react';
 import { Send, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useSettingsState } from '@/lib/settings-context';
 
 const selectClass =
   'rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm transition-colors ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
 
 const MODELS_BY_PROVIDER: Record<string, { value: string; label: string }[]> = {
   gemini: [{ value: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash' }],
+  groq: [
+    { value: 'qwen/qwen3.8-27b', label: 'Qwen 3.8 27B' },
+    { value: 'openai/gpt-oss-20b', label: 'GPT-OSS 20B' },
+  ],
   openai: [
     { value: 'gpt-4o', label: 'GPT-4o' },
     { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' },
@@ -24,27 +29,51 @@ const MODELS_BY_PROVIDER: Record<string, { value: string; label: string }[]> = {
   ],
 };
 
+function resolveInitialSelection(preferredProvider: string, preferredModel: string) {
+  const provider = MODELS_BY_PROVIDER[preferredProvider] ? preferredProvider : 'gemini';
+  const models = MODELS_BY_PROVIDER[provider] || [];
+  const model =
+    models.find((m) => m.value === preferredModel)?.value ?? models[0]?.value ?? 'gemini-3.6-flash';
+  return { provider, model };
+}
+
 interface ChatInputProps {
   onSend: (question: string, provider: string, model: string) => void;
   disabled?: boolean;
   placeholder?: string;
+  provider?: string;
+  model?: string;
+  onProviderChange?: (provider: string, model: string) => void;
 }
 
 export function ChatInput({
   onSend,
   disabled = false,
   placeholder = 'Ask about this repository...',
+  provider: controlledProvider,
+  model: controlledModel,
+  onProviderChange,
 }: ChatInputProps) {
+  const settings = useSettingsState();
+  const initial = resolveInitialSelection(settings.ai.defaultProvider, settings.ai.defaultModel);
   const [input, setInput] = useState('');
-  const [provider, setProvider] = useState('gemini');
-  const [model, setModel] = useState('gemini-3.6-flash');
+  const [uncontrolledProvider, setUncontrolledProvider] = useState(initial.provider);
+  const [uncontrolledModel, setUncontrolledModel] = useState(initial.model);
+
+  const provider = controlledProvider ?? uncontrolledProvider;
+  const model = controlledModel ?? uncontrolledModel;
 
   const handleProviderChange = (newProvider: string) => {
-    setProvider(newProvider);
-    const models = MODELS_BY_PROVIDER[newProvider];
-    if (models?.length) {
-      setModel(models[0].value);
-    }
+    const models = MODELS_BY_PROVIDER[newProvider] || [];
+    const nextModel = models[0]?.value ?? '';
+    setUncontrolledProvider(newProvider);
+    setUncontrolledModel(nextModel);
+    onProviderChange?.(newProvider, nextModel);
+  };
+
+  const handleModelChange = (newModel: string) => {
+    setUncontrolledModel(newModel);
+    onProviderChange?.(provider, newModel);
   };
 
   const handleSend = () => {
@@ -110,6 +139,7 @@ export function ChatInput({
             className={cn(selectClass, 'min-h-[40px] flex-1 sm:flex-none')}
           >
             <option value="gemini">Gemini</option>
+            <option value="groq">Groq</option>
             <option value="openai">OpenAI</option>
             <option value="anthropic">Anthropic</option>
           </select>
@@ -119,7 +149,7 @@ export function ChatInput({
           <select
             id="chat-model-select"
             value={model}
-            onChange={(e) => setModel(e.target.value)}
+            onChange={(e) => handleModelChange(e.target.value)}
             aria-label="AI model"
             className={cn(selectClass, 'min-h-[40px] flex-1 sm:flex-none')}
           >

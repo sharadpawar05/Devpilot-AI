@@ -40,6 +40,7 @@ export function useStreamPR() {
           workflowType: 'PR_REVIEW',
           provider: params.provider || 'gemini',
           prompt: `Review PR #${params.pull_number}`,
+          token,
           context: {
             owner: params.owner,
             repo: params.repo,
@@ -115,6 +116,7 @@ export function useStreamPR() {
           workflowType: 'PR_ANALYSIS',
           provider: params.provider || 'gemini',
           prompt: `Analyze PR #${params.pull_number}`,
+          token,
           context: {
             owner: params.owner,
             repo: params.repo,

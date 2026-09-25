@@ -54,6 +54,7 @@ vi.mock('@/lib/ai-history', () => ({
   aiHistoryApi: {
     createSession: vi.fn().mockResolvedValue(null),
     addMessage: vi.fn().mockResolvedValue(null),
+    appendMessages: vi.fn().mockResolvedValue(null),
     getSession: vi.fn().mockResolvedValue(null),
   },
   aiHistoryStorage: {
@@ -390,6 +391,32 @@ describe('Playground Flow - 10 Steps', () => {
       expect(screen.getByText('Model not available')).toBeInTheDocument();
       // Should show the friendly message from config, not the raw error
       expect(screen.getByText('The selected model is not available.')).toBeInTheDocument();
+      // Empty state should not compete with the error
+      expect(screen.queryByText('No response yet')).not.toBeInTheDocument();
+    });
+
+    it('should show classified provider rate-limit stream errors', async () => {
+      vi.mocked(useStreamSession).mockReturnValue({
+        content: '',
+        isStreaming: false,
+        error: {
+          code: 'RATE_LIMIT_EXCEEDED',
+          message: 'Rate limit exceeded. Please wait 58 seconds and try again.',
+        },
+        metadata: null,
+        startStream: vi.fn(),
+        stopStream: vi.fn(),
+        reset: vi.fn(),
+      });
+
+      render(<PlaygroundPage />);
+
+      expect(screen.getByText('Rate limit exceeded')).toBeInTheDocument();
+      expect(screen.getByText('Too many requests to the AI provider.')).toBeInTheDocument();
+      expect(screen.getByText('Please wait 58 seconds and try again.')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
+      expect(screen.queryByText('No response yet')).not.toBeInTheDocument();
+      expect(screen.queryByText('GoogleGenerativeAI')).not.toBeInTheDocument();
     });
 
     it('should display error in sticky footer', async () => {
@@ -436,9 +463,33 @@ describe('Playground Flow - 10 Steps', () => {
   describe('Step 7: Retry', () => {
     it('should allow retry after error without page refresh', async () => {
       const mockStartStream = vi.fn();
+      const mockReset = vi.fn();
 
-      // First call - error
-      vi.mocked(useStreamSession).mockReturnValueOnce({
+      vi.mocked(useStreamSession).mockReturnValue({
+        content: '',
+        isStreaming: false,
+        error: null,
+        metadata: null,
+        startStream: mockStartStream,
+        stopStream: vi.fn(),
+        reset: mockReset,
+      });
+
+      const { rerender } = render(<PlaygroundPage />);
+
+      const textarea = screen.getByPlaceholderText(/enter your prompt here/i);
+      fireEvent.change(textarea, { target: { value: 'Hello' } });
+
+      const generateButton = screen.getByText('Generate').closest('button');
+      expect(generateButton).not.toBeNull();
+      fireEvent.click(generateButton as HTMLButtonElement);
+
+      expect(mockStartStream).toHaveBeenCalledWith(expect.objectContaining({ prompt: 'Hello' }));
+      // Prompt is preserved after submit
+      expect(textarea).toHaveValue('Hello');
+
+      // Switch to error state (same component instance — lastPromptRef persists)
+      vi.mocked(useStreamSession).mockReturnValue({
         content: '',
         isStreaming: false,
         error: {
@@ -448,38 +499,24 @@ describe('Playground Flow - 10 Steps', () => {
         metadata: null,
         startStream: mockStartStream,
         stopStream: vi.fn(),
-        reset: vi.fn(),
-      });
-
-      const { rerender } = render(<PlaygroundPage />);
-
-      const textarea = screen.getByPlaceholderText(/enter your prompt here/i);
-      fireEvent.change(textarea, { target: { value: 'Hello' } });
-
-      // Second call - success
-      vi.mocked(useStreamSession).mockReturnValueOnce({
-        content: 'Success after retry',
-        isStreaming: false,
-        error: null,
-        metadata: {
-          provider: 'gemini',
-          model: 'gemini-3.6-flash',
-          latencyMs: 1000,
-          tokens: { input: 5, output: 10, total: 15 },
-        },
-        startStream: mockStartStream,
-        stopStream: vi.fn(),
-        reset: vi.fn(),
+        reset: mockReset,
       });
 
       rerender(<PlaygroundPage />);
 
-      expect(screen.getByText('Success after retry')).toBeInTheDocument();
+      const retryButton = screen.getByRole('button', { name: /retry/i });
+      fireEvent.click(retryButton);
+
+      expect(mockReset).toHaveBeenCalled();
+      expect(mockStartStream).toHaveBeenCalledTimes(2);
+      expect(mockStartStream).toHaveBeenLastCalledWith(
+        expect.objectContaining({ prompt: 'Hello' }),
+      );
     });
   });
 
   describe('Step 8: History', () => {
-    it('should show Playground history section', async () => {
+    it('should restore session response without showing You section', async () => {
       vi.mocked(aiHistoryApi.getSession).mockResolvedValue({
         id: 'session-1',
         workflowType: 'playground',
@@ -522,8 +559,13 @@ describe('Playground Flow - 10 Steps', () => {
       render(<PlaygroundPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('Conversation History')).toBeInTheDocument();
+        expect(screen.getByText('Hi there!')).toBeInTheDocument();
       });
+
+      // Only the response is shown — no "You" section or conversation thread
+      expect(screen.queryByText('Conversation History')).not.toBeInTheDocument();
+      expect(screen.queryByText('You')).not.toBeInTheDocument();
+      expect(screen.queryByText('Hello')).not.toBeInTheDocument();
 
       // Reset for other tests
       vi.mocked(useSearchParams).mockReturnValue([new URLSearchParams(), vi.fn()]);
@@ -572,9 +614,10 @@ describe('Playground Flow - 10 Steps', () => {
       render(<PlaygroundPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('What is AI?')).toBeInTheDocument();
         expect(screen.getByText('AI is artificial intelligence.')).toBeInTheDocument();
       });
+      // Response only — user prompt is not rendered as a chat bubble
+      expect(screen.queryByText('What is AI?')).not.toBeInTheDocument();
 
       // Reset for other tests
       vi.mocked(useSearchParams).mockReturnValue([new URLSearchParams(), vi.fn()]);
@@ -631,15 +674,15 @@ describe('Playground Flow - 10 Steps', () => {
         expect(screen.getByText('New')).toBeInTheDocument();
       });
 
-      // Form should be hidden when viewing history
-      expect(screen.queryByPlaceholderText(/enter your prompt here/i)).not.toBeInTheDocument();
+      // Form stays visible so the conversation can be continued
+      expect(screen.getByPlaceholderText(/enter your prompt here/i)).toBeInTheDocument();
 
       // Clicking New should clear the session
       const clearButton = screen.getByText('New');
       await user.click(clearButton);
 
       expect(mockReset).toHaveBeenCalled();
-      // After clearing, form should be visible again
+      // After clearing, form should still be visible
       await waitFor(() => {
         expect(screen.getByPlaceholderText(/enter your prompt here/i)).toBeInTheDocument();
       });
@@ -889,6 +932,38 @@ describe('Playground Flow - 10 Steps', () => {
       ).toBeInTheDocument();
       // Should have retry button for retryable errors
       expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
+    });
+
+    it('should apply template from ?template= query param', async () => {
+      vi.mocked(useSearchParams).mockReturnValue([
+        new URLSearchParams({ template: 'write-tests' }),
+        vi.fn(),
+      ]);
+
+      render(<PlaygroundPage />);
+
+      await waitFor(() => {
+        const textarea = screen.getByPlaceholderText(/enter your prompt here/i);
+        expect((textarea as HTMLTextAreaElement).value).toContain('unit tests');
+      });
+
+      vi.mocked(useSearchParams).mockReturnValue([new URLSearchParams(), vi.fn()]);
+    });
+
+    it('should apply documentation template from ?template=documentation', async () => {
+      vi.mocked(useSearchParams).mockReturnValue([
+        new URLSearchParams({ template: 'documentation' }),
+        vi.fn(),
+      ]);
+
+      render(<PlaygroundPage />);
+
+      await waitFor(() => {
+        const textarea = screen.getByPlaceholderText(/enter your prompt here/i);
+        expect((textarea as HTMLTextAreaElement).value.toLowerCase()).toContain('documentation');
+      });
+
+      vi.mocked(useSearchParams).mockReturnValue([new URLSearchParams(), vi.fn()]);
     });
   });
 });

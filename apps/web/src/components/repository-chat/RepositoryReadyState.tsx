@@ -6,12 +6,18 @@ interface RepositoryReadyStateProps {
   repoFullName: string;
   isChatting: boolean;
   onSend: (question: string, provider: string, model: string) => void;
+  provider?: string;
+  model?: string;
+  onProviderChange?: (provider: string, model: string) => void;
 }
 
 export function RepositoryReadyState({
   repoFullName,
   isChatting,
   onSend,
+  provider,
+  model,
+  onProviderChange,
 }: RepositoryReadyStateProps) {
   return (
     <div className="flex h-full flex-col">
@@ -29,14 +35,21 @@ export function RepositoryReadyState({
           <div className="mt-8">
             <p className="mb-3 text-xs font-medium text-muted-foreground">Suggested Questions</p>
             <SuggestedQuestions
-              onSelect={(q) => onSend(q, 'gemini', 'gemini-3.6-flash')}
+              onSelect={(q) => onSend(q, provider || 'gemini', model || 'gemini-3.6-flash')}
               disabled={isChatting}
             />
           </div>
         </div>
       </div>
 
-      <ChatInput onSend={onSend} disabled={isChatting} placeholder="Ask about this repository..." />
+      <ChatInput
+        onSend={onSend}
+        disabled={isChatting}
+        placeholder="Ask about this repository..."
+        provider={provider}
+        model={model}
+        onProviderChange={onProviderChange}
+      />
     </div>
   );
 }

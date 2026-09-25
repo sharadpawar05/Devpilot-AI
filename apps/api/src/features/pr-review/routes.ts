@@ -19,14 +19,14 @@ const reviewSchema = z.object({
     .enum(['Standard', 'Performance', 'Security', 'Maintainability', 'Architecture'])
     .default('Standard'),
   reviewDepth: z.enum(['Quick', 'Standard', 'Deep']).default('Standard'),
-  provider: z.enum(['gemini', 'openai', 'anthropic', 'openrouter']).default('gemini'),
+  provider: z.enum(['gemini', 'openai', 'anthropic', 'openrouter', 'groq']).default('gemini'),
 });
 
 const analyzeSchema = z.object({
   owner: z.string().min(1),
   repo: z.string().min(1),
   pull_number: z.number().min(1),
-  provider: z.enum(['gemini', 'openai', 'anthropic', 'openrouter']).default('gemini'),
+  provider: z.enum(['gemini', 'openai', 'anthropic', 'openrouter', 'groq']).default('gemini'),
 });
 
 const DEFAULT_MODELS: Record<string, string> = {
@@ -34,6 +34,7 @@ const DEFAULT_MODELS: Record<string, string> = {
   openai: 'gpt-4o',
   anthropic: 'claude-3.5-sonnet',
   openrouter: 'gpt-4',
+  groq: 'qwen/qwen3.8-27b',
 };
 
 const DEPTH_MAX_TOKENS: Record<string, number> = {

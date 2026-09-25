@@ -5,6 +5,7 @@ import { useGitHub } from '@/hooks/use-github';
 import { useRepositoryChat } from '@/hooks/use-repository-chat';
 import { useCopyResponse } from '@/hooks/use-keyboard-shortcuts';
 import { aiHistoryApi } from '@/lib/ai-history';
+import { useSettingsState } from '@/lib/settings-context';
 import { RepositoryChatState, deriveChatState } from '@/components/repository-chat/state';
 import { RepositoryChatLayout } from '@/components/repository-chat/RepositoryChatLayout';
 import { DisconnectedState } from '@/components/repository-chat/DisconnectedState';
@@ -15,16 +16,36 @@ import { ConversationState } from '@/components/repository-chat/ConversationStat
 import { RepositoryErrorState } from '@/components/repository-chat/RepositoryErrorState';
 import { RepoChatLoadingSteps } from '@/components/shared/LoadingSteps';
 
+const PROVIDER_MODEL_FALLBACKS: Record<string, string> = {
+  gemini: 'gemini-3.6-flash',
+  groq: 'qwen/qwen3.8-27b',
+  openai: 'gpt-4o',
+  anthropic: 'claude-3.5-sonnet',
+  openrouter: 'gpt-4',
+};
+
 export function RepositoryChatPage() {
   const { session } = useAuth();
   const gh = useGitHub();
   const chat = useRepositoryChat(session?.accessToken);
   const [searchParams] = useSearchParams();
+  const settings = useSettingsState();
 
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [selectedRepoFullName, setSelectedRepoFullName] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('main');
   const [isLoadingSession, setIsLoadingSession] = useState(false);
+  const [selectedProvider, setSelectedProvider] = useState<string>(settings.ai.defaultProvider);
+  const [selectedModel, setSelectedModel] = useState<string>(
+    settings.ai.defaultModel ||
+      PROVIDER_MODEL_FALLBACKS[settings.ai.defaultProvider] ||
+      'gemini-3.6-flash',
+  );
+
+  const handleProviderChange = useCallback((provider: string, model: string) => {
+    setSelectedProvider(provider);
+    setSelectedModel(model || PROVIDER_MODEL_FALLBACKS[provider] || 'gemini-3.6-flash');
+  }, []);
 
   const isIndexed = (chat.tree?.length ?? 0) > 0;
 
@@ -100,10 +121,18 @@ export function RepositoryChatPage() {
   const handleSend = useCallback(
     (question: string, provider: string, model: string) => {
       if (owner && repo) {
-        chat.sendMessage(owner, repo, selectedBranch, question, provider, model);
+        const effectiveProvider = provider || selectedProvider;
+        const effectiveModel =
+          model ||
+          selectedModel ||
+          PROVIDER_MODEL_FALLBACKS[effectiveProvider] ||
+          'gemini-3.6-flash';
+        setSelectedProvider(effectiveProvider);
+        setSelectedModel(effectiveModel);
+        chat.sendMessage(owner, repo, selectedBranch, question, effectiveProvider, effectiveModel);
       }
     },
-    [owner, repo, selectedBranch, chat.sendMessage],
+    [owner, repo, selectedBranch, selectedProvider, selectedModel, chat.sendMessage],
   );
 
   const handleFileClick = useCallback((path: string) => {
@@ -189,6 +218,9 @@ export function RepositoryChatPage() {
           repoFullName={selectedRepoFullName}
           isChatting={chat.isChatting}
           onSend={handleSend}
+          provider={selectedProvider}
+          model={selectedModel}
+          onProviderChange={handleProviderChange}
         />
       )}
 
@@ -201,6 +233,9 @@ export function RepositoryChatPage() {
           onFileClick={handleFileClick}
           error={chat.error}
           onRetry={chat.retryLastMessage}
+          provider={selectedProvider}
+          model={selectedModel}
+          onProviderChange={handleProviderChange}
         />
       )}
     </RepositoryChatLayout>

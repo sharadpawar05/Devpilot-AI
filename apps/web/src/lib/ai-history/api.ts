@@ -4,7 +4,6 @@ import type {
   AIHistoryFilters,
   AIHistoryListResult,
 } from '@devpilot/types';
-import { generateId } from '@/lib/id';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
 
@@ -322,18 +321,68 @@ export const aiHistoryApi = {
     sessionId: string,
     message: { role: string; content: string; latency: number; tokens: number },
   ): Promise<AIHistorySession | null> {
-    const session = await aiHistoryApi.getSession(token, sessionId);
-    if (!session) return null;
+    return aiHistoryApi.appendMessages(token, sessionId, [message]);
+  },
 
-    session.messages.push({
-      id: generateId(),
-      role: message.role as 'user' | 'assistant',
-      content: message.content,
-      latency: message.latency,
-      tokens: message.tokens,
-      timestamp: new Date().toISOString(),
-    });
+  async appendMessages(
+    token: string,
+    sessionId: string,
+    messages: Array<{ role: string; content: string; latency: number; tokens: number }>,
+  ): Promise<AIHistorySession | null> {
+    try {
+      const data = await apiFetch<{
+        success: boolean;
+        id: string;
+        workflowType: string;
+        repository: string | null;
+        title: string;
+        provider: string;
+        model: string;
+        totalLatency: number;
+        totalTokens: number;
+        pinned: boolean;
+        archived: boolean;
+        favorite: boolean;
+        createdAt: string;
+        updatedAt: string;
+        messages: Array<{
+          id: string;
+          role: string;
+          content: string;
+          latency: number;
+          tokens: number;
+          timestamp: string;
+        }>;
+      }>(`${API_BASE_URL}/ai-history/sessions/${sessionId}/messages`, token, {
+        method: 'POST',
+        body: JSON.stringify({ messages }),
+      });
 
-    return aiHistoryApi.updateSession(token, sessionId, {});
+      return {
+        id: data.id,
+        workflowType: data.workflowType as AIHistorySession['workflowType'],
+        repository: data.repository ?? undefined,
+        title: data.title,
+        provider: data.provider as AIHistorySession['provider'],
+        model: data.model as AIHistorySession['model'],
+        totalLatency: data.totalLatency,
+        totalTokens: data.totalTokens,
+        pinned: data.pinned,
+        archived: data.archived,
+        favorite: data.favorite,
+        createdAt: data.createdAt,
+        updatedAt: data.updatedAt,
+        messages: data.messages.map((m) => ({
+          id: m.id,
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+          latency: m.latency,
+          tokens: m.tokens,
+          timestamp: m.timestamp,
+        })),
+      };
+    } catch {
+      return null;
+    }
   },
 };

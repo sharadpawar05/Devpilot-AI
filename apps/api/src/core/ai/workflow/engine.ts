@@ -127,6 +127,10 @@ export class AIWorkflowEngine {
       temperature: effectiveTemperature,
       maxTokens: effectiveMaxTokens,
     })) {
+      if (chunk.type === 'error') {
+        yield chunk;
+        return;
+      }
       if (chunk.type === 'token' && chunk.content) {
         accumulatedContent += chunk.content;
       }

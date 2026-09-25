@@ -17,7 +17,7 @@ const engineeringStatusSchema = z.object({
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .optional(),
-  provider: z.enum(['gemini', 'openai', 'anthropic', 'openrouter']).default('gemini'),
+  provider: z.enum(['gemini', 'openai', 'anthropic', 'openrouter', 'groq']).default('gemini'),
 });
 
 export async function engineeringStatusRoutes(app: FastifyInstance) {

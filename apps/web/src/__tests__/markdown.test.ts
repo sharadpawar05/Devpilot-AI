@@ -37,4 +37,26 @@ describe('renderMarkdown', () => {
     expect(html).not.toMatch(/<p[^>]*>\s*<div class="code-block"/);
     expect(html).toContain('<div class="code-block');
   });
+
+  it('renders h4 and h5 headings instead of raw #### text', () => {
+    const html = renderMarkdown('#### 1. Critical Issue\n\n##### Sub detail');
+    expect(html).toContain('<h4');
+    expect(html).toContain('1. Critical Issue');
+    expect(html).toContain('<h5');
+    expect(html).not.toContain('####');
+  });
+
+  it('renders * bullets as list items without italic mangling', () => {
+    const html = renderMarkdown('* Issue: something\n* Fix: move it out');
+    expect(html).toContain('<li');
+    expect(html).toContain('<ul');
+    expect(html).toContain('Issue: something');
+    expect(html).not.toContain('* Issue');
+  });
+
+  it('keeps bold asterisks intact when normalizing bullet markers', () => {
+    const html = renderMarkdown('**Bold** and *italic*');
+    expect(html).toContain('<strong>Bold</strong>');
+    expect(html).toContain('<em>italic</em>');
+  });
 });

@@ -9,6 +9,7 @@ interface ProviderAnalyticsProps {
 
 const providerColors: Record<string, string> = {
   Gemini: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+  Groq: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
   Openai: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
   Anthropic: 'bg-orange-500/10 text-orange-600 dark:text-orange-400',
   Openrouter: 'bg-purple-500/10 text-purple-600 dark:text-purple-400',

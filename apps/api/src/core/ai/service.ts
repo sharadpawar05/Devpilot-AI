@@ -41,4 +41,12 @@ if (config.ai.openrouterApiKey) {
   });
 }
 
+if (config.ai.groqApiKey) {
+  aiService.registerProvider('groq', {
+    apiKey: config.ai.groqApiKey,
+    defaultModel: 'qwen/qwen3.8-27b',
+    timeout: 60000,
+  });
+}
+
 export { aiService };
