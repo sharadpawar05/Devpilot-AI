@@ -160,6 +160,10 @@ describe('UsageLimits', () => {
     // Customer-facing labels (no internal enum names)
     expect(screen.getByText('Engineering Reports')).toBeTruthy();
     expect(screen.getByText('Active Repositories')).toBeTruthy();
+    expect(screen.getByText('Health Scans')).toBeTruthy();
+    // Chat counter covers Playground and Repository Chat, so the label says so
+    expect(screen.getByText('AI Chat Messages')).toBeTruthy();
+    expect(screen.queryByText('Repository Chat')).toBeNull();
     expect(screen.queryByText('AI_REPORT')).toBeNull();
     expect(screen.queryByText('Feature Quotas')).toBeNull();
     expect(screen.getByText(/Resets Oct 1/)).toBeTruthy();

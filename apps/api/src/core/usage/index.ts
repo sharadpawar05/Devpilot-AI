@@ -19,3 +19,4 @@ export {
 } from './plan-limits';
 export { AI_CREDIT_COSTS, getCreditCost, type AICreditCostKey } from './credit-costs';
 export { sendUsageLimitReached, type UsageLimitErrorDetails } from './errors';
+export { repoScopeFromString, repoScopeFromFields, type RepoScope } from './repository-scope';

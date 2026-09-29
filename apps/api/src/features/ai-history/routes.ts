@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { authenticate } from '@/core/auth';
 import { db } from '@/core/db';
+import { usageService, sendUsageLimitReached, repoScopeFromString } from '@/core/usage';
 
 async function ensureUserExists(sub: string, email?: string): Promise<void> {
   const existing = await db.user.findUnique({
@@ -136,6 +137,16 @@ export async function aiHistoryRoutes(app: FastifyInstance) {
           success: false,
           error: { code: 'USER_NOT_FOUND', message: 'User not found' },
         });
+      }
+
+      // Sessions feed the Active Repositories counter, so a session for a
+      // repository the user has not activated must go through the plan limit.
+      const scope = repoScopeFromString(parsed.data.repository);
+      if (scope) {
+        const access = await usageService.ensureRepositoryAccess(auth.sub, scope.owner, scope.repo);
+        if (!access.allowed && access.details) {
+          return sendUsageLimitReached(reply, access.details);
+        }
       }
 
       const { messages, ...sessionData } = parsed.data;

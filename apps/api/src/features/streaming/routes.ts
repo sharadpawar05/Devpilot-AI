@@ -10,6 +10,7 @@ import {
   usageService,
   sendUsageLimitReached,
   AI_CREDIT_COSTS,
+  repoScopeFromFields,
   type AICreditCostKey,
 } from '@/core/usage';
 
@@ -160,6 +161,18 @@ export async function streamingRoutes(app: FastifyInstance) {
             message: `Provider '${provider}' is not configured. Available: ${availableProviders.join(', ') || 'none'}. Set the corresponding API key in your .env file.`,
           },
         });
+      }
+
+      // Repo-scoped workflows must respect the REPOSITORIES plan limit before
+      // any credits are spent. Playground/code-only workflows carry no scope.
+      const scope =
+        repoScopeFromFields(context.owner, context.repo) ??
+        repoScopeFromFields(metadata?.owner, metadata?.repo);
+      if (scope) {
+        const access = await usageService.ensureRepositoryAccess(auth.sub, scope.owner, scope.repo);
+        if (!access.allowed && access.details) {
+          return sendUsageLimitReached(reply, access.details);
+        }
       }
 
       const consume = await consumeStreamQuota(auth.sub, workflowType);

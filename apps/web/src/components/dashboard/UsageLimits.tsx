@@ -5,7 +5,10 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useUsage } from '@/hooks/use-usage';
 
 const ENGINEERING_REPORTS_HELP =
-  'Structured engineering reports generated from your repository data. Examples: Sprint Summary, Engineering Status, Incident Summary, Engineering Health Report.';
+  'Structured engineering reports generated from your repository data. Examples: Sprint Summary, Engineering Status, Incident Summary, Engineering Health Report, Release Notes, Repository Summary, Documentation and Test Generation.';
+
+const CHAT_MESSAGES_HELP =
+  'Messages sent from the Playground and from Repository Chat. Every message counts once against the monthly limit, regardless of which chat you use.';
 
 export const UsageLimits = memo(function UsageLimits() {
   const { data: usage, isPending, isFetching, isError, error, refetch } = useUsage();
@@ -151,8 +154,9 @@ export const UsageLimits = memo(function UsageLimits() {
           nearLimit={isNearLimit(usage.usage.aiReports, usage.limits.aiReports)}
           atLimit={isAtLimit(usage.usage.aiReports, usage.limits.aiReports)}
         />
-        <UsageRow
-          label="Repository Chat"
+        <UsageRowWithHelp
+          label="AI Chat Messages"
+          help={CHAT_MESSAGES_HELP}
           used={usage.usage.chatMessages}
           limit={usage.limits.chatMessages}
           nearLimit={isNearLimit(usage.usage.chatMessages, usage.limits.chatMessages)}

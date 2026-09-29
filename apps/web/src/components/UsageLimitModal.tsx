@@ -31,8 +31,8 @@ const FEATURE_COPY: Record<
     unit: (limit) => `Your plan includes ${limit} health scan${limit === 1 ? '' : 's'} per month.`,
   },
   CHAT_MESSAGE: {
-    title: 'Repository chat limit reached',
-    blurb: 'AI chat messages about your repositories.',
+    title: 'Chat message limit reached',
+    blurb: 'Messages sent from the Playground and from Repository Chat.',
     unit: (limit) => `Your plan includes ${limit} chat message${limit === 1 ? '' : 's'} per month.`,
   },
   AI_CREDITS: {
