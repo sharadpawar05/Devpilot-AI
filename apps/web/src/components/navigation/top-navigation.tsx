@@ -31,7 +31,7 @@ export function TopNavigation() {
 
       <SearchBar />
 
-      <div className="flex items-center gap-1">
+      <div className="ml-auto flex items-center gap-1 self-start">
         <NotificationBell />
 
         <Button
