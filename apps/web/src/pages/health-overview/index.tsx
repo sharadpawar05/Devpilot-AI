@@ -1,11 +1,15 @@
 import { useState, useCallback, useEffect } from 'react';
-import { RefreshCw, ChevronDown, Loader2, Shield, Download } from 'lucide-react';
+import { Activity, RefreshCw, ChevronDown, Loader2, Shield, Download } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/auth';
 import { useGitHub } from '@/hooks/use-github';
 import { repoOverviewApi } from '@/lib/repo-overview/api';
 import { getErrorMessage } from '@/lib/error-messages';
+import { isUsageLimitError } from '@/lib/api-error';
+import { useUsageLimitModal } from '@/hooks/use-usage-limit-modal';
+import { UsageLimitModal } from '@/components/UsageLimitModal';
+import { useRunHealthScan } from '@/lib/repo-intelligence';
 import {
   HealthScore,
   HealthDimensions,
@@ -100,6 +104,14 @@ export default function HealthOverviewPage() {
   const [overviewData, setOverviewData] = useState<RepoOverviewData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<{ code?: string; message?: string } | null>(null);
+  const [scanError, setScanError] = useState<{
+    code?: string;
+    message?: string;
+    feature?: string;
+    used?: number;
+    limit?: number;
+    resetAt?: string;
+  } | null>(null);
   const [generationModal, setGenerationModal] = useState<{
     open: boolean;
     actionType: HealthActionType;
@@ -175,6 +187,46 @@ export default function HealthOverviewPage() {
     }
   }, [owner, repo, token, fetchOverview]);
 
+  const runHealthScan = useRunHealthScan(owner, repo);
+  const scanUsageLimit = useUsageLimitModal(scanError);
+  const [scanNotice, setScanNotice] = useState<'consumed' | 'cached' | null>(null);
+
+  const handleRunScan = useCallback(async () => {
+    if (!owner || !repo || !token) return;
+
+    setScanNotice(null);
+    setScanError(null);
+
+    try {
+      const { health, cached } = await runHealthScan.mutateAsync();
+      setOverviewData((prev) => (prev ? { ...prev, health } : prev));
+      setScanNotice(cached ? 'cached' : 'consumed');
+      if (!overviewData) fetchOverview();
+    } catch (err) {
+      if (isUsageLimitError(err)) {
+        const e = err as {
+          code?: string;
+          feature?: string;
+          used?: number;
+          limit?: number;
+          resetAt?: string;
+        };
+        setScanError({
+          code: e.code || 'USAGE_LIMIT_REACHED',
+          message: err instanceof Error ? err.message : 'Health scan limit reached',
+          feature: e.feature,
+          used: e.used,
+          limit: e.limit,
+          resetAt: e.resetAt,
+        });
+      } else {
+        setError({
+          message: err instanceof Error ? err.message : 'Failed to run health scan',
+        });
+      }
+    }
+  }, [owner, repo, token, overviewData, fetchOverview, runHealthScan]);
+
   useEffect(() => {
     if (owner && repo && token) {
       gh.fetchBranches(owner, repo).catch(() => {});
@@ -187,6 +239,8 @@ export default function HealthOverviewPage() {
       setSelectedBranch('main');
       setOverviewData(null);
       setError(null);
+      setScanError(null);
+      setScanNotice(null);
       if (fullName) {
         const [o, r] = fullName.split('/');
         gh.fetchBranches(o, r);
@@ -199,6 +253,8 @@ export default function HealthOverviewPage() {
     setSelectedBranch(branch);
     setOverviewData(null);
     setError(null);
+    setScanError(null);
+    setScanNotice(null);
   }, []);
 
   const handleGenerate = useCallback((actionType: HealthActionType) => {
@@ -403,6 +459,11 @@ export default function HealthOverviewPage() {
 
   return (
     <div className="w-full px-6 py-6 space-y-6">
+      <UsageLimitModal
+        details={scanUsageLimit.details}
+        open={scanUsageLimit.open}
+        onOpenChange={scanUsageLimit.setOpen}
+      />
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <RepoSelector
@@ -414,6 +475,19 @@ export default function HealthOverviewPage() {
           onBranchChange={handleBranchChange}
         />
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRunScan}
+            disabled={runHealthScan.isPending || isLoading}
+          >
+            {runHealthScan.isPending ? (
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Activity className="mr-1.5 h-3.5 w-3.5" />
+            )}
+            Run Health Scan
+          </Button>
           <Button variant="outline" size="sm" onClick={fetchOverview} disabled={isLoading}>
             {isLoading ? (
               <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -430,6 +504,15 @@ export default function HealthOverviewPage() {
           )}
         </div>
       </div>
+
+      {/* Health scan quota feedback */}
+      {scanNotice && (
+        <p className="text-xs text-muted-foreground" role="status">
+          {scanNotice === 'cached'
+            ? 'Served from cache — no Health Scan used. Push a new commit or scan another repository to consume quota.'
+            : 'Fresh scan completed — 1 Health Scan used.'}
+        </p>
+      )}
 
       {/* Error State */}
       {error && (

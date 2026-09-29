@@ -114,8 +114,9 @@ describe('AI Credit Costs', () => {
     expect(AI_CREDIT_COSTS.AI_REPORT).toBe(3);
     expect(AI_CREDIT_COSTS.PR_REVIEW).toBe(5);
     expect(AI_CREDIT_COSTS.REPOSITORY_OVERVIEW).toBe(10);
-    expect(AI_CREDIT_COSTS.HEALTH_SCAN).toBe(15);
     expect(AI_CREDIT_COSTS.ARCHITECTURE_ANALYSIS).toBe(20);
+    // Health scans are deterministic analysis — never charged as AI credits.
+    expect('HEALTH_SCAN' in AI_CREDIT_COSTS).toBe(false);
   });
 });
 
@@ -373,10 +374,12 @@ describe('UsageService', () => {
       expect(tx.userUsage.updateMany).toHaveBeenCalled();
       const args = tx.userUsage.updateMany.mock.calls[0][0] as {
         where: { healthScansUsed: { lte: number } };
-        data: { healthScansUsed: { increment: number } };
+        data: { healthScansUsed: { increment: number }; aiCreditsUsed?: unknown };
       };
       expect(args.where.healthScansUsed.lte).toBe(1); // limit 2 - amount 1
       expect(args.data.healthScansUsed.increment).toBe(1);
+      // Health scans must never spend AI credits.
+      expect(args.data.aiCreditsUsed).toBeUndefined();
     });
 
     it('third concurrent AI report at limit 2 cannot succeed (atomic conditional)', async () => {
@@ -484,7 +487,7 @@ describe('UsageService', () => {
       expect(summary.usage).toHaveProperty('repositories');
       expect(summary.remaining.aiCredits).toBe(50);
       expect(summary.creditCosts.AI_REPORT).toBe(3);
-      expect(summary.creditCosts.HEALTH_SCAN).toBe(15);
+      expect('HEALTH_SCAN' in summary.creditCosts).toBe(false);
     });
 
     it('remaining is always max(limit - used, 0)', async () => {

@@ -13,6 +13,7 @@ export {
   useRepositoryCommitActivity,
   useRepositoryFileTree,
   useRepositoryHealth,
+  useRunHealthScan,
   useRepositoryIntelligence,
   useRepositoryReadme,
   useInvalidateIntelligence,

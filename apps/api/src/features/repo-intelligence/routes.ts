@@ -578,12 +578,9 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
           }
         }
 
-        // Atomically consume health scan + AI credits before running new scan
-        const consume = await usageService.consumeWithCredits(
-          auth.sub,
-          'HEALTH_SCAN',
-          'HEALTH_SCAN',
-        );
+        // Atomically consume the health scan quota before running a new scan.
+        // Health scans are deterministic analysis — they never spend AI credits.
+        const consume = await usageService.consumeQuota(auth.sub, 'HEALTH_SCAN');
         if (!consume.allowed && consume.details) {
           return sendUsageLimitReached(reply, consume.details);
         }
@@ -618,7 +615,7 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
       } catch (error: unknown) {
         // Refund only if this request actually consumed a health scan quota.
         if (consumed) {
-          await usageService.refundWithCredits(auth.sub, 'HEALTH_SCAN', 'HEALTH_SCAN');
+          await usageService.refundQuota(auth.sub, 'HEALTH_SCAN');
         }
         const err = error as { status?: number; message?: string };
         return reply.status(err.status || 500).send({

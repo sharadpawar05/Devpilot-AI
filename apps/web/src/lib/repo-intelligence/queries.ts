@@ -388,6 +388,33 @@ export function useFileContent(owner: string, repo: string, path: string | null,
   });
 }
 
+// ─── Run Health Scan Mutation ────────────────────────────────────────────────
+
+/**
+ * Executes a fresh health scan via GET /repo-intelligence/health.
+ * Each uncached run consumes one Health Scan from the plan quota, so this is
+ * intentionally a mutation (not a query) — repeated clicks must hit the API.
+ */
+export function useRunHealthScan(owner: string, repo: string) {
+  const { session } = useAuth();
+  const token = session?.accessToken;
+  const queryClient = useQueryClient();
+
+  return useMutation<{ health: RepositoryHealth; cached: boolean }, Error>({
+    mutationFn: async () => {
+      const result = await repositoryIntelligenceApi.getHealth(owner, repo, token);
+      if (!result.success || !result.data)
+        throw new Error(result.error || 'Failed to run health scan');
+      return { health: result.data, cached: result.cached === true };
+    },
+    onSuccess: ({ health, cached }) => {
+      queryClient.setQueryData(intelligenceKeys.health(owner, repo), health);
+      // Cached results consumed no quota — only refresh the meter on a real scan.
+      if (!cached) void queryClient.invalidateQueries({ queryKey: ['usage'] });
+    },
+  });
+}
+
 // ─── Invalidate Cache Mutation ───────────────────────────────────────────────
 
 export function useInvalidateIntelligence() {

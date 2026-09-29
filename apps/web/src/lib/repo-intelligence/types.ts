@@ -197,6 +197,11 @@ export interface CommitActivity {
 
 export type HealthSeverity = 'critical' | 'high' | 'medium' | 'low';
 
+export type HealthCheckCategory = 'structural' | 'quality';
+
+export type HealthCheckStatus =
+  'passed' | 'failed' | 'warning' | 'partial' | 'not_applicable' | 'not_measured';
+
 export type HealthActionType =
   | 'none'
   | 'generate-readme'
@@ -207,10 +212,18 @@ export type HealthActionType =
   | 'generate-tests'
   | 'generate-docs'
   | 'generate-dockerfile'
-  | 'generate-env-example';
+  | 'generate-env-example'
+  | 'improve-coverage'
+  | 'improve-readme'
+  | 'add-ci-pipeline'
+  | 'fix-vulnerabilities'
+  | 'update-dependencies';
 
 export interface HealthCheckDetail {
+  id: string;
   name: string;
+  category: HealthCheckCategory;
+  status: HealthCheckStatus;
   passed: boolean;
   severity: HealthSeverity;
   failedDescription: string;
@@ -220,6 +233,7 @@ export interface HealthCheckDetail {
   actionLabel: string;
   actionType: HealthActionType;
   scorePenalty: number;
+  evidence?: Record<string, unknown>;
   quality?: HealthQualityMetrics;
 }
 
@@ -233,12 +247,18 @@ export interface HealthQualityMetrics {
   workflowCount?: number;
   passingWorkflows?: number;
   failingWorkflows?: number;
+  workflowTypes?: string[];
   vulnerabilityCount?: number;
   criticalVulnerabilities?: number;
   highVulnerabilities?: number;
+  dependabotAccessible?: boolean;
   totalDependencies?: number;
   outdatedDependencies?: number;
   outdatedPercentage?: number;
+  hasLockfile?: boolean;
+  majorOutdated?: number;
+  minorOutdated?: number;
+  patchOutdated?: number;
   vulnerabilities?: VulnerabilityItem[];
   complexityScore?: number;
   largeFiles?: LargeFileItem[];
@@ -278,6 +298,36 @@ export interface HotspotItem {
 export interface ScoreBreakdownItem {
   name: string;
   penalty: number;
+  category: HealthCheckCategory;
+}
+
+export interface RepositoryHealthSummary {
+  structuralScore: number;
+  qualityScore: number;
+  structuralWeight: number;
+  qualityWeight: number;
+  testCoverage?: number;
+  documentationScore?: number | null;
+  cicdScore?: number | null;
+  securityScore?: number | null;
+  dependencyScore?: number | null;
+  complexityScore?: number | null;
+  debtScore?: number;
+  hotspotCount?: number;
+  maintainabilityScore?: number;
+}
+
+export interface HealthMetricTrend {
+  current: number;
+  previous: number;
+  change: number;
+  direction: 'up' | 'down' | 'stable';
+}
+
+export interface HealthTrend {
+  score: HealthMetricTrend;
+  coverage: HealthMetricTrend | null;
+  previousAt: string;
 }
 
 export interface RepositoryHealth {
@@ -289,6 +339,9 @@ export interface RepositoryHealth {
   criticalCount: number;
   details: HealthCheckDetail[];
   scoreBreakdown: ScoreBreakdownItem[];
+  summary: RepositoryHealthSummary;
+  updatedAt: string;
+  trend?: HealthTrend | null;
 }
 
 // ─── Repository Intelligence (Technology Analysis) ───────────────────────────

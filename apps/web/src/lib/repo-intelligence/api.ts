@@ -15,6 +15,7 @@ import type {
   FileContent,
   IntelligenceApiResult,
 } from './types';
+import { ApiError } from '@/lib/api-error';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
 
@@ -30,14 +31,26 @@ async function authFetch(
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const res = await fetch(url, { ...options, headers, credentials: 'include' });
   if (!res.ok) {
+    const text = await res.text().catch(() => '');
     let message = `Request failed (${res.status})`;
+    let errCode: string | undefined;
+    let feature: string | undefined;
+    let used: number | undefined;
+    let limit: number | undefined;
+    let resetAt: string | undefined;
     try {
-      const body = await res.json();
-      message = body.error?.message || body.message || message;
+      const json = JSON.parse(text);
+      const body = json.error ?? {};
+      message = body.message || json.message || message;
+      errCode = typeof body.code === 'string' ? body.code : undefined;
+      feature = typeof body.feature === 'string' ? body.feature : undefined;
+      used = typeof body.used === 'number' ? body.used : undefined;
+      limit = typeof body.limit === 'number' ? body.limit : undefined;
+      resetAt = typeof body.resetAt === 'string' ? body.resetAt : undefined;
     } catch {
-      /* ignore */
+      message = text || message;
     }
-    throw new Error(message);
+    throw new ApiError(message, { code: errCode, feature, used, limit, resetAt, retryable: false });
   }
   return res;
 }
@@ -364,7 +377,12 @@ export const repositoryIntelligenceApi = {
     owner: string,
     repo: string,
     token?: string,
-  ): Promise<{ success: boolean; data?: RepositoryHealth; error?: string }> {
+  ): Promise<{
+    success: boolean;
+    data?: RepositoryHealth;
+    cached?: boolean;
+    error?: string;
+  }> {
     try {
       const params = buildParams(owner, repo);
       const res = await authFetch(`${API_BASE}/repo-intelligence/health?${params}`, token);
@@ -374,8 +392,11 @@ export const repositoryIntelligenceApi = {
           success: false,
           error: (json.error as { message?: string })?.message || 'Failed to fetch health',
         };
-      return { success: true, data: json.data as RepositoryHealth };
+      const data = json.data as RepositoryHealth & { cached?: boolean };
+      return { success: true, data, cached: data.cached === true };
     } catch (error) {
+      // Usage-limit envelopes must keep their code/feature/used/limit fields.
+      if (error instanceof ApiError) throw error;
       return { success: false, error: error instanceof Error ? error.message : 'Network error' };
     }
   },

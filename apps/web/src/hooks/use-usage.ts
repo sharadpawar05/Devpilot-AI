@@ -36,7 +36,6 @@ export interface UsageData {
     AI_REPORT: number;
     PR_REVIEW: number;
     REPOSITORY_OVERVIEW: number;
-    HEALTH_SCAN: number;
     ARCHITECTURE_ANALYSIS: number;
   };
 }
