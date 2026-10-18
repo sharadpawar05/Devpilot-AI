@@ -9,7 +9,7 @@ import { repositoryStatusService } from './status';
 import { buildTreeSummary, findFilesByKeywords } from './parser';
 import { db } from '@/core/db';
 import { config } from '@devpilot/config';
-import { usageService, sendUsageLimitReached } from '@/core/usage';
+import { usageService, sendUsageLimitReached, AI_CREDIT_COSTS } from '@/core/usage';
 import {
   githubOwnerSchema,
   githubRepoSchema,
@@ -395,7 +395,7 @@ Question: ${question}`;
           model: response.model,
           inputTokens: response.tokens.input,
           outputTokens: response.tokens.output,
-          creditsConsumed: 5,
+          creditsConsumed: AI_CREDIT_COSTS.REPOSITORY_CHAT,
           estimatedCostUsd: response.cost?.totalCost ?? 0,
         });
 

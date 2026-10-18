@@ -232,4 +232,80 @@ describe.skipIf(!TEST_DATABASE_URL)('database integrity against a real Postgres'
       expect(report.id).toBeTruthy();
     });
   });
+
+  describe('monthly reset', () => {
+    it('a new UTC month starts at zero and is consumable even when last month was full', async () => {
+      const sub = randomUUID();
+      const localId = await usageService.resolveUserId(sub);
+      const current = await usageService.getOrCreateUsage(localId);
+
+      const prevStart = new Date(current.periodStart);
+      prevStart.setUTCMonth(prevStart.getUTCMonth() - 1);
+      const prevEnd = new Date(current.periodEnd);
+      prevEnd.setUTCMonth(prevEnd.getUTCMonth() - 1);
+      await db.userUsage.create({
+        data: {
+          userId: localId,
+          periodStart: prevStart,
+          periodEnd: prevEnd,
+          chatMessagesUsed: 999,
+        },
+      });
+
+      const summary = await usageService.getUsageSummary(sub);
+      expect(summary.periodStart).toBe(current.periodStart.toISOString());
+      expect(summary.usage.chatMessages).toBe(0);
+      expect(summary.remaining.chatMessages).toBe(summary.limits.chatMessages);
+
+      const consumed = await usageService.consumeQuota(sub, 'CHAT_MESSAGE');
+      expect(consumed.consumed).toBe(true);
+      expect(consumed.used).toBe(1);
+    });
+  });
+
+  describe('failed requests and retries', () => {
+    it('refund after a failed generation restores quota so a retry can consume', async () => {
+      const sub = randomUUID();
+      const limits = await usageService.getPlanLimitsForUser(sub);
+
+      for (let i = 0; i < limits.aiReports; i++) {
+        const r = await usageService.consumeQuota(sub, 'AI_REPORT');
+        expect(r.consumed).toBe(true);
+      }
+
+      const atLimit = await usageService.consumeQuota(sub, 'AI_REPORT');
+      expect(atLimit.allowed).toBe(false);
+      expect(atLimit.details?.feature).toBe('AI_REPORT');
+      expect(atLimit.details?.limit).toBe(limits.aiReports);
+      expect(atLimit.details?.resetAt).toBeInstanceOf(Date);
+
+      await usageService.refundQuota(sub, 'AI_REPORT');
+
+      const retry = await usageService.consumeQuota(sub, 'AI_REPORT');
+      expect(retry.consumed).toBe(true);
+
+      const summary = await usageService.getUsageSummary(sub);
+      expect(summary.usage.aiReports).toBe(limits.aiReports);
+      expect(summary.remaining.aiReports).toBe(0);
+    });
+
+    it('refundWithCredits restores both dimensions together so a retry can consume again', async () => {
+      const sub = randomUUID();
+
+      const consumed = await usageService.consumeWithCredits(sub, 'AI_REPORT', 'AI_REPORT');
+      expect(consumed.consumed).toBe(true);
+      const afterFirst = await usageService.getUsageSummary(sub);
+      expect(afterFirst.usage.aiReports).toBe(1);
+      expect(afterFirst.usage.aiCredits).toBeGreaterThan(0);
+
+      await usageService.refundWithCredits(sub, 'AI_REPORT', 'AI_REPORT');
+
+      const afterRefund = await usageService.getUsageSummary(sub);
+      expect(afterRefund.usage.aiReports).toBe(0);
+      expect(afterRefund.usage.aiCredits).toBe(0);
+
+      const again = await usageService.consumeWithCredits(sub, 'AI_REPORT', 'AI_REPORT');
+      expect(again.consumed).toBe(true);
+    });
+  });
 });
