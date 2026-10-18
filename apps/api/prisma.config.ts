@@ -4,16 +4,11 @@ import dotenv from 'dotenv';
 dotenv.config({ path: '.env' });
 
 const databaseUrl = process.env['DATABASE_URL'];
-if (!databaseUrl) {
-  throw new Error('DATABASE_URL is required to run Prisma commands (set it in apps/api/.env)');
-}
 
 export default defineConfig({
   schema: 'prisma/schema.prisma',
   migrations: {
     path: 'prisma/migrations',
   },
-  datasource: {
-    url: databaseUrl,
-  },
+  ...(databaseUrl ? { datasource: { url: databaseUrl } } : {}),
 });
