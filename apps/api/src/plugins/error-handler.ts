@@ -8,6 +8,19 @@ export async function registerErrorHandler(app: FastifyInstance) {
     // Log the full error server-side only
     app.log.error(error);
 
+    // Fastify schema validation failures (JSON Schema `pattern`, required
+    // params, etc.) — keep the standard API error shape and surface the
+    // validation message (contains no internal details or secrets).
+    if (error.validation && statusCode === 400) {
+      return reply.status(400).send({
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: error.message,
+        },
+      });
+    }
+
     // Sanitize the error for client exposure
     const sanitized = sanitizeError(
       error,

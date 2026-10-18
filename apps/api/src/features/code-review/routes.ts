@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { aiService } from '@/core/ai/service';
+import { classifyAIError } from '@/core/ai/classify-error';
 import { authenticate } from '@/core/auth/middleware';
 import { usageService, sendUsageLimitReached, AI_CREDIT_COSTS } from '@/core/usage';
 import { PromptRegistry, loadMarkdownPrompts } from '@devpilot/ai-prompts';
@@ -161,13 +162,12 @@ export async function codeReviewRoutes(app: FastifyInstance) {
         });
       } catch (error) {
         await usageService.refundQuota(auth.sub, 'AI_CREDITS', creditCost);
-        const message = error instanceof Error ? error.message : String(error);
         app.log.error({ err: error }, 'Prompt rendering failed');
         return reply.status(500).send({
           success: false,
           error: {
             code: 'PROMPT_ERROR',
-            message: `Failed to render prompt: ${message}`,
+            message: 'Failed to render prompt',
           },
         });
       }
@@ -209,19 +209,15 @@ export async function codeReviewRoutes(app: FastifyInstance) {
         });
       } catch (error) {
         await usageService.refundQuota(auth.sub, 'AI_CREDITS', creditCost);
-        const message = error instanceof Error ? error.message : String(error);
-        const code_ =
-          error && typeof error === 'object' && 'code' in error
-            ? String((error as { code: unknown }).code)
-            : 'AI_ERROR';
-
         app.log.error({ err: error, provider, model }, 'Code review failed');
+        const errorResponse = classifyAIError(error);
 
-        return reply.status(502).send({
+        return reply.status(errorResponse.status).send({
           success: false,
           error: {
-            code: code_,
-            message,
+            code: errorResponse.code,
+            message: errorResponse.message,
+            retryable: errorResponse.retryable,
           },
         });
       }
