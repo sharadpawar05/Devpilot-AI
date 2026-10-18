@@ -118,13 +118,17 @@ class UsageService {
 
   /**
    * Lazily create the current-month usage row if missing.
+   * Uses INSERT ... ON CONFLICT DO NOTHING (via createMany skipDuplicates)
+   * so concurrent callers never race into a P2002 on first touch of a period.
    */
   async getOrCreateUsage(localUserId: string): Promise<UsageRow> {
     const { periodStart, periodEnd } = getCurrentMonthPeriod();
-    return db.userUsage.upsert({
+    await db.userUsage.createMany({
+      data: [{ userId: localUserId, periodStart, periodEnd }],
+      skipDuplicates: true,
+    });
+    return db.userUsage.findUniqueOrThrow({
       where: { userId_periodStart: { userId: localUserId, periodStart } },
-      update: {},
-      create: { userId: localUserId, periodStart, periodEnd },
     });
   }
 
@@ -341,10 +345,9 @@ class UsageService {
     const limit = getLimitForFeature(limits, feature);
 
     const result = await db.$transaction(async (tx) => {
-      await tx.userUsage.upsert({
-        where: { userId_periodStart: { userId: localUserId, periodStart } },
-        update: {},
-        create: { userId: localUserId, periodStart, periodEnd },
+      await tx.userUsage.createMany({
+        data: [{ userId: localUserId, periodStart, periodEnd }],
+        skipDuplicates: true,
       });
 
       // Atomic conditional increment: only succeeds while under limit.
@@ -397,10 +400,9 @@ class UsageService {
     const creditLimit = limits.aiCredits;
 
     const result = await db.$transaction(async (tx) => {
-      await tx.userUsage.upsert({
-        where: { userId_periodStart: { userId: localUserId, periodStart } },
-        update: {},
-        create: { userId: localUserId, periodStart, periodEnd },
+      await tx.userUsage.createMany({
+        data: [{ userId: localUserId, periodStart, periodEnd }],
+        skipDuplicates: true,
       });
 
       const current = await tx.userUsage.findUniqueOrThrow({

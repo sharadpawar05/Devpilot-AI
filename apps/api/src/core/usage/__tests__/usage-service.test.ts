@@ -18,7 +18,7 @@ vi.mock('@/core/db', () => ({
       findUnique: vi.fn(),
     },
     userUsage: {
-      upsert: vi.fn(),
+      createMany: vi.fn(),
       findUnique: vi.fn(),
       findUniqueOrThrow: vi.fn(),
       updateMany: vi.fn(),
@@ -40,7 +40,7 @@ import { db, resolveLocalUserId } from '@/core/db';
 
 const mockDb = db as unknown as {
   user: { findUnique: Mock };
-  userUsage: { upsert: Mock; findUnique: Mock; findUniqueOrThrow: Mock; updateMany: Mock };
+  userUsage: { createMany: Mock; findUnique: Mock; findUniqueOrThrow: Mock; updateMany: Mock };
   aIUsageEvent: { create: Mock };
   repoHealthSnapshot: { findUnique: Mock; upsert: Mock };
   $queryRaw: Mock;
@@ -141,7 +141,7 @@ describe('UsageService', () => {
     mockDb.user.findUnique.mockResolvedValue({
       organization: { plan: 'FREE' },
     });
-    mockDb.userUsage.upsert.mockResolvedValue(localRow);
+    mockDb.userUsage.createMany.mockResolvedValue({ count: 1 });
     mockDb.userUsage.findUnique.mockResolvedValue(localRow);
     mockDb.userUsage.findUniqueOrThrow.mockResolvedValue(localRow);
     mockDb.userUsage.updateMany.mockResolvedValue({ count: 1 });
@@ -152,7 +152,7 @@ describe('UsageService', () => {
     // Default transaction: invoke callback with a tx mock
     const tx = {
       userUsage: {
-        upsert: vi.fn().mockResolvedValue(localRow),
+        createMany: vi.fn().mockResolvedValue({ count: 1 }),
         findUniqueOrThrow: vi.fn().mockResolvedValue(localRow),
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
@@ -181,7 +181,7 @@ describe('UsageService', () => {
         ...localRow,
         healthScansUsed: 2,
       });
-      mockDb.userUsage.upsert.mockResolvedValue({
+      mockDb.userUsage.findUniqueOrThrow.mockResolvedValue({
         ...localRow,
         healthScansUsed: 2,
       });
@@ -195,7 +195,7 @@ describe('UsageService', () => {
     });
 
     it('should reject AI report when at limit', async () => {
-      mockDb.userUsage.upsert.mockResolvedValue({
+      mockDb.userUsage.findUniqueOrThrow.mockResolvedValue({
         ...localRow,
         aiReportsUsed: 2,
       });
@@ -207,7 +207,7 @@ describe('UsageService', () => {
     });
 
     it('should reject chat when at limit', async () => {
-      mockDb.userUsage.upsert.mockResolvedValue({
+      mockDb.userUsage.findUniqueOrThrow.mockResolvedValue({
         ...localRow,
         chatMessagesUsed: 20,
       });
@@ -245,7 +245,7 @@ describe('UsageService', () => {
 
     it('should isolate periods using current UTC month', async () => {
       await usageService.checkQuota(userId, 'HEALTH_SCAN');
-      const callArgs = mockDb.userUsage.upsert.mock.calls[0][0] as {
+      const callArgs = mockDb.userUsage.findUniqueOrThrow.mock.calls[0][0] as {
         where: { userId_periodStart: { periodStart: Date } };
       };
       const expected = getCurrentMonthPeriod().periodStart;
@@ -260,7 +260,7 @@ describe('UsageService', () => {
     function setupTx(opts: { active?: boolean; count?: number; upsertOk?: boolean }) {
       const tx = {
         userUsage: {
-          upsert: vi.fn().mockResolvedValue(localRow),
+          createMany: vi.fn().mockResolvedValue({ count: 1 }),
           findUniqueOrThrow: vi.fn().mockResolvedValue(localRow),
           updateMany: vi.fn().mockResolvedValue({ count: 1 }),
         },
@@ -335,7 +335,7 @@ describe('UsageService', () => {
     it('should reject when at limit without consuming', async () => {
       const tx = {
         userUsage: {
-          upsert: vi.fn().mockResolvedValue(localRow),
+          createMany: vi.fn().mockResolvedValue({ count: 1 }),
           findUniqueOrThrow: vi.fn().mockResolvedValue({
             ...localRow,
             aiReportsUsed: 2,
@@ -360,7 +360,7 @@ describe('UsageService', () => {
     it('should use conditional updateMany for race safety', async () => {
       const tx = {
         userUsage: {
-          upsert: vi.fn().mockResolvedValue(localRow),
+          createMany: vi.fn().mockResolvedValue({ count: 1 }),
           findUniqueOrThrow: vi.fn().mockResolvedValue(localRow),
           updateMany: vi.fn().mockResolvedValue({ count: 1 }),
         },
@@ -386,7 +386,7 @@ describe('UsageService', () => {
       // Simulate: two already consumed (aiReportsUsed=2), third updateMany matches 0 rows
       const tx = {
         userUsage: {
-          upsert: vi.fn().mockResolvedValue(localRow),
+          createMany: vi.fn().mockResolvedValue({ count: 1 }),
           findUniqueOrThrow: vi.fn().mockResolvedValue({ ...localRow, aiReportsUsed: 2 }),
           updateMany: vi.fn().mockResolvedValue({ count: 0 }),
         },
@@ -425,7 +425,7 @@ describe('UsageService', () => {
     it('should fail when feature at limit', async () => {
       const tx = {
         userUsage: {
-          upsert: vi.fn().mockResolvedValue(localRow),
+          createMany: vi.fn().mockResolvedValue({ count: 1 }),
           findUniqueOrThrow: vi.fn().mockResolvedValue({
             ...localRow,
             aiReportsUsed: 2,
@@ -447,7 +447,7 @@ describe('UsageService', () => {
     it('should fail when credits exhausted even if feature under limit', async () => {
       const tx = {
         userUsage: {
-          upsert: vi.fn().mockResolvedValue(localRow),
+          createMany: vi.fn().mockResolvedValue({ count: 1 }),
           findUniqueOrThrow: vi.fn().mockResolvedValue({
             ...localRow,
             aiCreditsUsed: 50,
@@ -491,7 +491,7 @@ describe('UsageService', () => {
     });
 
     it('remaining is always max(limit - used, 0)', async () => {
-      mockDb.userUsage.upsert.mockResolvedValue({
+      mockDb.userUsage.findUniqueOrThrow.mockResolvedValue({
         ...localRow,
         aiCreditsUsed: 60,
         healthScansUsed: 5,
