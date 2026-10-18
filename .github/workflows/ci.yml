@@ -26,6 +26,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # @prisma/client's postinstall cannot find apps/api/prisma/schema.prisma
+      # from the workspace root, so generate explicitly before typecheck.
+      - name: Generate Prisma client
+        run: pnpm --filter @devpilot/api db:generate
+
       - name: Lint
         run: pnpm lint
 
