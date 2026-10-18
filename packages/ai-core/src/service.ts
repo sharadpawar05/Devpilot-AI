@@ -19,6 +19,7 @@ export interface GenerateOptions {
   timeout?: number;
   responseFormat?: 'text' | 'json';
   retryPolicy?: Partial<RetryPolicy>;
+  signal?: AbortSignal;
 }
 
 export interface StructuredJSONOptions extends GenerateOptions {
@@ -51,6 +52,7 @@ export class AIService {
       timeout: options.timeout,
       responseFormat: options.responseFormat,
       retryPolicy: options.retryPolicy,
+      signal: options.signal,
     };
 
     return this.gateway.generate(request);
@@ -71,6 +73,7 @@ export class AIService {
       timeout: options.timeout,
       responseFormat: options.responseFormat,
       retryPolicy: options.retryPolicy,
+      signal: options.signal,
     };
 
     yield* this.gateway.generateStream(request);
@@ -123,6 +126,7 @@ export class AIService {
       timeout: options.timeout,
       responseFormat: options.responseFormat,
       retryPolicy: options.retryPolicy,
+      signal: options.signal,
     };
 
     return this.gateway.generateWithFallback(request, fallbackProviders);

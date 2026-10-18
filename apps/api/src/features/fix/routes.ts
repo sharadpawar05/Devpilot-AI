@@ -1,14 +1,22 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { authenticate } from '@/core/auth';
 import { aiService } from '@/core/ai/service';
+import { classifyAIError } from '@/core/ai/classify-error';
+import { usageService, sendUsageLimitReached, AI_CREDIT_COSTS } from '@/core/usage';
 import { PromptRegistry, loadMarkdownPrompts } from '@devpilot/ai-prompts';
 
 const registry = new PromptRegistry();
 registry.registerAll(loadMarkdownPrompts());
 
+const LANGUAGE_PATTERN = /^[a-zA-Z0-9+#._-]{1,20}$/;
+
 const fixRequestSchema = z.object({
   code: z.string().min(1, 'Code is required').max(100000, 'Code too long'),
-  language: z.string().min(1, 'Language is required'),
+  language: z
+    .string()
+    .min(1, 'Language is required')
+    .regex(LANGUAGE_PATTERN, 'Language must be a short alphanumeric identifier'),
   reviewContext: z.string().max(20000).optional(),
   provider: z.enum(['gemini', 'openai', 'anthropic', 'openrouter', 'groq']).default('gemini'),
   model: z.string().min(1).optional(),
@@ -32,15 +40,21 @@ export async function fixRoutes(app: FastifyInstance) {
   }>(
     '/ai/fix',
     {
+      preHandler: [authenticate],
+      config: {
+        // AI fixes are expensive — tighter than the global ceiling.
+        rateLimit: { max: 20, timeWindow: '1 minute' },
+      },
       schema: {
         description: 'Generate structured code fixes with diffs and explanations',
         tags: ['ai', 'fix'],
+        security: [{ bearerAuth: [] }],
         body: {
           type: 'object',
           required: ['code', 'language'],
           properties: {
             code: { type: 'string', minLength: 1, maxLength: 100000 },
-            language: { type: 'string', minLength: 1 },
+            language: { type: 'string', minLength: 1, maxLength: 20 },
             reviewContext: { type: 'string', maxLength: 20000 },
             provider: {
               type: 'string',
@@ -54,6 +68,7 @@ export async function fixRoutes(app: FastifyInstance) {
       },
     },
     async (request, reply) => {
+      const auth = (request as { auth: { sub: string } }).auth;
       const parsed = fixRequestSchema.safeParse(request.body);
 
       if (!parsed.success) {
@@ -88,15 +103,20 @@ export async function fixRoutes(app: FastifyInstance) {
           reviewContext: reviewContext ?? '',
         });
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
         app.log.error({ err: error }, 'Prompt rendering failed');
         return reply.status(500).send({
           success: false,
           error: {
             code: 'PROMPT_ERROR',
-            message: `Failed to render prompt: ${message}`,
+            message: 'Failed to render prompt',
           },
         });
+      }
+
+      const creditCost = AI_CREDIT_COSTS.CODE_FIX;
+      const consume = await usageService.consumeQuota(auth.sub, 'AI_CREDITS', creditCost);
+      if (!consume.allowed && consume.details) {
+        return sendUsageLimitReached(reply, consume.details);
       }
 
       try {
@@ -108,6 +128,16 @@ export async function fixRoutes(app: FastifyInstance) {
         });
 
         const totalTokens = result.tokens.total || result.tokens.input + result.tokens.output;
+
+        await usageService.recordAIUsageEvent({
+          userId: auth.sub,
+          feature: 'CODE_FIX',
+          model: result.model,
+          inputTokens: result.tokens.input,
+          outputTokens: result.tokens.output,
+          creditsConsumed: creditCost,
+          estimatedCostUsd: result.cost?.totalCost ?? 0,
+        });
 
         return reply.send({
           success: true,
@@ -122,19 +152,15 @@ export async function fixRoutes(app: FastifyInstance) {
           },
         });
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        const code_ =
-          error && typeof error === 'object' && 'code' in error
-            ? String((error as { code: unknown }).code)
-            : 'AI_ERROR';
-
-        app.log.error({ err: error, provider, model }, 'Code fix generation failed');
-
-        return reply.status(502).send({
+        await usageService.refundQuota(auth.sub, 'AI_CREDITS', creditCost);
+        app.log.error({ err: error, provider }, 'Code fix generation failed');
+        const errorResponse = classifyAIError(error);
+        return reply.status(errorResponse.status).send({
           success: false,
           error: {
-            code: code_,
-            message,
+            code: errorResponse.code,
+            message: errorResponse.message,
+            retryable: errorResponse.retryable,
           },
         });
       }

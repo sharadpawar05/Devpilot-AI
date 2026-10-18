@@ -135,6 +135,7 @@ export class GroqProvider implements AIProvider {
         }),
       },
       timeout,
+      request.signal,
     );
 
     const data = (await response.json()) as GroqChatResponse;
@@ -190,6 +191,7 @@ export class GroqProvider implements AIProvider {
         }),
       },
       timeout,
+      request.signal,
     );
 
     if (!response.ok || !response.body) {
@@ -207,10 +209,45 @@ export class GroqProvider implements AIProvider {
     const decoder = new TextDecoder();
     let buffer = '';
     let totalText = '';
+    let chunkTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const withChunkDeadline = async <T>(promise: Promise<T>): Promise<T> => {
+      let timedOut = false;
+      const deadline = new Promise<never>((_, reject) => {
+        chunkTimer = setTimeout(() => {
+          timedOut = true;
+          reader.cancel().catch(() => undefined);
+          reject({
+            code: 'TIMEOUT',
+            message: `Groq stream stalled: no data received for ${timeout}ms`,
+            provider: 'groq' as AIProviderName,
+            retryable: true,
+          });
+        }, timeout);
+      });
+      try {
+        return await Promise.race([promise, deadline]);
+      } finally {
+        clearTimeout(chunkTimer);
+        if (timedOut) {
+          // reader already cancelled
+        }
+      }
+    };
 
     try {
       while (true) {
-        const { done, value } = await reader.read();
+        if (request.signal?.aborted) {
+          await reader.cancel().catch(() => undefined);
+          throw {
+            code: 'ABORTED',
+            message: 'Groq stream aborted by client disconnect',
+            provider: 'groq' as AIProviderName,
+            retryable: false,
+          } satisfies AIError;
+        }
+
+        const { done, value } = await withChunkDeadline(reader.read());
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
@@ -236,6 +273,7 @@ export class GroqProvider implements AIProvider {
         }
       }
     } finally {
+      clearTimeout(chunkTimer);
       reader.releaseLock();
     }
 
@@ -307,12 +345,26 @@ export class GroqProvider implements AIProvider {
     url: string,
     init: RequestInit,
     timeoutMs: number,
+    externalSignal?: AbortSignal,
   ): Promise<Response> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const onExternalAbort = () => controller.abort();
+    if (externalSignal) {
+      if (externalSignal.aborted) controller.abort();
+      externalSignal.addEventListener('abort', onExternalAbort, { once: true });
+    }
     try {
       return await fetch(url, { ...init, signal: controller.signal });
     } catch (error) {
+      if (externalSignal?.aborted) {
+        throw {
+          code: 'ABORTED',
+          message: 'Groq request aborted by client disconnect',
+          provider: 'groq' as AIProviderName,
+          retryable: false,
+        } satisfies AIError;
+      }
       if (controller.signal.aborted) {
         throw {
           code: 'TIMEOUT',
@@ -329,6 +381,7 @@ export class GroqProvider implements AIProvider {
       } satisfies AIError;
     } finally {
       clearTimeout(timer);
+      externalSignal?.removeEventListener('abort', onExternalAbort);
     }
   }
 }

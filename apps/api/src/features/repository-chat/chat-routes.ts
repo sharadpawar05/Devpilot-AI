@@ -219,6 +219,10 @@ export async function repositoryChatRoutes(app: FastifyInstance) {
     '/repository-chat/chat',
     {
       preHandler: [authenticate],
+      config: {
+        // AI chat is expensive — tighter than the global ceiling.
+        rateLimit: { max: 30, timeWindow: '1 minute' },
+      },
       schema: {
         description: 'Ask a question about a repository',
         tags: ['repository-chat'],

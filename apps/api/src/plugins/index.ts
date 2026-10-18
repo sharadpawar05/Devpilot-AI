@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { registerCors } from './cors';
 import { registerHelmet } from './helmet';
+import { registerRateLimit } from './rate-limit';
 import { registerSwagger } from './swagger';
 import { registerErrorHandler } from './error-handler';
 import { registerRequestLogger } from '@/core/logging';
@@ -12,6 +13,7 @@ export async function registerPlugins(app: FastifyInstance) {
   await registerRequestLogger(app);
   await registerCookies(app);
   await registerCors(app);
+  await registerRateLimit(app);
   await registerHelmet(app);
   await registerSwagger(app);
   await registerAuth(app);

@@ -81,6 +81,8 @@ export class GeminiProvider implements AIProvider {
     }
 
     const timeout = request.timeout ?? this.config.timeout ?? 60000;
+    const timeoutHandle = this.createTimeoutPromise<never>(timeout, model);
+    const abortPromise = this.createAbortPromise<never>(request.signal);
 
     try {
       const result = await Promise.race([
@@ -88,7 +90,8 @@ export class GeminiProvider implements AIProvider {
           contents: [{ role: 'user', parts: [{ text: request.prompt }] }],
           generationConfig,
         }),
-        this.createTimeoutPromise<never>(timeout, model),
+        timeoutHandle.promise,
+        ...(abortPromise ? [abortPromise] : []),
       ]);
 
       const response = result.response;
@@ -129,6 +132,8 @@ export class GeminiProvider implements AIProvider {
         statusCode: mapGeminiStatus(message),
         retryable: mapGeminiErrorCode(message) === 'RATE_LIMIT_EXCEEDED',
       };
+    } finally {
+      timeoutHandle.cancel();
     }
   }
 
@@ -155,19 +160,30 @@ export class GeminiProvider implements AIProvider {
     }
 
     const timeout = request.timeout ?? this.config.timeout ?? 60000;
+    const timeoutHandle = this.createTimeoutPromise<never>(timeout, model);
+    const abortPromise = this.createAbortPromise<never>(request.signal);
 
-    const result = await Promise.race([
-      genModel.generateContentStream({
-        contents: [{ role: 'user', parts: [{ text: request.prompt }] }],
-        generationConfig,
-      }),
-      this.createTimeoutPromise<never>(timeout, model),
-    ]);
+    let result;
+    try {
+      result = await Promise.race([
+        genModel.generateContentStream({
+          contents: [{ role: 'user', parts: [{ text: request.prompt }] }],
+          generationConfig,
+        }),
+        timeoutHandle.promise,
+        ...(abortPromise ? [abortPromise] : []),
+      ]);
+    } finally {
+      timeoutHandle.cancel();
+    }
 
     const stream = result.stream;
     let totalText = '';
 
     for await (const chunk of stream) {
+      if (request.signal?.aborted) {
+        break;
+      }
       const text = chunk.text();
       if (text) {
         totalText += text;
@@ -217,9 +233,13 @@ export class GeminiProvider implements AIProvider {
     }
   }
 
-  private createTimeoutPromise<T>(ms: number, model: string): Promise<T> {
-    return new Promise((_, reject) => {
-      setTimeout(() => {
+  private createTimeoutPromise<T>(
+    ms: number,
+    model: string,
+  ): { promise: Promise<T>; cancel: () => void } {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const promise = new Promise<T>((_, reject) => {
+      timer = setTimeout(() => {
         reject({
           code: 'TIMEOUT',
           message: `Gemini request timed out after ${ms}ms (model: ${model})`,
@@ -227,6 +247,26 @@ export class GeminiProvider implements AIProvider {
           retryable: true,
         });
       }, ms);
+    });
+    return { promise, cancel: () => clearTimeout(timer) };
+  }
+
+  private createAbortPromise<T>(signal: AbortSignal | undefined): Promise<T> | null {
+    if (!signal) return null;
+    return new Promise<T>((_, reject) => {
+      const abort = () => {
+        reject({
+          code: 'ABORTED',
+          message: 'Gemini request aborted by client disconnect',
+          provider: 'gemini' as AIProviderName,
+          retryable: false,
+        });
+      };
+      if (signal.aborted) {
+        abort();
+        return;
+      }
+      signal.addEventListener('abort', abort, { once: true });
     });
   }
 }

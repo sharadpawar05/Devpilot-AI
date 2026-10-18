@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import type { FixResult } from '@/components/ai/fix-mode/types';
+import { useAuth } from '@/auth';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
 
@@ -61,44 +62,57 @@ export function useFixMode(): UseFixModeReturn {
   const [provider, setProvider] = useState('');
   const [model, setModel] = useState('');
   const [latencyMs, setLatencyMs] = useState(0);
+  const { session } = useAuth();
 
-  const generateFixes = useCallback(async (options: FixModeOptions) => {
-    setIsLoading(true);
-    setError(null);
-    setResult(null);
+  const generateFixes = useCallback(
+    async (options: FixModeOptions) => {
+      setIsLoading(true);
+      setError(null);
+      setResult(null);
 
-    try {
-      const res = await fetch(`${API_BASE_URL}/ai/fix`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          code: options.code,
-          language: options.language,
-          reviewContext: options.reviewContext,
-          provider: options.provider ?? 'gemini',
-          model: options.model,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        throw new Error(data.error?.message || 'Failed to generate fixes');
+      if (!session?.accessToken) {
+        setError('You must be signed in to generate fixes');
+        setIsLoading(false);
+        return;
       }
 
-      setProvider(data.provider);
-      setModel(data.model);
-      setLatencyMs(data.latencyMs);
+      try {
+        const res = await fetch(`${API_BASE_URL}/ai/fix`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.accessToken}`,
+          },
+          body: JSON.stringify({
+            code: options.code,
+            language: options.language,
+            reviewContext: options.reviewContext,
+            provider: options.provider ?? 'gemini',
+            model: options.model,
+          }),
+        });
 
-      const parsed = parseFixResult(data.response);
-      setResult(parsed);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'An unexpected error occurred';
-      setError(message);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+          throw new Error(data.error?.message || 'Failed to generate fixes');
+        }
+
+        setProvider(data.provider);
+        setModel(data.model);
+        setLatencyMs(data.latencyMs);
+
+        const parsed = parseFixResult(data.response);
+        setResult(parsed);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'An unexpected error occurred';
+        setError(message);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [session?.accessToken],
+  );
 
   const reset = useCallback(() => {
     setIsLoading(false);

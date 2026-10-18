@@ -22,6 +22,10 @@ export async function aiRoutes(app: FastifyInstance) {
     '/ai/chat',
     {
       preHandler: [authenticate],
+      config: {
+        // AI chat is expensive — tighter than the global ceiling.
+        rateLimit: { max: 30, timeWindow: '1 minute' },
+      },
       schema: {
         description: 'Send a chat prompt to an AI provider',
         tags: ['ai'],

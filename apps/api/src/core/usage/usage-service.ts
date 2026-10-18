@@ -590,8 +590,9 @@ class UsageService {
   // ─── Health cache (commit SHA) ──────────────────────────────────────────
 
   async getHealthCache(userId: string, owner: string, repo: string, commitSha: string) {
+    const localUserId = await resolveLocalUserId(userId);
     return db.repoHealthSnapshot.findUnique({
-      where: { userId_owner_repo_commitSha: { userId, owner, repo, commitSha } },
+      where: { userId_owner_repo_commitSha: { userId: localUserId, owner, repo, commitSha } },
     });
   }
 
@@ -612,8 +613,9 @@ class UsageService {
       summary: unknown;
     },
   ) {
+    const localUserId = await resolveLocalUserId(userId);
     return db.repoHealthSnapshot.upsert({
-      where: { userId_owner_repo_commitSha: { userId, owner, repo, commitSha } },
+      where: { userId_owner_repo_commitSha: { userId: localUserId, owner, repo, commitSha } },
       update: {
         score: health.score,
         passedCount: health.passedCount,
@@ -626,7 +628,7 @@ class UsageService {
         summary: JSON.parse(JSON.stringify(health.summary)) as Prisma.InputJsonValue,
       },
       create: {
-        userId,
+        userId: localUserId,
         owner,
         repo,
         commitSha,

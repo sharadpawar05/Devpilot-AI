@@ -75,11 +75,15 @@ export class PromptRenderer {
       }
 
       if (value === '') {
-        errors.push({
-          variable: variable.name,
-          message: `Variable '${variable.name}' has empty value`,
-          code: 'EMPTY_VALUE',
-        });
+        // Empty string is only invalid for required variables; optional
+        // variables treat '' the same as not provided.
+        if (variable.required) {
+          errors.push({
+            variable: variable.name,
+            message: `Variable '${variable.name}' has empty value`,
+            code: 'EMPTY_VALUE',
+          });
+        }
         continue;
       }
 

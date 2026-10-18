@@ -1,4 +1,7 @@
 import { repositoryIntelligenceService } from '@/features/repo-intelligence';
+import { getMeteredHealth } from '@/features/repo-intelligence/health-metering';
+import { UsageLimitExceededError } from '@/core/usage';
+import type { RepositoryHealth } from '@/features/repo-intelligence';
 import type {
   RepoOverviewMetadata,
   RepoFileNode,
@@ -64,16 +67,58 @@ function mapHealthDetails(
   }));
 }
 
+function degradedHealth(): RepositoryHealth {
+  return {
+    score: 0,
+    passedCount: 0,
+    failedCount: 0,
+    warningCount: 0,
+    notMeasuredCount: 0,
+    criticalCount: 0,
+    details: [],
+    scoreBreakdown: [],
+    updatedAt: new Date().toISOString(),
+    trend: null,
+    summary: {
+      structuralScore: 0,
+      qualityScore: 0,
+      structuralWeight: 40,
+      qualityWeight: 60,
+    },
+  };
+}
+
 export class RepoOverviewService {
-  async getOverview(userId: string, owner: string, repo: string): Promise<RepoOverviewData> {
+  async getOverview(
+    userId: string,
+    owner: string,
+    repo: string,
+    opts: { allowDegradedHealth?: boolean } = {},
+  ): Promise<RepoOverviewData> {
+    const healthPromise = getMeteredHealth(userId, owner, repo)
+      .then((result) => result.health)
+      .catch((error) => {
+        if (error instanceof UsageLimitExceededError && opts.allowDegradedHealth) {
+          return null;
+        }
+        throw error;
+      });
+
     const [metadataResult, languagesResult, contributorsResult, treeResult, healthResult] =
       await Promise.allSettled([
         repositoryIntelligenceService.getMetadata(userId, owner, repo),
         repositoryIntelligenceService.getLanguages(userId, owner, repo),
         repositoryIntelligenceService.getContributors(userId, owner, repo),
         repositoryIntelligenceService.getFileTree(userId, owner, repo),
-        repositoryIntelligenceService.getHealth(userId, owner, repo),
+        healthPromise,
       ]);
+
+    if (
+      healthResult.status === 'rejected' &&
+      healthResult.reason instanceof UsageLimitExceededError
+    ) {
+      throw healthResult.reason;
+    }
 
     if (metadataResult.status === 'rejected') {
       throw new Error(
@@ -89,26 +134,9 @@ export class RepoOverviewService {
     const contributors = contributorsResult.status === 'fulfilled' ? contributorsResult.value : [];
     const tree = treeResult.status === 'fulfilled' ? treeResult.value : [];
     const health =
-      healthResult.status === 'fulfilled'
+      healthResult.status === 'fulfilled' && healthResult.value !== null
         ? healthResult.value
-        : {
-            score: 0,
-            passedCount: 0,
-            failedCount: 0,
-            warningCount: 0,
-            notMeasuredCount: 0,
-            criticalCount: 0,
-            details: [],
-            scoreBreakdown: [],
-            updatedAt: new Date().toISOString(),
-            trend: null,
-            summary: {
-              structuralScore: 0,
-              qualityScore: 0,
-              structuralWeight: 40,
-              qualityWeight: 60,
-            },
-          };
+        : degradedHealth();
 
     const overviewMetadata: RepoOverviewMetadata = {
       id: metadata.id,

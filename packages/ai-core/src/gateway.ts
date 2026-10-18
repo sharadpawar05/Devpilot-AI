@@ -63,11 +63,12 @@ export class GatewayService {
       const response = await executeWithRetry(async (attempt) => {
         lastAttempt = attempt;
         const timeout = request.timeout ?? this.config.globalTimeout;
-
-        return Promise.race([
-          provider.generate(request),
-          this.createTimeoutError<AIResponse>(timeout, providerName),
-        ]);
+        const timeoutHandle = this.createTimeoutPromise<AIResponse>(timeout, providerName);
+        try {
+          return await Promise.race([provider.generate(request), timeoutHandle.promise]);
+        } finally {
+          timeoutHandle.cancel();
+        }
       }, mergedRetryPolicy);
 
       this.recordSuccess(providerName, response.latencyMs);
@@ -287,9 +288,13 @@ export class GatewayService {
     this.providerStats.set(provider, stats);
   }
 
-  private createTimeoutError<T>(ms: number, provider: AIProviderName): Promise<T> {
-    return new Promise((_, reject) => {
-      setTimeout(() => {
+  private createTimeoutPromise<T>(
+    ms: number,
+    provider: AIProviderName,
+  ): { promise: Promise<T>; cancel: () => void } {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const promise = new Promise<T>((_, reject) => {
+      timer = setTimeout(() => {
         reject(
           new AIGatewayError({
             code: 'TIMEOUT',
@@ -300,6 +305,7 @@ export class GatewayService {
         );
       }, ms);
     });
+    return { promise, cancel: () => clearTimeout(timer) };
   }
 
   private generateLogId(): string {
