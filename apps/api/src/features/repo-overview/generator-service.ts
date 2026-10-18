@@ -469,12 +469,13 @@ function cleanGeneratedContent(content: string, actionType: HealthActionType): s
   if (fenceMatch) {
     cleaned = fenceMatch[1].trim();
   }
-  // Remove leading/trailing explanation text for non-CI generators
+  // Remove leading conversational preamble text for non-CI generators.
+  // Only preamble lines ("Here is...", "This is...") are stripped — a
+  // heading-first markdown file must keep its heading.
   if (actionType !== 'generate-ci' && actionType !== 'generate-tests') {
     const lines = cleaned.split('\n');
     const startIdx = lines.findIndex(
-      (l) =>
-        l.trim().length > 0 && !l.startsWith('#') && !l.startsWith('Here') && !l.startsWith('This'),
+      (l) => l.trim().length > 0 && !l.startsWith('Here') && !l.startsWith('This'),
     );
     if (startIdx > 0) cleaned = lines.slice(startIdx).join('\n');
   }
@@ -519,6 +520,12 @@ export class GeneratorService {
         finalFilePath = parts[1];
         finalContent = parts[2].trim();
       }
+    }
+
+    // Reject invalid AI output instead of returning an empty artifact.
+    // Throwing here routes through the endpoint's catch → quota refund.
+    if (!finalContent.trim()) {
+      throw new Error('The AI model returned empty content. Please try again.');
     }
 
     return {

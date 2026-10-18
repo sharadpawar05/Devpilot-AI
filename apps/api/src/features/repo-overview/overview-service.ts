@@ -113,10 +113,12 @@ export class RepoOverviewService {
         healthPromise,
       ]);
 
-    if (
-      healthResult.status === 'rejected' &&
-      healthResult.reason instanceof UsageLimitExceededError
-    ) {
+    // Without allowDegradedHealth, a failed health scan must fail the request
+    // rather than serving a fabricated score of 0. UsageLimitExceededError is
+    // rethrown as-is so routes can return the machine-readable 403 envelope.
+    // With allowDegradedHealth (internal AI-summary path where health is not
+    // surfaced), failures fall through to the placeholder below.
+    if (healthResult.status === 'rejected' && !opts.allowDegradedHealth) {
       throw healthResult.reason;
     }
 

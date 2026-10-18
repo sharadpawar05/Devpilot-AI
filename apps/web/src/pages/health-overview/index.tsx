@@ -399,7 +399,7 @@ export default function HealthOverviewPage() {
       lines.push(`- ${hotspotCheck.quality.hotspots.length} hotspot files detected`);
       for (const hs of hotspotCheck.quality.hotspots.slice(0, 5)) {
         lines.push(
-          `  - ${hs.path} (score: ${hs.score}, commits: ${hs.commits}, lines: ${hs.lines})`,
+          `  - ${hs.path} (score: ${hs.score}, est. changes: ${hs.commits}, lines: ${hs.lines})`,
         );
         lines.push(`    Reason: ${hs.reason}`);
       }

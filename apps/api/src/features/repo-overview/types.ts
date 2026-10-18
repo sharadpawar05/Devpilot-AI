@@ -152,9 +152,9 @@ export interface RepositoryHealthSummary {
   securityScore?: number | null;
   dependencyScore?: number | null;
   complexityScore?: number | null;
-  debtScore?: number;
-  hotspotCount?: number;
-  maintainabilityScore?: number;
+  debtScore?: number | null;
+  hotspotCount?: number | null;
+  maintainabilityScore?: number | null;
 }
 
 export interface HealthMetricTrend {

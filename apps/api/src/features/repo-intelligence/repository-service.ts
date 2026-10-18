@@ -753,12 +753,13 @@ export class RepositoryIntelligenceService {
       .map((r) => ({ path: r.path, content: r.content }));
     const testCoverage = this.analyzeTestCoverage(coverageFiles, filePaths);
 
-    // Analyze README quality
-    const readmeQuality = this.analyzeReadmeQuality(readmeContent?.content);
+    // Analyze README quality (distinguishes "no README" from "fetch failed")
+    const readmeQuality = this.analyzeReadmeQuality(Boolean(readmePath), readmeContent?.content);
 
-    // Analyze CI/CD workflows
+    // Analyze CI/CD workflows (nulls preserved so a fetch failure can be
+    // distinguished from a genuinely missing workflow)
     const cicdQuality = this.analyzeCicdWorkflows(
-      workflowContents.map((c) => c?.content).filter(Boolean) as string[],
+      workflowContents.map((c) => c?.content ?? null),
       workflowPaths,
     );
 
@@ -837,6 +838,11 @@ export class RepositoryIntelligenceService {
       Array.from(fileChangeMap.entries()).map(([file, count]) => ({ file, count })),
       fileSizes,
     );
+
+    // Honest disclosure: hotspot churn is a heuristic estimate from file
+    // contents (import/export references, size) — not measured git history.
+    const hotspotMethod =
+      'Heuristic estimate based on import/export references and file size (not measured from git history)';
 
     // Build health check details
     const details: HealthCheckDetail[] = [
@@ -929,8 +935,8 @@ export class RepositoryIntelligenceService {
         id: 'docker',
         name: 'Docker',
         category: 'structural',
-        status: 'not_applicable',
-        passed: false,
+        status: hasDockerfile ? 'passed' : 'not_applicable',
+        passed: hasDockerfile,
         severity: 'low',
         failedDescription: hasDockerfile
           ? 'Docker configuration detected'
@@ -1007,7 +1013,7 @@ export class RepositoryIntelligenceService {
         category: 'quality',
         status: readmeQuality.status,
         passed: readmeQuality.status === 'passed',
-        severity: 'high',
+        severity: readmeQuality.status === 'not_measured' ? 'low' : 'high',
         failedDescription: readmeQuality.description,
         whyItMatters:
           'A comprehensive README helps users understand your project quickly and reduces support questions.',
@@ -1021,11 +1027,14 @@ export class RepositoryIntelligenceService {
           sectionsMissing: readmeQuality.sectionsMissing,
           sectionScores: readmeQuality.sectionScores,
         },
-        quality: {
-          sectionsFound: readmeQuality.sectionsFound,
-          sectionsMissing: readmeQuality.sectionsMissing,
-          sectionScores: readmeQuality.sectionScores,
-        },
+        quality:
+          readmeQuality.status === 'not_measured'
+            ? {}
+            : {
+                sectionsFound: readmeQuality.sectionsFound,
+                sectionsMissing: readmeQuality.sectionsMissing,
+                sectionScores: readmeQuality.sectionScores,
+              },
       },
       {
         id: 'ci-cd',
@@ -1033,7 +1042,7 @@ export class RepositoryIntelligenceService {
         category: 'quality',
         status: cicdQuality.status,
         passed: cicdQuality.status === 'passed',
-        severity: 'high',
+        severity: cicdQuality.status === 'not_measured' ? 'low' : 'high',
         failedDescription: cicdQuality.description,
         whyItMatters:
           'A complete CI/CD pipeline ensures code quality, security, and deployment consistency.',
@@ -1047,12 +1056,15 @@ export class RepositoryIntelligenceService {
           workflowPaths,
           workflowTypes: cicdQuality.workflowTypes,
         },
-        quality: {
-          workflowCount: cicdQuality.workflowCount,
-          passingWorkflows: cicdQuality.passingWorkflows,
-          failingWorkflows: cicdQuality.failingWorkflows,
-          workflowTypes: cicdQuality.workflowTypes,
-        },
+        quality:
+          cicdQuality.status === 'not_measured'
+            ? {}
+            : {
+                workflowCount: cicdQuality.workflowCount,
+                passingWorkflows: cicdQuality.passingWorkflows,
+                failingWorkflows: cicdQuality.failingWorkflows,
+                workflowTypes: cicdQuality.workflowTypes,
+              },
       },
       {
         id: 'security',
@@ -1154,18 +1166,29 @@ export class RepositoryIntelligenceService {
         id: 'complexity',
         name: 'Code Complexity & File Size',
         category: 'quality',
+        // No source file contents were fetched → the heuristic measured
+        // nothing; report NOT_MEASURED instead of a fabricated pass.
         status:
-          complexityResult.complexityScore >= 70
-            ? 'passed'
-            : complexityResult.complexityScore >= 40
-              ? 'warning'
-              : 'failed',
-        passed: complexityResult.complexityScore >= 70,
-        severity: complexityResult.complexityScore < 40 ? 'high' : 'medium',
+          complexityResult.sourceFilesAnalyzed === 0
+            ? 'not_measured'
+            : complexityResult.complexityScore >= 70
+              ? 'passed'
+              : complexityResult.complexityScore >= 40
+                ? 'warning'
+                : 'failed',
+        passed: complexityResult.sourceFilesAnalyzed > 0 && complexityResult.complexityScore >= 70,
+        severity:
+          complexityResult.sourceFilesAnalyzed === 0
+            ? 'low'
+            : complexityResult.complexityScore < 40
+              ? 'high'
+              : 'medium',
         failedDescription:
-          complexityResult.largeFiles.length > 0
-            ? `${complexityResult.largeFiles.length} large files detected (${complexityResult.complexityScore}/100 score)`
-            : `Code complexity score: ${complexityResult.complexityScore}/100`,
+          complexityResult.sourceFilesAnalyzed === 0
+            ? 'No source file contents available to analyze complexity'
+            : complexityResult.largeFiles.length > 0
+              ? `${complexityResult.largeFiles.length} large files detected (${complexityResult.complexityScore}/100 score)`
+              : `Code complexity score: ${complexityResult.complexityScore}/100`,
         whyItMatters:
           'Large files are harder to maintain, test, and review. They increase cognitive load and the risk of bugs.',
         recommendation:
@@ -1174,34 +1197,59 @@ export class RepositoryIntelligenceService {
         actionLabel: 'Review Complexity',
         actionType: 'none',
         scorePenalty:
-          complexityResult.complexityScore >= 70
+          complexityResult.sourceFilesAnalyzed === 0
             ? 0
-            : Math.round((100 - complexityResult.complexityScore) / 5),
-        evidence: {
-          sourceFilesAnalyzed: complexityResult.sourceFilesAnalyzed,
-          method: complexityResult.method,
-          largeFileThreshold: 500,
-          veryLargeFileThreshold: 1000,
-          largeFiles: complexityResult.largeFiles.map((f) => ({ path: f.path, lines: f.lines })),
-        },
-        quality: {
-          complexityScore: complexityResult.complexityScore,
-          largeFiles: complexityResult.largeFiles,
-        },
+            : complexityResult.complexityScore >= 70
+              ? 0
+              : Math.round((100 - complexityResult.complexityScore) / 5),
+        evidence:
+          complexityResult.sourceFilesAnalyzed === 0
+            ? {
+                sourceFilesAnalyzed: 0,
+                method: complexityResult.method,
+                reason: 'No source file contents were available to scan',
+              }
+            : {
+                sourceFilesAnalyzed: complexityResult.sourceFilesAnalyzed,
+                method: complexityResult.method,
+                largeFileThreshold: 500,
+                veryLargeFileThreshold: 1000,
+                largeFiles: complexityResult.largeFiles.map((f) => ({
+                  path: f.path,
+                  lines: f.lines,
+                })),
+              },
+        quality:
+          complexityResult.sourceFilesAnalyzed === 0
+            ? {}
+            : {
+                complexityScore: complexityResult.complexityScore,
+                largeFiles: complexityResult.largeFiles,
+              },
       },
       // Technical debt check
       {
         id: 'debt',
         name: 'Technical Debt',
         category: 'quality',
+        // No file contents were scanned → nothing was measured.
         status:
-          debtResult.debtScore >= 70 ? 'passed' : debtResult.debtScore >= 40 ? 'warning' : 'failed',
-        passed: debtResult.debtScore >= 70,
-        severity: debtResult.debtScore < 40 ? 'high' : 'medium',
+          fileContentsMap.size === 0
+            ? 'not_measured'
+            : debtResult.debtScore >= 70
+              ? 'passed'
+              : debtResult.debtScore >= 40
+                ? 'warning'
+                : 'failed',
+        passed: fileContentsMap.size > 0 && debtResult.debtScore >= 70,
+        severity:
+          fileContentsMap.size === 0 ? 'low' : debtResult.debtScore < 40 ? 'high' : 'medium',
         failedDescription:
-          debtResult.debtItems.length > 0
-            ? `${debtResult.debtItems.reduce((sum, d) => sum + d.count, 0)} debt indicators found across ${debtResult.debtItems.length} patterns (score: ${debtResult.debtScore}/100)`
-            : `Technical debt score: ${debtResult.debtScore}/100`,
+          fileContentsMap.size === 0
+            ? 'No file contents available to scan for technical debt indicators'
+            : debtResult.debtItems.length > 0
+              ? `${debtResult.debtItems.reduce((sum, d) => sum + d.count, 0)} debt indicators found across ${debtResult.debtItems.length} patterns (score: ${debtResult.debtScore}/100)`
+              : `Technical debt score: ${debtResult.debtScore}/100`,
         whyItMatters:
           'Technical debt accumulates over time, slowing development and increasing the risk of regressions.',
         recommendation:
@@ -1209,39 +1257,61 @@ export class RepositoryIntelligenceService {
         estimatedEffort: '1-4 hours',
         actionLabel: 'Review Debt',
         actionType: 'none',
-        scorePenalty: debtResult.debtScore >= 70 ? 0 : Math.round((100 - debtResult.debtScore) / 5),
-        evidence: {
-          patternsScanned: debtResult.patternsScanned,
-          totalIndicators: debtResult.debtItems.reduce((sum, d) => sum + d.count, 0),
-          debtItems: debtResult.debtItems.map((d) => ({
-            pattern: d.pattern,
-            count: d.count,
-            severity: d.severity,
-            sampleFiles: d.files.slice(0, 3),
-          })),
-        },
-        quality: {
-          debtItems: debtResult.debtItems,
-          debtScore: debtResult.debtScore,
-        },
+        scorePenalty:
+          fileContentsMap.size === 0
+            ? 0
+            : debtResult.debtScore >= 70
+              ? 0
+              : Math.round((100 - debtResult.debtScore) / 5),
+        evidence:
+          fileContentsMap.size === 0
+            ? {
+                patternsScanned: 0,
+                reason: 'No file contents were available to scan',
+              }
+            : {
+                patternsScanned: debtResult.patternsScanned,
+                totalIndicators: debtResult.debtItems.reduce((sum, d) => sum + d.count, 0),
+                debtItems: debtResult.debtItems.map((d) => ({
+                  pattern: d.pattern,
+                  count: d.count,
+                  severity: d.severity,
+                  sampleFiles: d.files.slice(0, 3),
+                })),
+              },
+        quality:
+          fileContentsMap.size === 0
+            ? {}
+            : {
+                debtItems: debtResult.debtItems,
+                debtScore: debtResult.debtScore,
+              },
       },
       // Hotspot check
       {
         id: 'hotspots',
         name: 'Code Hotspots',
         category: 'quality',
+        // Hotspot analysis runs over fetched file contents; with no contents
+        // there is nothing to analyze, so the check is unmeasured rather than
+        // a fabricated "no hotspots" pass.
         status:
-          hotspotResult.hotspotCount <= 3
-            ? 'passed'
-            : hotspotResult.hotspotCount <= 7
-              ? 'warning'
-              : 'failed',
-        passed: hotspotResult.hotspotCount <= 3,
-        severity: hotspotResult.hotspotCount > 7 ? 'high' : 'medium',
+          fileContentsMap.size === 0
+            ? 'not_measured'
+            : hotspotResult.hotspotCount <= 3
+              ? 'passed'
+              : hotspotResult.hotspotCount <= 7
+                ? 'warning'
+                : 'failed',
+        passed: fileContentsMap.size > 0 && hotspotResult.hotspotCount <= 3,
+        severity:
+          fileContentsMap.size === 0 ? 'low' : hotspotResult.hotspotCount > 7 ? 'high' : 'medium',
         failedDescription:
-          hotspotResult.hotspotCount > 0
-            ? `${hotspotResult.hotspotCount} hotspot files with high churn detected`
-            : 'No significant hotspots detected',
+          fileContentsMap.size === 0
+            ? 'No file contents available to analyze for hotspots'
+            : hotspotResult.hotspotCount > 0
+              ? `${hotspotResult.hotspotCount} hotspot files with high churn detected`
+              : 'No significant hotspots detected',
         whyItMatters:
           'Files that change frequently are often architectural hotspots. High churn combined with large size increases defect risk.',
         recommendation:
@@ -1250,22 +1320,36 @@ export class RepositoryIntelligenceService {
         actionLabel: 'Review Hotspots',
         actionType: 'none',
         scorePenalty:
-          hotspotResult.hotspotCount <= 3 ? 0 : Math.min(15, (hotspotResult.hotspotCount - 3) * 3),
-        evidence: {
-          hotspotCount: hotspotResult.hotspotCount,
-          threshold: 3,
-          method: 'Commit activity frequency combined with file size',
-          hotspots: hotspotResult.hotspots.map((h) => ({
-            path: h.path,
-            score: h.score,
-            commits: h.commits,
-            lines: h.lines,
-            reason: h.reason,
-          })),
-        },
-        quality: {
-          hotspots: hotspotResult.hotspots,
-        },
+          fileContentsMap.size === 0
+            ? 0
+            : hotspotResult.hotspotCount <= 3
+              ? 0
+              : Math.min(15, (hotspotResult.hotspotCount - 3) * 3),
+        evidence:
+          fileContentsMap.size === 0
+            ? {
+                hotspotCount: null,
+                reason: 'No file contents were available to analyze',
+                method: hotspotMethod,
+              }
+            : {
+                hotspotCount: hotspotResult.hotspotCount,
+                threshold: 3,
+                method: hotspotMethod,
+                hotspots: hotspotResult.hotspots.map((h) => ({
+                  path: h.path,
+                  score: h.score,
+                  commits: h.commits,
+                  lines: h.lines,
+                  reason: h.reason,
+                })),
+              },
+        quality:
+          fileContentsMap.size === 0
+            ? {}
+            : {
+                hotspots: hotspotResult.hotspots,
+              },
       },
     ];
 
@@ -1357,14 +1441,29 @@ export class RepositoryIntelligenceService {
     // Sub-category scores — use explicit score from analysis when available
     const securityScore = securityQuality.score;
     const dependencyScore = dependencyQuality.score;
-    // Maintainability = average of complexity, debt, and hotspot scores
+    // Maintainability = average of the MEASURED complexity, debt, and hotspot
+    // scores. Unmeasured components are excluded; if nothing was measured the
+    // score is null instead of a fabricated number.
+    const complexityMeasured = complexityResult.sourceFilesAnalyzed > 0;
+    const debtMeasured = fileContentsMap.size > 0;
     const hotspotCheck = details.find((d) => d.id === 'hotspots');
+    const hotspotMeasured =
+      hotspotCheck !== undefined &&
+      hotspotCheck.status !== 'not_measured' &&
+      hotspotCheck.status !== 'not_applicable';
     const hotspotScore = hotspotCheck
       ? Math.max(0, 100 - (hotspotCheck.scorePenalty / maxHotspotPenalty) * 100)
       : 100;
-    const maintainabilityScore = Math.round(
-      (complexityResult.complexityScore + debtResult.debtScore + hotspotScore) / 3,
-    );
+    const maintainabilityParts: number[] = [];
+    if (complexityMeasured) maintainabilityParts.push(complexityResult.complexityScore);
+    if (debtMeasured) maintainabilityParts.push(debtResult.debtScore);
+    if (hotspotMeasured) maintainabilityParts.push(hotspotScore);
+    const maintainabilityScore =
+      maintainabilityParts.length > 0
+        ? Math.round(
+            maintainabilityParts.reduce((sum, v) => sum + v, 0) / maintainabilityParts.length,
+          )
+        : null;
     const cicdScore = Math.max(0, 100 - (cicdQuality.penalty / maxCicdPenalty) * 100);
     const documentationScore = Math.max(
       0,
@@ -1416,14 +1515,15 @@ export class RepositoryIntelligenceService {
         structuralWeight,
         qualityWeight,
         testCoverage: testCoverage.coverage,
-        documentationScore: Math.round(documentationScore),
-        cicdScore: Math.round(cicdScore),
+        documentationScore:
+          readmeQuality.status === 'not_measured' ? null : Math.round(documentationScore),
+        cicdScore: cicdQuality.status === 'not_measured' ? null : Math.round(cicdScore),
         securityScore: securityScore,
         dependencyScore: dependencyScore,
-        complexityScore: complexityResult.complexityScore,
-        debtScore: debtResult.debtScore,
-        hotspotCount: hotspotResult.hotspotCount,
-        maintainabilityScore: Math.round(maintainabilityScore),
+        complexityScore: complexityMeasured ? complexityResult.complexityScore : null,
+        debtScore: debtMeasured ? debtResult.debtScore : null,
+        hotspotCount: hotspotMeasured ? hotspotResult.hotspotCount : null,
+        maintainabilityScore,
       },
     };
 
@@ -1663,8 +1763,11 @@ export class RepositoryIntelligenceService {
     };
   }
 
-  private analyzeReadmeQuality(readmeContent: string | undefined): {
-    status: 'passed' | 'failed' | 'warning' | 'partial';
+  private analyzeReadmeQuality(
+    readmeExists: boolean,
+    readmeContent: string | undefined,
+  ): {
+    status: 'passed' | 'failed' | 'warning' | 'partial' | 'not_measured';
     description: string;
     recommendation: string;
     penalty: number;
@@ -1673,7 +1776,7 @@ export class RepositoryIntelligenceService {
     sectionsMissing: string[];
     sectionScores: Record<string, number>;
   } {
-    if (!readmeContent) {
+    if (!readmeExists) {
       return {
         status: 'failed',
         description: 'No README content to analyze',
@@ -1691,6 +1794,21 @@ export class RepositoryIntelligenceService {
           'architecture',
           'configuration',
         ],
+        sectionScores: {},
+      };
+    }
+
+    if (readmeContent === undefined || readmeContent === null) {
+      // README exists but its content could not be fetched — that is an
+      // availability problem, not a quality verdict.
+      return {
+        status: 'not_measured',
+        description: 'README exists but its content could not be fetched',
+        recommendation: 'Retry the health scan. If this persists, check repository access.',
+        penalty: 0,
+        score: 0,
+        sectionsFound: [],
+        sectionsMissing: [],
         sectionScores: {},
       };
     }
@@ -1805,10 +1923,10 @@ export class RepositoryIntelligenceService {
   }
 
   private analyzeCicdWorkflows(
-    workflowContents: string[],
+    workflowContents: Array<string | null>,
     workflowPaths: string[],
   ): {
-    status: 'passed' | 'failed' | 'warning' | 'partial';
+    status: 'passed' | 'failed' | 'warning' | 'partial' | 'not_measured';
     description: string;
     recommendation: string;
     penalty: number;
@@ -1826,6 +1944,21 @@ export class RepositoryIntelligenceService {
         recommendation: 'Add GitHub Actions workflows for testing, linting, and deployment.',
         penalty: 30,
         workflowCount: 0,
+        passingWorkflows: 0,
+        failingWorkflows: 0,
+        workflowTypes: [],
+      };
+    }
+
+    if (workflowContents.every((c) => !c)) {
+      // Workflow files exist but none of their contents could be fetched —
+      // availability problem, not a failing pipeline.
+      return {
+        status: 'not_measured',
+        description: 'CI/CD workflows exist but their contents could not be fetched',
+        recommendation: 'Retry the health scan. If this persists, check repository access.',
+        penalty: 0,
+        workflowCount,
         passingWorkflows: 0,
         failingWorkflows: 0,
         workflowTypes: [],
