@@ -9,6 +9,7 @@ import {
 } from 'react';
 import type { Session, AuthUser, AuthProvider as OAuthProvider } from '@devpilot/types';
 import { supabase } from '@/lib/supabase';
+import { AuthUnavailableError, isAuthServiceReachable } from '@/lib/supabase-health';
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -123,6 +124,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signInWithOAuth = useCallback(async (provider: OAuthProvider) => {
+    const reachable = await isAuthServiceReachable();
+    if (!reachable) {
+      throw new AuthUnavailableError();
+    }
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {

@@ -1,10 +1,11 @@
 import { createBrowserRouter, Navigate, type RouteObject } from 'react-router-dom';
-import { ProtectedRoute, PublicRoute } from '@/auth';
+import { AuthErrorWatcher, ProtectedRoute, PublicRoute } from '@/auth';
 import { MarketingLayout } from '@/layouts/marketing-layout';
 import { AppLayout } from '@/layouts/app-layout';
 import { GitHubProvider } from '@/hooks/use-github';
 import { LandingPage } from '@/pages/landing';
 import { LoginPage } from '@/pages/login';
+import { AuthErrorPage } from '@/pages/auth-error';
 import { DashboardPage } from '@/pages/dashboard';
 import { PlaygroundPage } from '@/pages/playground';
 import { CodeReviewPage } from '@/pages/code-review';
@@ -32,47 +33,53 @@ function RootRedirect() {
 
 const routes: RouteObject[] = [
   {
-    element: <MarketingLayout />,
+    element: <AuthErrorWatcher />,
     children: [
-      { path: '/', element: <RootRedirect /> },
       {
-        path: '/login',
-        element: (
-          <PublicRoute>
-            <LoginPage />
-          </PublicRoute>
-        ),
+        element: <MarketingLayout />,
+        children: [
+          { path: '/', element: <RootRedirect /> },
+          {
+            path: '/login',
+            element: (
+              <PublicRoute>
+                <LoginPage />
+              </PublicRoute>
+            ),
+          },
+          { path: '/auth/error', element: <AuthErrorPage /> },
+        ],
       },
+      {
+        element: (
+          <ProtectedRoute>
+            <GitHubProvider>
+              <AppLayout />
+            </GitHubProvider>
+          </ProtectedRoute>
+        ),
+        children: [
+          { path: '/dashboard', element: <DashboardPage /> },
+          { path: '/playground', element: <PlaygroundPage /> },
+          { path: '/code-review', element: <CodeReviewPage /> },
+          { path: '/github', element: <GitHubReviewPage /> },
+          { path: '/pull-request-assistant', element: <PullRequestAssistantPage /> },
+          { path: '/repository-overview', element: <RepositoryOverviewPage /> },
+          { path: '/health-overview', element: <HealthOverviewPage /> },
+          { path: '/sprint-summary', element: <SprintSummaryPage /> },
+          { path: '/release-notes', element: <ReleaseNotesPage /> },
+          { path: '/engineering-status', element: <EngineeringStatusPage /> },
+          { path: '/incident-summary', element: <IncidentSummaryPage /> },
+          { path: '/repository-chat', element: <RepositoryChatPage /> },
+          { path: '/history', element: <HistoryPage /> },
+          { path: '/analytics', element: <AnalyticsPage /> },
+          { path: '/settings', element: <SettingsPage /> },
+          { path: '/profile', element: <ProfilePage /> },
+        ],
+      },
+      { path: '*', element: <NotFoundPage /> },
     ],
   },
-  {
-    element: (
-      <ProtectedRoute>
-        <GitHubProvider>
-          <AppLayout />
-        </GitHubProvider>
-      </ProtectedRoute>
-    ),
-    children: [
-      { path: '/dashboard', element: <DashboardPage /> },
-      { path: '/playground', element: <PlaygroundPage /> },
-      { path: '/code-review', element: <CodeReviewPage /> },
-      { path: '/github', element: <GitHubReviewPage /> },
-      { path: '/pull-request-assistant', element: <PullRequestAssistantPage /> },
-      { path: '/repository-overview', element: <RepositoryOverviewPage /> },
-      { path: '/health-overview', element: <HealthOverviewPage /> },
-      { path: '/sprint-summary', element: <SprintSummaryPage /> },
-      { path: '/release-notes', element: <ReleaseNotesPage /> },
-      { path: '/engineering-status', element: <EngineeringStatusPage /> },
-      { path: '/incident-summary', element: <IncidentSummaryPage /> },
-      { path: '/repository-chat', element: <RepositoryChatPage /> },
-      { path: '/history', element: <HistoryPage /> },
-      { path: '/analytics', element: <AnalyticsPage /> },
-      { path: '/settings', element: <SettingsPage /> },
-      { path: '/profile', element: <ProfilePage /> },
-    ],
-  },
-  { path: '*', element: <NotFoundPage /> },
 ];
 
 export const router: ReturnType<typeof createBrowserRouter> = createBrowserRouter(routes);
