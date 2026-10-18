@@ -469,6 +469,111 @@ describe('UsageService', () => {
     });
   });
 
+  describe('refundQuota (failed request restore)', () => {
+    it('decrements the feature counter only when it can cover the refund', async () => {
+      await usageService.refundQuota(userId, 'AI_REPORT', 1);
+      expect(mockDb.userUsage.updateMany).toHaveBeenCalledTimes(1);
+      const args = mockDb.userUsage.updateMany.mock.calls[0][0] as {
+        where: { userId: string; periodStart: Date; aiReportsUsed: { gte: number } };
+        data: { aiReportsUsed: { decrement: number } };
+      };
+      expect(args.where.userId).toBe(userId);
+      expect(args.where.periodStart).toEqual(getCurrentMonthPeriod().periodStart);
+      expect(args.where.aiReportsUsed.gte).toBe(1);
+      expect(args.data.aiReportsUsed.decrement).toBe(1);
+    });
+
+    it('never throws when the usage row is missing (best-effort refund)', async () => {
+      mockDb.userUsage.updateMany.mockRejectedValue(new Error('row missing'));
+      await expect(usageService.refundQuota(userId, 'CHAT_MESSAGE')).resolves.toBeUndefined();
+    });
+  });
+
+  describe('refundWithCredits (failed request restore)', () => {
+    it('restores the feature counter and AI credits together', async () => {
+      await usageService.refundWithCredits(userId, 'CHAT_MESSAGE', 'REPOSITORY_CHAT');
+      const args = mockDb.userUsage.updateMany.mock.calls[0][0] as {
+        where: { chatMessagesUsed: { gte: number }; aiCreditsUsed: { gte: number } };
+        data: { chatMessagesUsed: { decrement: number }; aiCreditsUsed: { decrement: number } };
+      };
+      expect(args.where.chatMessagesUsed.gte).toBe(1);
+      expect(args.where.aiCreditsUsed.gte).toBe(AI_CREDIT_COSTS.REPOSITORY_CHAT);
+      expect(args.data.chatMessagesUsed.decrement).toBe(1);
+      expect(args.data.aiCreditsUsed.decrement).toBe(AI_CREDIT_COSTS.REPOSITORY_CHAT);
+    });
+  });
+
+  describe('monthly reset (UTC period keying)', () => {
+    it('creates and addresses usage rows with the current UTC month period', async () => {
+      const { periodStart, periodEnd } = getCurrentMonthPeriod();
+      await usageService.getOrCreateUsage(userId);
+      expect(mockDb.userUsage.createMany).toHaveBeenCalledWith({
+        data: [{ userId, periodStart, periodEnd }],
+        skipDuplicates: true,
+      });
+      expect(mockDb.userUsage.findUniqueOrThrow).toHaveBeenCalledWith({
+        where: { userId_periodStart: { userId, periodStart } },
+      });
+    });
+
+    it('consumes against the current period row inside the transaction', async () => {
+      const { periodStart, periodEnd } = getCurrentMonthPeriod();
+      const tx = {
+        userUsage: {
+          createMany: vi.fn().mockResolvedValue({ count: 1 }),
+          findUniqueOrThrow: vi.fn().mockResolvedValue(localRow),
+          updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        },
+        repositoryIndex: { upsert: vi.fn() },
+        $queryRaw: vi.fn().mockResolvedValue([]),
+      };
+      mockDb.$transaction.mockImplementation(async (fn: unknown) =>
+        (fn as (t: typeof tx) => Promise<unknown>)(tx),
+      );
+
+      const result = await usageService.consumeQuota(userId, 'HEALTH_SCAN');
+      expect(result.consumed).toBe(true);
+      expect(tx.userUsage.createMany).toHaveBeenCalledWith({
+        data: [{ userId, periodStart, periodEnd }],
+        skipDuplicates: true,
+      });
+      const updateArgs = tx.userUsage.updateMany.mock.calls[0][0] as {
+        where: { userId: string; periodStart: Date };
+      };
+      expect(updateArgs.where.userId).toBe(userId);
+      expect(updateArgs.where.periodStart).toEqual(periodStart);
+    });
+  });
+
+  describe('retry after refund', () => {
+    it('a failed generation refund allows the same quota to be consumed again', async () => {
+      const tx = {
+        userUsage: {
+          createMany: vi.fn().mockResolvedValue({ count: 1 }),
+          findUniqueOrThrow: vi.fn().mockResolvedValue({ ...localRow, aiReportsUsed: 1 }),
+          updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        },
+        repositoryIndex: { upsert: vi.fn() },
+        $queryRaw: vi.fn().mockResolvedValue([]),
+      };
+      mockDb.$transaction.mockImplementation(async (fn: unknown) =>
+        (fn as (t: typeof tx) => Promise<unknown>)(tx),
+      );
+
+      const first = await usageService.consumeQuota(userId, 'AI_REPORT');
+      expect(first.consumed).toBe(true);
+
+      await usageService.refundQuota(userId, 'AI_REPORT');
+      expect(mockDb.userUsage.updateMany).toHaveBeenLastCalledWith(
+        expect.objectContaining({ data: { aiReportsUsed: { decrement: 1 } } }),
+      );
+
+      const retry = await usageService.consumeQuota(userId, 'AI_REPORT');
+      expect(retry.consumed).toBe(true);
+      expect(tx.userUsage.updateMany).toHaveBeenCalledTimes(2);
+    });
+  });
+
   describe('getUsageSummary', () => {
     it('should return plan, period, usage, limits, remaining, resetAt', async () => {
       const summary = await usageService.getUsageSummary(userId);
