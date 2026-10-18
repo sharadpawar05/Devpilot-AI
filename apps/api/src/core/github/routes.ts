@@ -1,8 +1,11 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { Octokit } from 'octokit';
 import { authenticate } from '@/core/auth';
 import { getEnv } from '@/config';
 import { db } from '@/core/db';
+import { sanitizeError } from '@/core/errors/sanitize';
+import { GITHUB_OWNER_PATTERN, GITHUB_REPO_PATTERN } from '@/core/validation/repository';
 import {
   getGitHubToken,
   setGitHubToken,
@@ -10,6 +13,31 @@ import {
   getOctokit,
   revokeGitHubToken,
 } from '@/core/github/token';
+
+/**
+ * Constant-time string comparison. Hashing both sides first avoids leaking
+ * length information through timingSafeEqual's length requirement.
+ */
+function timingSafeStringEqual(a: string, b: string): boolean {
+  const hashA = createHash('sha256').update(a).digest();
+  const hashB = createHash('sha256').update(b).digest();
+  return timingSafeEqual(hashA, hashB);
+}
+
+function githubErrorResponse(
+  reply: FastifyReply,
+  error: unknown,
+  log: FastifyInstance['log'],
+  logContext: string,
+  fallbackMessage = 'Failed to communicate with GitHub.',
+) {
+  log.error({ err: error }, logContext);
+  const sanitized = sanitizeError(error, 'GITHUB_ERROR', fallbackMessage, 500);
+  return reply.status(sanitized.statusCode).send({
+    success: false,
+    error: { code: sanitized.code, message: sanitized.message },
+  });
+}
 
 export async function githubRoutes(app: FastifyInstance) {
   // GET /github/auth-url
@@ -32,6 +60,26 @@ export async function githubRoutes(app: FastifyInstance) {
             code: 'CONFIGURATION_ERROR',
             message:
               'GitHub OAuth is not configured. Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET in your .env file.',
+          },
+        });
+      }
+
+      // In production a localhost callback would send the OAuth code to an
+      // address users cannot reach — fail fast instead of starting a
+      // flow that can never complete.
+      if (
+        env.NODE_ENV === 'production' &&
+        /^https?:\/\/localhost(?::\d+)?\//i.test(env.GITHUB_REDIRECT_URI)
+      ) {
+        app.log.error(
+          'GITHUB_REDIRECT_URI points at localhost in production; refusing to start OAuth',
+        );
+        return reply.status(500).send({
+          success: false,
+          error: {
+            code: 'CONFIGURATION_ERROR',
+            message:
+              'GitHub OAuth is misconfigured: GITHUB_REDIRECT_URI must point at the deployed frontend in production.',
           },
         });
       }
@@ -149,11 +197,22 @@ export async function githubRoutes(app: FastifyInstance) {
 
       const rawState = request.cookies?.github_oauth_state;
       const expectedState = rawState ? request.unsignCookie(rawState).value : undefined;
+      const rawOAuthUser = request.cookies?.github_oauth_user;
+      const expectedUser = rawOAuthUser ? request.unsignCookie(rawOAuthUser).value : undefined;
 
       reply.clearCookie('github_oauth_state', { path: '/' });
       reply.clearCookie('github_oauth_user', { path: '/' });
 
-      if (!expectedState || expectedState !== state) {
+      if (
+        !expectedState ||
+        !timingSafeStringEqual(expectedState, state) ||
+        !expectedUser ||
+        !timingSafeStringEqual(expectedUser, auth.sub)
+      ) {
+        // Either the state is missing/mismatched (CSRF) or the OAuth flow was
+        // initiated by a different session than the one completing it. The
+        // github_oauth_user cookie binds the flow to the initiating user so a
+        // leaked code+state cannot be redeemed from another account.
         return reply.status(403).send({
           success: false,
           error: {
@@ -231,11 +290,13 @@ export async function githubRoutes(app: FastifyInstance) {
           },
         });
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
         app.log.error({ err: error }, 'GitHub OAuth callback failed');
         return reply.status(500).send({
           success: false,
-          error: { code: 'OAUTH_ERROR', message },
+          error: {
+            code: 'OAUTH_ERROR',
+            message: 'GitHub OAuth callback failed. Please try again.',
+          },
         });
       }
     },
@@ -382,11 +443,7 @@ export async function githubRoutes(app: FastifyInstance) {
           })),
         });
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return reply.status(500).send({
-          success: false,
-          error: { code: 'GITHUB_ERROR', message },
-        });
+        return githubErrorResponse(reply, error, app.log, 'Failed to list GitHub repositories');
       }
     },
   );
@@ -400,6 +457,14 @@ export async function githubRoutes(app: FastifyInstance) {
         description: 'List repository branches',
         tags: ['github'],
         security: [{ bearerAuth: [] }],
+        params: {
+          type: 'object',
+          required: ['owner', 'repo'],
+          properties: {
+            owner: { type: 'string', pattern: GITHUB_OWNER_PATTERN },
+            repo: { type: 'string', pattern: GITHUB_REPO_PATTERN },
+          },
+        },
       },
     },
     async (request, reply) => {
@@ -420,12 +485,12 @@ export async function githubRoutes(app: FastifyInstance) {
           })),
         });
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        console.error(`[GitHub] branches error for ${owner}/${repo}:`, message);
-        return reply.status(500).send({
-          success: false,
-          error: { code: 'GITHUB_ERROR', message },
-        });
+        return githubErrorResponse(
+          reply,
+          error,
+          app.log,
+          `Failed to list branches for ${owner}/${repo}`,
+        );
       }
     },
   );
@@ -439,6 +504,14 @@ export async function githubRoutes(app: FastifyInstance) {
         description: 'List repository pull requests',
         tags: ['github'],
         security: [{ bearerAuth: [] }],
+        params: {
+          type: 'object',
+          required: ['owner', 'repo'],
+          properties: {
+            owner: { type: 'string', pattern: GITHUB_OWNER_PATTERN },
+            repo: { type: 'string', pattern: GITHUB_REPO_PATTERN },
+          },
+        },
       },
     },
     async (request, reply) => {
@@ -469,11 +542,7 @@ export async function githubRoutes(app: FastifyInstance) {
           })),
         });
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return reply.status(500).send({
-          success: false,
-          error: { code: 'GITHUB_ERROR', message },
-        });
+        return githubErrorResponse(reply, error, app.log, 'Failed to list GitHub repositories');
       }
     },
   );
@@ -491,8 +560,8 @@ export async function githubRoutes(app: FastifyInstance) {
           type: 'object',
           required: ['owner', 'repo', 'pull_number'],
           properties: {
-            owner: { type: 'string', minLength: 1 },
-            repo: { type: 'string', minLength: 1 },
+            owner: { type: 'string', pattern: GITHUB_OWNER_PATTERN },
+            repo: { type: 'string', pattern: GITHUB_REPO_PATTERN },
             pull_number: { type: 'string', pattern: '^[1-9]\\d*$' },
           },
         },
@@ -532,11 +601,7 @@ export async function githubRoutes(app: FastifyInstance) {
           })),
         });
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return reply.status(500).send({
-          success: false,
-          error: { code: 'GITHUB_ERROR', message },
-        });
+        return githubErrorResponse(reply, error, app.log, 'Failed to list GitHub repositories');
       }
     },
   );

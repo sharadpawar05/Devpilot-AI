@@ -10,6 +10,11 @@ import { buildTreeSummary, findFilesByKeywords } from './parser';
 import { db } from '@/core/db';
 import { config } from '@devpilot/config';
 import { usageService, sendUsageLimitReached } from '@/core/usage';
+import {
+  githubOwnerSchema,
+  githubRepoSchema,
+  githubBranchSchema,
+} from '@/core/validation/repository';
 
 const MAX_FILE_SIZE = 50_000;
 const MAX_CONTEXT_FILES = 15;
@@ -39,15 +44,21 @@ async function ensureUserExists(supabaseUserId: string, email?: string): Promise
 }
 
 const indexSchema = z.object({
-  owner: z.string().min(1),
-  repo: z.string().min(1),
-  branch: z.string().default('main'),
+  owner: githubOwnerSchema,
+  repo: githubRepoSchema,
+  branch: githubBranchSchema.default('main'),
+});
+
+const repoQuerySchema = z.object({
+  owner: githubOwnerSchema,
+  repo: githubRepoSchema,
+  branch: githubBranchSchema.default('main'),
 });
 
 const chatSchema = z.object({
-  owner: z.string().min(1),
-  repo: z.string().min(1),
-  branch: z.string().default('main'),
+  owner: githubOwnerSchema,
+  repo: githubRepoSchema,
+  branch: githubBranchSchema.default('main'),
   question: z.string().min(1).max(10000),
   conversationHistory: z
     .array(
@@ -155,7 +166,8 @@ export async function repositoryChatRoutes(app: FastifyInstance) {
           status: 'INDEXING',
         });
       } catch (error: unknown) {
-        const err = error as { status?: number; message?: string };
+        const err = error as { status?: number };
+        app.log.error({ err: error, owner, repo, branch }, 'Repository indexing failed');
         if (err.status === 404) {
           return reply
             .status(404)
@@ -168,7 +180,7 @@ export async function repositoryChatRoutes(app: FastifyInstance) {
         }
         return reply.status(500).send({
           success: false,
-          error: { message: err.message || 'Failed to index repository' },
+          error: { message: 'Failed to index repository' },
         });
       }
     },
@@ -186,17 +198,14 @@ export async function repositoryChatRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const auth = (request as { auth: { sub: string } }).auth;
-      const {
-        owner,
-        repo,
-        branch = 'main',
-      } = request.query as { owner?: string; repo?: string; branch?: string };
-
-      if (!owner || !repo) {
-        return reply
-          .status(400)
-          .send({ success: false, error: { message: 'owner and repo are required' } });
+      const parsed = repoQuerySchema.safeParse(request.query);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message },
+        });
       }
+      const { owner, repo, branch } = parsed.data;
 
       const data = await repositoryIndexer.getIndex(auth.sub, owner, repo, branch);
       if (!data) {
@@ -427,17 +436,14 @@ Question: ${question}`;
     },
     async (request, reply) => {
       const auth = (request as { auth: { sub: string } }).auth;
-      const {
-        owner,
-        repo,
-        branch = 'main',
-      } = request.query as { owner?: string; repo?: string; branch?: string };
-
-      if (!owner || !repo) {
-        return reply
-          .status(400)
-          .send({ success: false, error: { message: 'owner and repo are required' } });
+      const parsed = repoQuerySchema.safeParse(request.query);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message },
+        });
       }
+      const { owner, repo, branch } = parsed.data;
 
       const status = await repositoryStatusService.getStatus(auth.sub, owner, repo, branch);
       const index = await repositoryIndexer.getIndex(auth.sub, owner, repo, branch);

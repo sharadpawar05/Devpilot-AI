@@ -14,15 +14,26 @@ import {
   AI_CREDIT_COSTS,
 } from '@/core/usage';
 import type { HealthActionType } from './types';
+import {
+  githubOwnerSchema,
+  githubRepoSchema,
+  repoFilePathSchema,
+} from '@/core/validation/repository';
 
 const overviewQuerySchema = z.object({
-  owner: z.string().min(1),
-  repo: z.string().min(1),
+  owner: githubOwnerSchema,
+  repo: githubRepoSchema,
 });
 
 const summarySchema = z.object({
-  owner: z.string().min(1),
-  repo: z.string().min(1),
+  owner: githubOwnerSchema,
+  repo: githubRepoSchema,
+});
+
+const fileContentQuerySchema = z.object({
+  owner: githubOwnerSchema,
+  repo: githubRepoSchema,
+  path: repoFilePathSchema,
 });
 
 export async function repoOverviewRoutes(app: FastifyInstance) {
@@ -152,18 +163,18 @@ export async function repoOverviewRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const auth = (request as { auth: { sub: string } }).auth;
-      const { owner, repo, path } = request.query as {
-        owner?: string;
-        repo?: string;
-        path?: string;
-      };
-
-      if (!owner || !repo || !path) {
+      const parsed = fileContentQuerySchema.safeParse(request.query);
+      if (!parsed.success) {
         return reply.status(400).send({
           success: false,
-          error: { message: 'owner, repo, and path are required' },
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: parsed.error.errors[0]?.message ?? 'Invalid request',
+          },
         });
       }
+
+      const { owner, repo, path } = parsed.data;
 
       try {
         const content = await repositoryIntelligenceService.getFileContent(
@@ -406,8 +417,8 @@ Keep each section concise. Do not add any other sections.`;
   // ─── AI Generation ───────────────────────────────────────────────────────
 
   const generateSchema = z.object({
-    owner: z.string().min(1),
-    repo: z.string().min(1),
+    owner: githubOwnerSchema,
+    repo: githubRepoSchema,
     actionType: z.enum([
       'generate-readme',
       'generate-license',

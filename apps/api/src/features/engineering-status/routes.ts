@@ -3,11 +3,16 @@ import { z } from 'zod';
 import { authenticate } from '@/core/auth/middleware';
 import { engineeringStatusService } from './engineering-status-service';
 import { usageService, sendUsageLimitReached } from '@/core/usage';
+import {
+  githubOwnerSchema,
+  githubRepoSchema,
+  githubBranchSchema,
+} from '@/core/validation/repository';
 
 const engineeringStatusSchema = z.object({
-  owner: z.string().min(1),
-  repo: z.string().min(1),
-  branch: z.string().default('main'),
+  owner: githubOwnerSchema,
+  repo: githubRepoSchema,
+  branch: githubBranchSchema.default('main'),
   timeRange: z.enum(['7d', '14d', '30d', 'custom']).default('14d'),
   startDate: z
     .string()

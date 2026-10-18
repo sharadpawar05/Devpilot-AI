@@ -3,10 +3,12 @@ import { z } from 'zod';
 import { authenticate } from '@/core/auth/middleware';
 import { releaseNotesService } from './release-notes-service';
 import { usageService, sendUsageLimitReached } from '@/core/usage';
+import { sanitizeError } from '@/core/errors/sanitize';
+import { githubOwnerSchema, githubRepoSchema } from '@/core/validation/repository';
 
 const releaseNotesSchema = z.object({
-  owner: z.string().min(1),
-  repo: z.string().min(1),
+  owner: githubOwnerSchema,
+  repo: githubRepoSchema,
   previousTag: z.string().optional(),
   currentTag: z.string().optional(),
   startDate: z
@@ -104,23 +106,26 @@ export async function releaseNotesRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const auth = (request as { auth: { sub: string } }).auth;
-      const { owner, repo } = request.query as { owner?: string; repo?: string };
-
-      if (!owner || !repo) {
+      const parsed = releaseNotesSchema.pick({ owner: true, repo: true }).safeParse(request.query);
+      if (!parsed.success) {
         return reply.status(400).send({
           success: false,
-          error: { code: 'VALIDATION_ERROR', message: 'owner and repo are required' },
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: parsed.error.errors[0]?.message ?? 'Invalid request',
+          },
         });
       }
+      const { owner, repo } = parsed.data;
 
       try {
         const tags = await releaseNotesService.getReleaseTags(auth.sub, owner, repo);
         return reply.send({ success: true, tags });
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
-        return reply.status(500).send({
+        const sanitized = sanitizeError(error, 'FETCH_ERROR', 'Failed to fetch release tags.', 500);
+        return reply.status(sanitized.statusCode).send({
           success: false,
-          error: { code: 'FETCH_ERROR', message },
+          error: { code: sanitized.code, message: sanitized.message },
         });
       }
     },

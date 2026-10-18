@@ -3,11 +3,16 @@ import { z } from 'zod';
 import { authenticate } from '@/core/auth/middleware';
 import { incidentSummaryService } from './incident-summary-service';
 import { usageService, sendUsageLimitReached } from '@/core/usage';
+import {
+  githubOwnerSchema,
+  githubRepoSchema,
+  githubBranchSchema,
+} from '@/core/validation/repository';
 
 const incidentSummarySchema = z.object({
-  owner: z.string().min(1),
-  repo: z.string().min(1),
-  branch: z.string().default('main'),
+  owner: githubOwnerSchema,
+  repo: githubRepoSchema,
+  branch: githubBranchSchema.default('main'),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD format'),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD format'),
   provider: z.enum(['gemini', 'openai', 'anthropic', 'openrouter', 'groq']).default('gemini'),
@@ -100,7 +105,7 @@ export async function incidentSummaryRoutes(app: FastifyInstance) {
           success: false,
           error: {
             code: 'GENERATION_FAILED',
-            message: error instanceof Error ? error.message : 'Failed to generate incident summary',
+            message: 'Failed to generate incident summary',
           },
         });
       }

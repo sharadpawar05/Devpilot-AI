@@ -1,9 +1,41 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
+import { z } from 'zod';
 import { authenticate } from '@/core/auth';
 import { repositoryIndexer } from './indexer';
 import { repositoryStatusService } from './status';
 import { repositoryCache } from './cache';
 import { usageService, sendUsageLimitReached } from '@/core/usage';
+import {
+  githubOwnerSchema,
+  githubRepoSchema,
+  githubBranchSchema,
+  repoFilePathSchema,
+} from '@/core/validation/repository';
+
+const repoParamsSchema = z.object({
+  owner: githubOwnerSchema,
+  repo: githubRepoSchema,
+});
+
+const branchQuerySchema = z.object({
+  branch: githubBranchSchema.default('main'),
+});
+
+const fileContentQuerySchema = repoParamsSchema.extend({
+  path: repoFilePathSchema,
+  branch: githubBranchSchema.default('main'),
+});
+
+const indexBodySchema = z.object({
+  branch: githubBranchSchema.default('main'),
+});
+
+function validationError(reply: FastifyReply, error: z.ZodError) {
+  return reply.status(400).send({
+    success: false,
+    error: { code: 'VALIDATION_ERROR', message: error.errors[0]?.message ?? 'Invalid request' },
+  });
+}
 
 export default async function repositoryRoutes(app: FastifyInstance) {
   app.get(
@@ -11,9 +43,17 @@ export default async function repositoryRoutes(app: FastifyInstance) {
     {
       preHandler: [authenticate],
     },
-    async (request) => {
-      const { owner, repo } = request.params as { owner: string; repo: string };
-      const branch = (request.query as { branch?: string }).branch || 'main';
+    async (request, reply) => {
+      const params = repoParamsSchema.safeParse(request.params);
+      if (!params.success) {
+        return validationError(reply, params.error);
+      }
+      const query = branchQuerySchema.safeParse(request.query ?? {});
+      if (!query.success) {
+        return validationError(reply, query.error);
+      }
+      const { owner, repo } = params.data;
+      const branch = query.data.branch;
       const userId = request.auth!.sub;
 
       const status = await repositoryStatusService.getStatus(userId, owner, repo, branch);
@@ -29,8 +69,16 @@ export default async function repositoryRoutes(app: FastifyInstance) {
       preHandler: [authenticate],
     },
     async (request, reply) => {
-      const { owner, repo } = request.params as { owner: string; repo: string };
-      const { branch = 'main' } = (request.body as { branch?: string }) || {};
+      const params = repoParamsSchema.safeParse(request.params);
+      if (!params.success) {
+        return validationError(reply, params.error);
+      }
+      const body = indexBodySchema.safeParse(request.body ?? {});
+      if (!body.success) {
+        return validationError(reply, body.error);
+      }
+      const { owner, repo } = params.data;
+      const branch = body.data.branch;
       const userId = request.auth!.sub;
 
       const existingStatus = await repositoryStatusService.getStatus(userId, owner, repo, branch);
@@ -65,8 +113,16 @@ export default async function repositoryRoutes(app: FastifyInstance) {
       preHandler: [authenticate],
     },
     async (request, reply) => {
-      const { owner, repo } = request.params as { owner: string; repo: string };
-      const { branch = 'main' } = (request.body as { branch?: string }) || {};
+      const params = repoParamsSchema.safeParse(request.params);
+      if (!params.success) {
+        return validationError(reply, params.error);
+      }
+      const body = indexBodySchema.safeParse(request.body ?? {});
+      if (!body.success) {
+        return validationError(reply, body.error);
+      }
+      const { owner, repo } = params.data;
+      const branch = body.data.branch;
       const userId = request.auth!.sub;
 
       const existingStatus = await repositoryStatusService.getStatus(userId, owner, repo, branch);
@@ -103,8 +159,16 @@ export default async function repositoryRoutes(app: FastifyInstance) {
       preHandler: [authenticate],
     },
     async (request, reply) => {
-      const { owner, repo } = request.params as { owner: string; repo: string };
-      const branch = (request.query as { branch?: string }).branch || 'main';
+      const params = repoParamsSchema.safeParse(request.params);
+      if (!params.success) {
+        return validationError(reply, params.error);
+      }
+      const query = branchQuerySchema.safeParse(request.query ?? {});
+      if (!query.success) {
+        return validationError(reply, query.error);
+      }
+      const { owner, repo } = params.data;
+      const branch = query.data.branch;
       const userId = request.auth!.sub;
 
       const data = await repositoryIndexer.getIndex(userId, owner, repo, branch);
@@ -133,16 +197,21 @@ export default async function repositoryRoutes(app: FastifyInstance) {
       preHandler: [authenticate],
     },
     async (request, reply) => {
-      const { owner, repo } = request.params as { owner: string; repo: string };
-      const { path, branch = 'main' } = request.query as { path?: string; branch?: string };
-      const userId = request.auth!.sub;
-
-      if (!path) {
+      const parsed = fileContentQuerySchema.safeParse({
+        ...(request.params as Record<string, unknown>),
+        ...((request.query as Record<string, unknown>) ?? {}),
+      });
+      if (!parsed.success) {
         return reply.status(400).send({
           success: false,
-          error: { message: 'path query parameter is required' },
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: parsed.error.errors[0]?.message ?? 'Invalid request',
+          },
         });
       }
+      const { owner, repo, path, branch } = parsed.data;
+      const userId = request.auth!.sub;
 
       const data = await repositoryIndexer.getIndex(userId, owner, repo, branch);
       if (!data) {

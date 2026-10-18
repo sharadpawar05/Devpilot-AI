@@ -6,13 +6,15 @@ import { classifyAIError } from '@/core/ai/classify-error';
 import { usageService, sendUsageLimitReached, AI_CREDIT_COSTS } from '@/core/usage';
 import { PromptRegistry, loadMarkdownPrompts } from '@devpilot/ai-prompts';
 import { repositoryIntelligenceService } from '@/features/repo-intelligence';
+import { sanitizeError } from '@/core/errors/sanitize';
+import { githubOwnerSchema, githubRepoSchema } from '@/core/validation/repository';
 
 const registry = new PromptRegistry();
 registry.registerAll(loadMarkdownPrompts());
 
 const reviewSchema = z.object({
-  owner: z.string().min(1),
-  repo: z.string().min(1),
+  owner: githubOwnerSchema,
+  repo: githubRepoSchema,
   pull_number: z.number().min(1),
   files: z.array(z.string()).optional(),
   reviewType: z
@@ -23,8 +25,8 @@ const reviewSchema = z.object({
 });
 
 const analyzeSchema = z.object({
-  owner: z.string().min(1),
-  repo: z.string().min(1),
+  owner: githubOwnerSchema,
+  repo: githubRepoSchema,
   pull_number: z.number().min(1),
   provider: z.enum(['gemini', 'openai', 'anthropic', 'openrouter', 'groq']).default('gemini'),
 });
@@ -189,10 +191,15 @@ export async function prReviewRoutes(app: FastifyInstance) {
         };
         filesData = filesResult;
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return reply.status(500).send({
+        const sanitized = sanitizeError(
+          error,
+          'GITHUB_ERROR',
+          'Failed to fetch pull request.',
+          500,
+        );
+        return reply.status(sanitized.statusCode).send({
           success: false,
-          error: { code: 'GITHUB_ERROR', message: `Failed to fetch PR: ${message}` },
+          error: { code: sanitized.code, message: sanitized.message },
         });
       }
 
@@ -241,10 +248,10 @@ export async function prReviewRoutes(app: FastifyInstance) {
           isDeep: reviewDepth === 'Deep' ? 'yes' : undefined,
         });
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
+        app.log.error({ err: error }, 'PR review prompt rendering failed');
         return reply.status(500).send({
           success: false,
-          error: { code: 'PROMPT_ERROR', message: `Failed to render prompt: ${message}` },
+          error: { code: 'PROMPT_ERROR', message: 'Failed to render prompt' },
         });
       }
 
@@ -376,10 +383,15 @@ export async function prReviewRoutes(app: FastifyInstance) {
         };
         filesData = filesResult;
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return reply.status(500).send({
+        const sanitized = sanitizeError(
+          error,
+          'GITHUB_ERROR',
+          'Failed to fetch pull request.',
+          500,
+        );
+        return reply.status(sanitized.statusCode).send({
           success: false,
-          error: { code: 'GITHUB_ERROR', message: `Failed to fetch PR: ${message}` },
+          error: { code: sanitized.code, message: sanitized.message },
         });
       }
 
@@ -420,10 +432,10 @@ export async function prReviewRoutes(app: FastifyInstance) {
           truncated: truncated ? 'yes' : undefined,
         });
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
+        app.log.error({ err: error }, 'PR review prompt rendering failed');
         return reply.status(500).send({
           success: false,
-          error: { code: 'PROMPT_ERROR', message: `Failed to render prompt: ${message}` },
+          error: { code: 'PROMPT_ERROR', message: 'Failed to render prompt' },
         });
       }
 

@@ -22,11 +22,27 @@ function getJwks() {
 }
 
 export async function verifyToken(token: string): Promise<AuthJWTPayload> {
+  const env = getEnv();
   const key = getJwks();
   const { payload } = await jwtVerify(token, key, {
-    algorithms: ['HS256', 'RS256', 'ES256'],
+    // Supabase access tokens are signed with asymmetric keys published in
+    // the JWKS endpoint. Restricting algorithms blocks token confusion.
+    algorithms: ['RS256', 'ES256'],
+    // Only accept tokens minted for this project's Supabase instance and
+    // the standard "authenticated" audience.
+    issuer: `${env.SUPABASE_URL}/auth/v1`,
+    audience: 'authenticated',
   });
   return payload as AuthJWTPayload;
+}
+
+function isTokenExpiredError(error: unknown): boolean {
+  return (
+    error !== null &&
+    typeof error === 'object' &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 'ERR_JWT_EXPIRED'
+  );
 }
 
 export async function authenticate(request: FastifyRequest, reply: FastifyReply) {
@@ -58,9 +74,13 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
 
     (request as FastifyRequest & { auth: AuthJWTPayload }).auth = payload;
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Token verification failed';
-
+    // Log the detailed verification failure server-side only. Raw JOSE/JWKS
+    // error messages must never reach clients.
     request.log.warn({ err: error }, 'Authentication failed');
+
+    const message = isTokenExpiredError(error)
+      ? 'Token has expired. Please sign in again.'
+      : 'Invalid or expired token';
 
     return reply.status(401).send({
       success: false,

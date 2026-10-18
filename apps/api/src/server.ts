@@ -1,20 +1,13 @@
 import 'dotenv/config';
 import Fastify from 'fastify';
 import { loadEnv } from '@/config';
+import { buildServerOptions } from '@/core/http/server-options';
 import { registerPlugins } from '@/plugins';
 import { apiV1Routes } from '@/routes';
 
 const env = loadEnv();
 
-const app = Fastify({
-  logger: {
-    level: env.LOG_LEVEL,
-    transport:
-      env.NODE_ENV === 'development'
-        ? { target: 'pino-pretty', options: { colorize: true } }
-        : undefined,
-  },
-});
+const app = Fastify(buildServerOptions(env));
 
 async function bootstrap() {
   await registerPlugins(app);

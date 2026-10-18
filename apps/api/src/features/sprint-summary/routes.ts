@@ -4,11 +4,16 @@ import { authenticate } from '@/core/auth/middleware';
 import { sprintSummaryService } from './sprint-summary-service';
 import { usageService, sendUsageLimitReached } from '@/core/usage';
 import { classifyAIError } from '@/core/ai/classify-error';
+import {
+  githubOwnerSchema,
+  githubRepoSchema,
+  githubBranchSchema,
+} from '@/core/validation/repository';
 
 const sprintSummarySchema = z.object({
-  owner: z.string().min(1),
-  repo: z.string().min(1),
-  branch: z.string().default('main'),
+  owner: githubOwnerSchema,
+  repo: githubRepoSchema,
+  branch: githubBranchSchema.default('main'),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD format'),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD format'),
   provider: z.enum(['gemini', 'openai', 'anthropic', 'openrouter', 'groq']).default('gemini'),

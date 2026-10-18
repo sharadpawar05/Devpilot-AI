@@ -4,22 +4,28 @@ import { authenticate } from '@/core/auth/middleware';
 import { repositoryIntelligenceService } from './repository-service';
 import { getMeteredHealth } from './health-metering';
 import { UsageLimitExceededError, sendUsageLimitReached } from '@/core/usage';
+import { sanitizeError } from '@/core/errors/sanitize';
+import {
+  githubOwnerSchema,
+  githubRepoSchema,
+  githubBranchSchema,
+} from '@/core/validation/repository';
 
 const querySchema = z.object({
-  owner: z.string().min(1),
-  repo: z.string().min(1),
-  branch: z.string().optional(),
+  owner: githubOwnerSchema,
+  repo: githubRepoSchema,
+  branch: githubBranchSchema.optional(),
 });
 
 const prQuerySchema = z.object({
-  owner: z.string().min(1),
-  repo: z.string().min(1),
+  owner: githubOwnerSchema,
+  repo: githubRepoSchema,
   pull_number: z.coerce.number().min(1),
 });
 
 const invalidateBodySchema = z.object({
-  owner: z.string().min(1),
-  repo: z.string().min(1),
+  owner: githubOwnerSchema,
+  repo: githubRepoSchema,
 });
 
 export async function repoIntelligenceRoutes(app: FastifyInstance) {
@@ -64,11 +70,16 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
         if (error instanceof UsageLimitExceededError) {
           return sendUsageLimitReached(reply, error.details);
         }
-        const err = error as { status?: number; message?: string };
-        const status = err.status || 500;
-        return reply.status(status).send({
+        const err = error as { status?: number };
+        const sanitized = sanitizeError(
+          error,
+          'GITHUB_ERROR',
+          'Failed to fetch repository overview',
+          500,
+        );
+        return reply.status(err.status || sanitized.statusCode).send({
           success: false,
-          error: { message: err.message || 'Failed to fetch repository overview' },
+          error: { code: sanitized.code, message: sanitized.message },
         });
       }
     },
@@ -101,10 +112,11 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
         const metadata = await repositoryIntelligenceService.getMetadata(auth.sub, owner, repo);
         return reply.send({ success: true, data: metadata });
       } catch (error: unknown) {
-        const err = error as { status?: number; message?: string };
-        return reply.status(err.status || 500).send({
+        const err = error as { status?: number };
+        const sanitized = sanitizeError(error, 'GITHUB_ERROR', 'Failed to fetch metadata', 500);
+        return reply.status(err.status || sanitized.statusCode).send({
           success: false,
-          error: { message: err.message || 'Failed to fetch metadata' },
+          error: { code: sanitized.code, message: sanitized.message },
         });
       }
     },
@@ -141,10 +153,11 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
         );
         return reply.send({ success: true, data: contributors });
       } catch (error: unknown) {
-        const err = error as { status?: number; message?: string };
-        return reply.status(err.status || 500).send({
+        const err = error as { status?: number };
+        const sanitized = sanitizeError(error, 'GITHUB_ERROR', 'Failed to fetch contributors', 500);
+        return reply.status(err.status || sanitized.statusCode).send({
           success: false,
-          error: { message: err.message || 'Failed to fetch contributors' },
+          error: { code: sanitized.code, message: sanitized.message },
         });
       }
     },
@@ -184,10 +197,16 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
         );
         return reply.send({ success: true, data: pulls });
       } catch (error: unknown) {
-        const err = error as { status?: number; message?: string };
-        return reply.status(err.status || 500).send({
+        const err = error as { status?: number };
+        const sanitized = sanitizeError(
+          error,
+          'GITHUB_ERROR',
+          'Failed to fetch pull requests',
+          500,
+        );
+        return reply.status(err.status || sanitized.statusCode).send({
           success: false,
-          error: { message: err.message || 'Failed to fetch pull requests' },
+          error: { code: sanitized.code, message: sanitized.message },
         });
       }
     },
@@ -225,10 +244,11 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
         );
         return reply.send({ success: true, data: files });
       } catch (error: unknown) {
-        const err = error as { status?: number; message?: string };
-        return reply.status(err.status || 500).send({
+        const err = error as { status?: number };
+        const sanitized = sanitizeError(error, 'GITHUB_ERROR', 'Failed to fetch PR files', 500);
+        return reply.status(err.status || sanitized.statusCode).send({
           success: false,
-          error: { message: err.message || 'Failed to fetch PR files' },
+          error: { code: sanitized.code, message: sanitized.message },
         });
       }
     },
@@ -266,10 +286,11 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
         );
         return reply.send({ success: true, data: commits });
       } catch (error: unknown) {
-        const err = error as { status?: number; message?: string };
-        return reply.status(err.status || 500).send({
+        const err = error as { status?: number };
+        const sanitized = sanitizeError(error, 'GITHUB_ERROR', 'Failed to fetch commits', 500);
+        return reply.status(err.status || sanitized.statusCode).send({
           success: false,
-          error: { message: err.message || 'Failed to fetch commits' },
+          error: { code: sanitized.code, message: sanitized.message },
         });
       }
     },
@@ -302,10 +323,11 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
         const releases = await repositoryIntelligenceService.getReleases(auth.sub, owner, repo);
         return reply.send({ success: true, data: releases });
       } catch (error: unknown) {
-        const err = error as { status?: number; message?: string };
-        return reply.status(err.status || 500).send({
+        const err = error as { status?: number };
+        const sanitized = sanitizeError(error, 'GITHUB_ERROR', 'Failed to fetch releases', 500);
+        return reply.status(err.status || sanitized.statusCode).send({
           success: false,
-          error: { message: err.message || 'Failed to fetch releases' },
+          error: { code: sanitized.code, message: sanitized.message },
         });
       }
     },
@@ -340,10 +362,11 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
         const issues = await repositoryIntelligenceService.getIssues(auth.sub, owner, repo, state);
         return reply.send({ success: true, data: issues });
       } catch (error: unknown) {
-        const err = error as { status?: number; message?: string };
-        return reply.status(err.status || 500).send({
+        const err = error as { status?: number };
+        const sanitized = sanitizeError(error, 'GITHUB_ERROR', 'Failed to fetch issues', 500);
+        return reply.status(err.status || sanitized.statusCode).send({
           success: false,
-          error: { message: err.message || 'Failed to fetch issues' },
+          error: { code: sanitized.code, message: sanitized.message },
         });
       }
     },
@@ -380,10 +403,11 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
         );
         return reply.send({ success: true, data: activity });
       } catch (error: unknown) {
-        const err = error as { status?: number; message?: string };
-        return reply.status(err.status || 500).send({
+        const err = error as { status?: number };
+        const sanitized = sanitizeError(error, 'GITHUB_ERROR', 'Failed to fetch activity', 500);
+        return reply.status(err.status || sanitized.statusCode).send({
           success: false,
-          error: { message: err.message || 'Failed to fetch activity' },
+          error: { code: sanitized.code, message: sanitized.message },
         });
       }
     },
@@ -420,10 +444,16 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
         );
         return reply.send({ success: true, data: activity });
       } catch (error: unknown) {
-        const err = error as { status?: number; message?: string };
-        return reply.status(err.status || 500).send({
+        const err = error as { status?: number };
+        const sanitized = sanitizeError(
+          error,
+          'GITHUB_ERROR',
+          'Failed to fetch commit activity',
+          500,
+        );
+        return reply.status(err.status || sanitized.statusCode).send({
           success: false,
-          error: { message: err.message || 'Failed to fetch commit activity' },
+          error: { code: sanitized.code, message: sanitized.message },
         });
       }
     },
@@ -456,10 +486,11 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
         const tree = await repositoryIntelligenceService.getFileTree(auth.sub, owner, repo, branch);
         return reply.send({ success: true, data: tree });
       } catch (error: unknown) {
-        const err = error as { status?: number; message?: string };
-        return reply.status(err.status || 500).send({
+        const err = error as { status?: number };
+        const sanitized = sanitizeError(error, 'GITHUB_ERROR', 'Failed to fetch file tree', 500);
+        return reply.status(err.status || sanitized.statusCode).send({
           success: false,
-          error: { message: err.message || 'Failed to fetch file tree' },
+          error: { code: sanitized.code, message: sanitized.message },
         });
       }
     },
@@ -511,10 +542,11 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
 
         return reply.send({ success: true, data: content });
       } catch (error: unknown) {
-        const err = error as { status?: number; message?: string };
-        return reply.status(err.status || 500).send({
+        const err = error as { status?: number };
+        const sanitized = sanitizeError(error, 'GITHUB_ERROR', 'Failed to fetch file content', 500);
+        return reply.status(err.status || sanitized.statusCode).send({
           success: false,
-          error: { message: err.message || 'Failed to fetch file content' },
+          error: { code: sanitized.code, message: sanitized.message },
         });
       }
     },
@@ -550,10 +582,11 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
         if (error instanceof UsageLimitExceededError) {
           return sendUsageLimitReached(reply, error.details);
         }
-        const err = error as { status?: number; message?: string };
-        return reply.status(err.status || 500).send({
+        const err = error as { status?: number };
+        const sanitized = sanitizeError(error, 'GITHUB_ERROR', 'Failed to fetch health', 500);
+        return reply.status(err.status || sanitized.statusCode).send({
           success: false,
-          error: { message: err.message || 'Failed to fetch health' },
+          error: { code: sanitized.code, message: sanitized.message },
         });
       }
     },
@@ -593,10 +626,16 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
         );
         return reply.send({ success: true, data: { points } });
       } catch (error: unknown) {
-        const err = error as { status?: number; message?: string };
-        return reply.status(err.status || 500).send({
+        const err = error as { status?: number };
+        const sanitized = sanitizeError(
+          error,
+          'GITHUB_ERROR',
+          'Failed to fetch health history',
+          500,
+        );
+        return reply.status(err.status || sanitized.statusCode).send({
           success: false,
-          error: { message: err.message || 'Failed to fetch health history' },
+          error: { code: sanitized.code, message: sanitized.message },
         });
       }
     },
@@ -634,10 +673,11 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
         );
         return reply.send({ success: true, data: intelligence });
       } catch (error: unknown) {
-        const err = error as { status?: number; message?: string };
-        return reply.status(err.status || 500).send({
+        const err = error as { status?: number };
+        const sanitized = sanitizeError(error, 'GITHUB_ERROR', 'Failed to analyze repository', 500);
+        return reply.status(err.status || sanitized.statusCode).send({
           success: false,
-          error: { message: err.message || 'Failed to analyze repository' },
+          error: { code: sanitized.code, message: sanitized.message },
         });
       }
     },
@@ -670,10 +710,11 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
         const readme = await repositoryIntelligenceService.getReadme(auth.sub, owner, repo);
         return reply.send({ success: true, data: { content: readme } });
       } catch (error: unknown) {
-        const err = error as { status?: number; message?: string };
-        return reply.status(err.status || 500).send({
+        const err = error as { status?: number };
+        const sanitized = sanitizeError(error, 'GITHUB_ERROR', 'Failed to fetch README', 500);
+        return reply.status(err.status || sanitized.statusCode).send({
           success: false,
-          error: { message: err.message || 'Failed to fetch README' },
+          error: { code: sanitized.code, message: sanitized.message },
         });
       }
     },
@@ -706,10 +747,11 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
         const statistics = await repositoryIntelligenceService.getStatistics(auth.sub, owner, repo);
         return reply.send({ success: true, data: statistics });
       } catch (error: unknown) {
-        const err = error as { status?: number; message?: string };
-        return reply.status(err.status || 500).send({
+        const err = error as { status?: number };
+        const sanitized = sanitizeError(error, 'GITHUB_ERROR', 'Failed to fetch statistics', 500);
+        return reply.status(err.status || sanitized.statusCode).send({
           success: false,
-          error: { message: err.message || 'Failed to fetch statistics' },
+          error: { code: sanitized.code, message: sanitized.message },
         });
       }
     },
