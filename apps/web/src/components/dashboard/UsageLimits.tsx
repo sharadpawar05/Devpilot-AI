@@ -132,9 +132,15 @@ export const UsageLimits = memo(function UsageLimits() {
             <span className="text-muted-foreground">{creditsPct}%</span>
           </div>
           {creditsAt && (
-            <div className="mt-1 flex items-center gap-1 text-[10px] text-red-600 dark:text-red-400">
-              <AlertTriangle className="h-3 w-3" />
-              Plan limit reached
+            <div className="mt-1.5 space-y-0.5 text-[10px]">
+              <p className="flex items-center gap-1 font-semibold text-red-600 dark:text-red-400">
+                <AlertTriangle className="h-3 w-3" />
+                AI credits exhausted
+              </p>
+              <p className="text-red-600 dark:text-red-400">
+                Your monthly AI allowance has been used.
+                {periodLabel ? ` ${periodLabel}.` : ''}
+              </p>
             </div>
           )}
         </div>
@@ -168,6 +174,7 @@ export const UsageLimits = memo(function UsageLimits() {
           limit={usage.limits.repositories}
           nearLimit={isNearLimit(usage.usage.repositories, usage.limits.repositories)}
           atLimit={isAtLimit(usage.usage.repositories, usage.limits.repositories)}
+          variant="inventory"
         />
       </div>
     </div>
@@ -234,30 +241,40 @@ function UsageRow({
   limit,
   nearLimit,
   atLimit,
+  variant = 'quota',
 }: {
   label: string;
   used: number;
   limit: number;
   nearLimit: boolean;
   atLimit: boolean;
+  variant?: 'quota' | 'inventory';
 }) {
+  const isInventory = variant === 'inventory';
+  const tone = isInventory
+    ? 'text-foreground'
+    : atLimit
+      ? 'font-semibold text-red-600 dark:text-red-400'
+      : nearLimit
+        ? 'font-semibold text-amber-600 dark:text-amber-400'
+        : 'text-foreground';
+
   return (
     <div>
       <div className="flex items-center justify-between text-xs">
         <span className="text-muted-foreground">{label}</span>
-        <span
-          className={
-            atLimit
-              ? 'font-semibold text-red-600 dark:text-red-400'
-              : nearLimit
-                ? 'font-semibold text-amber-600 dark:text-amber-400'
-                : 'text-foreground'
-          }
-        >
+        <span className={tone}>
           {used} / {limit}
+          {isInventory ? ' used' : ''}
         </span>
       </div>
-      <QuotaBar used={used} limit={limit} nearLimit={nearLimit} atLimit={atLimit} label={label} />
+      <QuotaBar
+        used={used}
+        limit={limit}
+        nearLimit={isInventory ? false : nearLimit}
+        atLimit={isInventory ? false : atLimit}
+        label={label}
+      />
     </div>
   );
 }

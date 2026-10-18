@@ -156,7 +156,7 @@ describe('UsageLimits', () => {
     expect(screen.getByText('0 / 2')).toBeTruthy();
     expect(screen.getByText('2 / 2')).toBeTruthy();
     expect(screen.getByText('2 / 20')).toBeTruthy();
-    expect(screen.getByText('1 / 1')).toBeTruthy();
+    expect(screen.getByText('1 / 1 used')).toBeTruthy();
     // Customer-facing labels (no internal enum names)
     expect(screen.getByText('Engineering Reports')).toBeTruthy();
     expect(screen.getByText('Active Repositories')).toBeTruthy();
@@ -218,6 +218,56 @@ describe('UsageLimits', () => {
     render(<UsageLimits />);
     const limitMessages = screen.getAllByText('Plan limit reached');
     expect(limitMessages.length).toBeGreaterThan(0);
+    expect(screen.getByText('AI credits exhausted')).toBeTruthy();
+    expect(screen.getByText('Your monthly AI allowance has been used. Resets Oct 1.')).toBeTruthy();
+  });
+
+  it('should present a full repository quota as used instead of an error', () => {
+    mockUseUsage.mockReturnValue(
+      mockSuccess({
+        plan: 'FREE',
+        periodStart: '2026-09-01T00:00:00.000Z',
+        periodEnd: '2026-10-01T00:00:00.000Z',
+        usage: { aiCredits: 10, healthScans: 0, aiReports: 0, chatMessages: 2, repositories: 1 },
+        limits: { aiCredits: 50, healthScans: 2, aiReports: 2, chatMessages: 20, repositories: 1 },
+        remaining: {
+          aiCredits: 40,
+          healthScans: 2,
+          aiReports: 2,
+          chatMessages: 18,
+          repositories: 0,
+        },
+      }) as ReturnType<typeof useUsage>,
+    );
+
+    render(<UsageLimits />);
+    expect(screen.getByText('1 / 1 used')).toBeTruthy();
+    expect(screen.queryByText('Plan limit reached')).toBeNull();
+    expect(screen.queryByText('AI credits exhausted')).toBeNull();
+  });
+
+  it('should not show an exhausted state when one credit remains', () => {
+    mockUseUsage.mockReturnValue(
+      mockSuccess({
+        plan: 'FREE',
+        periodStart: '2026-09-01T00:00:00.000Z',
+        periodEnd: '2026-10-01T00:00:00.000Z',
+        usage: { aiCredits: 49, healthScans: 0, aiReports: 0, chatMessages: 2, repositories: 1 },
+        limits: { aiCredits: 50, healthScans: 2, aiReports: 2, chatMessages: 20, repositories: 1 },
+        remaining: {
+          aiCredits: 1,
+          healthScans: 2,
+          aiReports: 2,
+          chatMessages: 18,
+          repositories: 0,
+        },
+      }) as ReturnType<typeof useUsage>,
+    );
+
+    render(<UsageLimits />);
+    expect(screen.queryByText('AI credits exhausted')).toBeNull();
+    expect(screen.queryByText('Plan limit reached')).toBeNull();
+    expect(screen.getByText('1 remaining')).toBeTruthy();
   });
 
   it('should show error state with retry when query fails', () => {

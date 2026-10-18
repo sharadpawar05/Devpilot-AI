@@ -202,7 +202,12 @@ export const HealthSnapshotCard = memo(function HealthSnapshotCard({
             <p className={cn('text-sm font-semibold', getScoreColor(score))}>
               {getScoreLabel(score)}
             </p>
-            <TrendBadge trend={health.trend?.score ?? null} />
+            {health.trend?.score &&
+              (health.trend.score.change === 0 ? (
+                <span className="text-xs font-medium text-muted-foreground">· No change</span>
+              ) : (
+                <TrendBadge trend={health.trend.score} suffix=" pts" />
+              ))}
           </div>
           <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">

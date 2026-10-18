@@ -41,6 +41,24 @@ function isActionableFinding(detail: RepoHealthDetail): boolean {
   return true;
 }
 
+const UNCOVERED_TESTS_COPY = /^(\d+) test file\(s\) found but (.+)$/;
+
+function getFindingCopy(detail: RepoHealthDetail): { title: string; description: string } {
+  const description = detail.failedDescription ?? '';
+  if (detail.id === 'test-coverage') {
+    const match = UNCOVERED_TESTS_COPY.exec(description);
+    if (match) {
+      const clause =
+        match[2] === 'no coverage report available' ? 'no coverage report is available' : match[2];
+      return {
+        title: `${detail.name} — Coverage not measured`,
+        description: `${match[1]} test files detected, but ${clause}.`,
+      };
+    }
+  }
+  return { title: detail.name, description };
+}
+
 interface NeedsAttentionCardProps {
   details: RepoHealthDetail[] | null | undefined;
   isLoading: boolean;
@@ -156,6 +174,7 @@ export const NeedsAttentionCard = memo(function NeedsAttentionCard({
         {findings.map((detail) => {
           const style = SEVERITY_STYLES[detail.severity] ?? SEVERITY_STYLES.medium;
           const Icon = style.icon;
+          const copy = getFindingCopy(detail);
           return (
             <li key={detail.id} className="flex items-start gap-3">
               <div
@@ -168,7 +187,7 @@ export const NeedsAttentionCard = memo(function NeedsAttentionCard({
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <p className="truncate text-sm font-medium">{detail.name}</p>
+                  <p className="min-w-0 text-sm font-medium">{copy.title}</p>
                   <span
                     className={cn(
                       'shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase',
@@ -178,9 +197,9 @@ export const NeedsAttentionCard = memo(function NeedsAttentionCard({
                     {detail.severity}
                   </span>
                 </div>
-                {detail.failedDescription && (
+                {copy.description && (
                   <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
-                    {detail.failedDescription}
+                    {copy.description}
                   </p>
                 )}
               </div>

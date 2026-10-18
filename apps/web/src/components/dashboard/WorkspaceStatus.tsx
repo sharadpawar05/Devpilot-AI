@@ -1,16 +1,14 @@
 import { memo } from 'react';
-import { GitPullRequest, Github, Cpu } from 'lucide-react';
+import { GitPullRequest, Github } from 'lucide-react';
 
 interface WorkspaceStatusProps {
   pendingPRReviews: number;
   githubConnected: boolean;
-  lastAIModel: string | null;
 }
 
 export const WorkspaceStatus = memo(function WorkspaceStatus({
   pendingPRReviews,
   githubConnected,
-  lastAIModel,
 }: WorkspaceStatusProps) {
   return (
     <div className="rounded-2xl border border-input bg-card p-6 shadow-sm">
@@ -49,19 +47,6 @@ export const WorkspaceStatus = memo(function WorkspaceStatus({
               />
               {githubConnected ? 'Connected' : 'Disconnected'}
             </span>
-          }
-        />
-        <StatusRow
-          icon={Cpu}
-          label="Last AI Model"
-          value={
-            lastAIModel ? (
-              <span className="inline-flex items-center rounded-full bg-blue-500/10 px-2 py-0.5 text-xs font-medium text-blue-600 dark:text-blue-400">
-                {lastAIModel}
-              </span>
-            ) : (
-              <span className="text-xs text-muted-foreground">N/A</span>
-            )
           }
         />
       </div>

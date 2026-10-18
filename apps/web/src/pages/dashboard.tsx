@@ -25,13 +25,9 @@ export function DashboardPage() {
   const fetchedPRsForRepo = useRef<string | null>(null);
   const [stats, setStats] = useState({
     aiRequestsToday: 0,
-    totalReviews: 0,
-    avgReviewTime: '< 30s',
-    tokensUsed: 0,
-    githubRepos: 0,
-    connectedSince: null as string | null,
+    codeReviews: 0,
+    avgReviewTime: '—',
     lastSyncedAt: null as string | null,
-    lastAIModel: null as string | null,
     lastActivityAt: null as string | null,
   });
 
@@ -66,29 +62,28 @@ export function DashboardPage() {
       try {
         const result = await aiHistoryApi.listSessions(token, {}, { page: 1, pageSize: 100 });
         const sessions = result.sessions;
-        const totalLatency = sessions.reduce((sum, s) => sum + s.totalLatency, 0);
         const reviewSessions = sessions.filter(
           (s) => s.workflowType === 'code-review' || s.workflowType === 'pr-review',
         );
+        const reviewLatency = reviewSessions.reduce((sum, s) => sum + s.totalLatency, 0);
 
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const todaySessions = sessions.filter((s) => new Date(s.createdAt) >= today);
 
         const mostRecent = sessions.length > 0 ? sessions[0] : null;
+        const avgReviewMs = reviewSessions.length > 0 ? reviewLatency / reviewSessions.length : 0;
 
         setStats({
           aiRequestsToday: todaySessions.length,
-          totalReviews: reviewSessions.length,
+          codeReviews: reviewSessions.length,
           avgReviewTime:
-            reviewSessions.length > 0
-              ? `${Math.round(totalLatency / reviewSessions.length / 1000)}s`
-              : '< 30s',
-          tokensUsed: 0,
-          githubRepos: gh.repositories.length,
-          connectedSince: dashboardData?.github?.connectedAt ?? null,
+            reviewSessions.length === 0
+              ? '—'
+              : avgReviewMs < 1000
+                ? '< 1s'
+                : `${Math.round(avgReviewMs / 1000)}s`,
           lastSyncedAt: gh.connected ? new Date().toISOString() : null,
-          lastAIModel: mostRecent?.model ?? null,
           lastActivityAt: mostRecent?.createdAt ?? null,
         });
       } catch {
@@ -97,7 +92,7 @@ export function DashboardPage() {
     };
 
     loadStats();
-  }, [token, gh.repositories.length, gh.connected, dashboardData?.github?.connectedAt]);
+  }, [token, gh.connected]);
 
   // Auto-fetch PRs from the first (or most recently used) repo
   useEffect(() => {
@@ -182,21 +177,17 @@ export function DashboardPage() {
           <GitHubWidget gh={gh} lastSyncedAt={stats.lastSyncedAt} />
           <UsageAnalytics
             aiRequestsToday={stats.aiRequestsToday}
-            totalReviews={stats.totalReviews}
+            codeReviews={stats.codeReviews}
             avgReviewTime={stats.avgReviewTime}
-            githubRepos={stats.githubRepos}
+            githubRepos={gh.repositories.length}
             openPRs={gh.pulls.length}
-            connectedSince={stats.connectedSince}
+            connectedSince={dashboardData?.github?.connectedAt ?? null}
           />
         </div>
         <div className="space-y-6">
           <RecentActivity activities={dashboardData?.activity ?? []} />
           <UsageLimits />
-          <WorkspaceStatus
-            pendingPRReviews={gh.pulls.length}
-            githubConnected={gh.connected}
-            lastAIModel={stats.lastAIModel}
-          />
+          <WorkspaceStatus pendingPRReviews={gh.pulls.length} githubConnected={gh.connected} />
           <TipsCard />
         </div>
       </div>
