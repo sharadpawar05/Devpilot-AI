@@ -92,7 +92,6 @@ model Organization {
   aiReports    AIReport[]
   auditLogs    AuditLog[]
 
-  @@index([slug])
   @@map("organizations")
 }
 
@@ -121,8 +120,6 @@ model User {
   userUsages       UserUsage[]
   aiUsageEvents    AIUsageEvent[]
 
-  @@index([supabaseUserId])
-  @@index([email])
   @@index([organizationId])
   @@map("users")
 }
@@ -140,6 +137,7 @@ model Project {
   aiReports    AIReport[]
 
   @@index([organizationId])
+  @@unique([id, organizationId])
   @@map("projects")
 }
 
@@ -174,7 +172,7 @@ model AIReport {
   createdAt      DateTime     @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project      Project      @relation(fields: [projectId, organizationId], references: [id, organizationId], onDelete: Cascade)
   creator      User?        @relation(fields: [createdBy], references: [id], onDelete: SetNull)
 
   @@index([organizationId, type])
@@ -221,7 +219,6 @@ model RepositoryIndex {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, owner, repo, branch])
-  @@index([userId, owner, repo])
   @@index([status])
   @@map("repository_indexes")
 }
@@ -287,7 +284,6 @@ model RepoHealthSnapshot {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, owner, repo, commitSha])
-  @@index([userId, owner, repo])
   @@index([userId, createdAt(sort: Desc)])
   @@map("repo_health_snapshots")
 }
@@ -307,7 +303,6 @@ model UserUsage {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, periodStart])
-  @@index([userId])
   @@map("user_usage")
 }
 
