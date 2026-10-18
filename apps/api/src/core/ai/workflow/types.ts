@@ -22,6 +22,7 @@ export interface WorkflowRequest {
   context: Record<string, unknown>;
   prompt?: string;
   metadata?: Record<string, unknown>;
+  signal?: AbortSignal;
 }
 
 export interface WorkflowResponse {

@@ -54,6 +54,10 @@ export async function codeReviewRoutes(app: FastifyInstance) {
     '/code-review',
     {
       preHandler: [authenticate],
+      config: {
+        // AI reviews are expensive — tighter than the global ceiling.
+        rateLimit: { max: 20, timeWindow: '1 minute' },
+      },
       schema: {
         description: 'AI-powered code review with structured feedback',
         tags: ['ai'],

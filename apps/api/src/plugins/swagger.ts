@@ -6,6 +6,11 @@ import { getEnv, PACKAGE_VERSION } from '@/config';
 export async function registerSwagger(app: FastifyInstance) {
   const env = getEnv();
 
+  // Keep the API surface out of production: no public /docs explorer.
+  if (env.NODE_ENV === 'production') {
+    return;
+  }
+
   await app.register(swagger, {
     openapi: {
       info: {

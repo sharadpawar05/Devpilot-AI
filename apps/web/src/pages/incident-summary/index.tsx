@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { useGitHub } from '@/hooks/use-github';
 import { useIncidentSummary } from '@/lib/incident-summary';
 import { renderMarkdown } from '@/lib/markdown';
+import { openPrintableMarkdownReport } from '@/lib/print-report';
 import { getErrorMessage } from '@/lib/error-messages';
 import { useUsageLimitModal } from '@/hooks/use-usage-limit-modal';
 import { UsageLimitModal } from '@/components/UsageLimitModal';
@@ -281,35 +282,15 @@ export default function IncidentSummaryPage() {
 
   const handleDownloadPDF = useCallback(() => {
     if (!result) return;
-    const text = formatAsMarkdown(result);
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(`
-        <html>
-          <head>
-            <title>Incident Summary ${startDate} to ${endDate}</title>
-            <style>
-              body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; }
-              h1 { color: #1a1a1a; border-bottom: 2px solid #e5e7eb; padding-bottom: 8px; }
-              h2 { color: #374151; margin-top: 24px; }
-              h3 { color: #4b5563; }
-              p { line-height: 1.6; color: #4b5563; }
-              @media print { body { padding: 20px; } }
-            </style>
-          </head>
-          <body>
-            <h1>Incident Summary</h1>
-            <p><strong>Period:</strong> ${startDate} to ${endDate}</p>
-            <p><strong>Repository:</strong> ${selectedRepo}</p>
-            <p><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
-            <hr />
-            ${text.replace(/^## /gm, '<h2>').replace(/^### /gm, '<h3>').replace(/\n/g, '<br />')}
-          </body>
-        </html>
-      `);
-      printWindow.document.close();
-      printWindow.print();
-    }
+    openPrintableMarkdownReport({
+      title: `Incident Summary ${startDate} to ${endDate}`,
+      meta: [
+        { label: 'Period', value: `${startDate} to ${endDate}` },
+        { label: 'Repository', value: selectedRepo },
+        { label: 'Generated', value: new Date().toLocaleString() },
+      ],
+      markdownBody: formatAsMarkdown(result),
+    });
   }, [result, startDate, endDate, selectedRepo]);
 
   const canGenerate = selectedRepo && startDate && endDate && !generateMutation.isPending;

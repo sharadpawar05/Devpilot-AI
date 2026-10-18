@@ -54,6 +54,13 @@ function mapToWorkflowError(err: unknown, provider: AIProviderName): WorkflowErr
           provider,
           retryable: true,
         };
+      case 'ABORTED':
+        return {
+          code: 'AI_ERROR',
+          message: `Request to ${provider} was cancelled before completion.`,
+          provider,
+          retryable: false,
+        };
       case 'MODEL_NOT_FOUND':
         return {
           code: 'MODEL_NOT_FOUND',

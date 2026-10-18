@@ -4,6 +4,7 @@ import { useHistory } from '@/hooks/use-history';
 import { useGitHub } from '@/hooks/use-github';
 import { useSettingsState } from '@/lib/settings-context';
 import { useAnalytics, type DateRange } from '@/hooks/use-analytics';
+import { escapeHtml } from '@/lib/markdown';
 import {
   Zap,
   BarChart3,
@@ -112,8 +113,8 @@ export default function AnalyticsPage() {
 <div class="grid">
   <div class="card"><span>Total Sessions</span><p>${data.overview.totalSessions}</p></div>
   <div class="card"><span>Repositories</span><p>${data.overview.reposConnected}</p></div>
-  <div class="card"><span>AI Provider</span><p>${data.overview.aiProvider}</p></div>
-  <div class="card"><span>AI Model</span><p>${data.overview.aiModel}</p></div>
+  <div class="card"><span>AI Provider</span><p>${escapeHtml(data.overview.aiProvider)}</p></div>
+  <div class="card"><span>AI Model</span><p>${escapeHtml(data.overview.aiModel)}</p></div>
 </div>
 
 <h2>AI Usage</h2>
@@ -129,19 +130,19 @@ export default function AnalyticsPage() {
 <h2>Feature Usage</h2>
 <table>
 <tr><th>Feature</th><th>Count</th><th>Percentage</th></tr>
-${data.featureUsage.map((f) => `<tr><td>${f.feature}</td><td>${f.count}</td><td>${f.percentage}%</td></tr>`).join('\n')}
+${data.featureUsage.map((f) => `<tr><td>${escapeHtml(f.feature)}</td><td>${f.count}</td><td>${f.percentage}%</td></tr>`).join('\n')}
 </table>
 
 <h2>Provider Stats</h2>
 <table>
 <tr><th>Provider</th><th>Requests</th><th>Avg Response</th><th>Total Tokens</th><th>Models</th></tr>
-${data.providerStats.map((p) => `<tr><td>${p.provider}</td><td>${p.requestCount}</td><td>${(p.avgResponseTime / 1000).toFixed(1)}s</td><td>${p.totalTokens.toLocaleString()}</td><td>${p.models.join(', ')}</td></tr>`).join('\n')}
+${data.providerStats.map((p) => `<tr><td>${escapeHtml(p.provider)}</td><td>${p.requestCount}</td><td>${(p.avgResponseTime / 1000).toFixed(1)}s</td><td>${p.totalTokens.toLocaleString()}</td><td>${escapeHtml(p.models.join(', '))}</td></tr>`).join('\n')}
 </table>
 
 <h2>Repository Activity</h2>
 <table>
 <tr><th>Repository</th><th>Sessions</th><th>Total Tokens</th><th>Features Used</th></tr>
-${data.repositoryActivity.map((r) => `<tr><td>${r.name}</td><td>${r.sessionCount}</td><td>${r.totalTokens.toLocaleString()}</td><td>${r.workflowTypes.join(', ')}</td></tr>`).join('\n')}
+${data.repositoryActivity.map((r) => `<tr><td>${escapeHtml(r.name)}</td><td>${r.sessionCount}</td><td>${r.totalTokens.toLocaleString()}</td><td>${escapeHtml(r.workflowTypes.join(', '))}</td></tr>`).join('\n')}
 </table>
 
 <h2>Daily Usage (Last 30 Days)</h2>

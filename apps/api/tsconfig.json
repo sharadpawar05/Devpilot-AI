@@ -7,6 +7,6 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src/**/*", "prisma/seed.ts"],
+  "include": ["src/**/*", "scripts/**/*", "prisma/seed.ts"],
   "exclude": ["node_modules", "dist"]
 }

@@ -7,7 +7,12 @@ import { repoOverviewService } from './overview-service';
 import { generatorService } from './generator-service';
 import { repositoryAnalyzer } from './analyzer-service';
 import { sanitizeError, createErrorResponse } from '@/core/errors/sanitize';
-import { usageService, sendUsageLimitReached, AI_CREDIT_COSTS } from '@/core/usage';
+import {
+  usageService,
+  sendUsageLimitReached,
+  UsageLimitExceededError,
+  AI_CREDIT_COSTS,
+} from '@/core/usage';
 import type { HealthActionType } from './types';
 
 const overviewQuerySchema = z.object({
@@ -47,6 +52,9 @@ export async function repoOverviewRoutes(app: FastifyInstance) {
         const data = await repoOverviewService.getOverview(auth.sub, owner, repo);
         return reply.send({ success: true, data });
       } catch (error: unknown) {
+        if (error instanceof UsageLimitExceededError) {
+          return sendUsageLimitReached(reply, error.details);
+        }
         const sanitized = sanitizeError(
           error,
           'REPOSITORY_LOAD_FAILED',
@@ -227,7 +235,7 @@ export async function repoOverviewRoutes(app: FastifyInstance) {
       try {
         const [readmeContent, overview] = await Promise.allSettled([
           repositoryIntelligenceService.getReadme(auth.sub, owner, repo),
-          repoOverviewService.getOverview(auth.sub, owner, repo),
+          repoOverviewService.getOverview(auth.sub, owner, repo, { allowDegradedHealth: true }),
         ]);
 
         const readme = readmeContent.status === 'fulfilled' ? readmeContent.value : '';

@@ -1,5 +1,6 @@
 import { Octokit } from 'octokit';
 import { db } from '@/core/db';
+import { getEnv } from '@/config';
 import { encrypt, decrypt } from '@/core/github/crypto';
 
 export async function getGitHubToken(userId: string): Promise<string | null> {
@@ -68,6 +69,32 @@ export async function deleteGitHubToken(userId: string): Promise<void> {
     where: { supabaseUserId: userId },
     data: { githubAccessToken: null },
   });
+}
+
+/**
+ * Best-effort revocation of an OAuth token at GitHub so a disconnected
+ * token cannot keep accessing the user's account. Local deletion must
+ * proceed even when GitHub is unreachable.
+ */
+export async function revokeGitHubToken(token: string): Promise<void> {
+  const env = getEnv();
+  if (!env.GITHUB_CLIENT_ID || !env.GITHUB_CLIENT_SECRET || !token) return;
+  try {
+    await fetch(`https://api.github.com/applications/${env.GITHUB_CLIENT_ID}/token`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${env.GITHUB_CLIENT_ID}:${env.GITHUB_CLIENT_SECRET}`).toString('base64')}`,
+        Accept: 'application/vnd.github+json',
+        'Content-Type': 'application/json',
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+      body: JSON.stringify({ access_token: token }),
+      signal: AbortSignal.timeout(5000),
+    });
+    // 204 = revoked, 404 = already invalid — both acceptable.
+  } catch {
+    // Best-effort: never block the local disconnect on a GitHub outage.
+  }
 }
 
 export async function getOctokit(userId: string): Promise<Octokit> {

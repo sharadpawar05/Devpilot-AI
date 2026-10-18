@@ -25,6 +25,7 @@ import { Button } from '@/components/ui/button';
 import { useGitHub } from '@/hooks/use-github';
 import { useEngineeringStatus } from '@/lib/engineering-status';
 import { renderMarkdown } from '@/lib/markdown';
+import { openPrintableMarkdownReport } from '@/lib/print-report';
 import { getErrorMessage } from '@/lib/error-messages';
 import { useUsageLimitModal } from '@/hooks/use-usage-limit-modal';
 import { UsageLimitModal } from '@/components/UsageLimitModal';
@@ -373,14 +374,14 @@ export default function EngineeringStatusPage() {
 
   const handleDownloadPDF = useCallback(() => {
     if (!result) return;
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(
-        `<html><head><title>Engineering Status Report</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:40px;max-width:800px;margin:0 auto}h1{border-bottom:2px solid #e5e7eb;padding-bottom:8px}h2{margin-top:24px}@media print{body{padding:20px}}</style></head><body><h1>Engineering Status Report</h1><p><strong>Period:</strong> ${result.timeRange.label}</p><p><strong>Generated:</strong> ${new Date().toLocaleString()}</p><hr/>${formatAsMarkdown(result).replace(/^## /gm, '<h2>').replace(/^### /gm, '<h3>').replace(/\n/g, '<br />')}</body></html>`,
-      );
-      printWindow.document.close();
-      printWindow.print();
-    }
+    openPrintableMarkdownReport({
+      title: 'Engineering Status Report',
+      meta: [
+        { label: 'Period', value: result.timeRange.label },
+        { label: 'Generated', value: new Date().toLocaleString() },
+      ],
+      markdownBody: formatAsMarkdown(result),
+    });
   }, [result]);
 
   const canGenerate = selectedRepo && !generateMutation.isPending;

@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { workflowEngine } from '@/core/ai/workflow/engine';
 import { WorkflowType } from '@/core/ai/workflow/types';
-import { getEnv } from '@/config';
+import { resolveCorsOrigin } from '@/plugins/cors';
 import { authenticate } from '@/core/auth';
 import { aiService } from '@/core/ai/service';
 import { classifyAIError } from '@/core/ai/classify-error';
@@ -14,29 +14,52 @@ import {
   type AICreditCostKey,
 } from '@/core/usage';
 
-const streamRequestSchema = z.object({
-  workflowType: z.enum([
-    'PLAYGROUND',
-    'CODE_REVIEW',
-    'CODE_FIX',
-    'PR_REVIEW',
-    'PR_ANALYSIS',
-    'REPOSITORY_CHAT',
-    'DOCUMENTATION',
-    'TEST_GENERATION',
-    'SECURITY_REVIEW',
-    'ARCHITECTURE_REVIEW',
-  ]),
-  provider: z.enum(['gemini', 'openai', 'anthropic', 'openrouter', 'groq']).default('gemini'),
-  model: z.string().optional(),
-  prompt: z.string().optional(),
-  context: z.record(z.unknown()).default({}),
-  temperature: z.number().min(0).max(2).optional(),
-  maxTokens: z.number().min(1).max(100000).optional(),
-  metadata: z.record(z.unknown()).optional(),
-});
+const MAX_PROMPT_CHARS = 100_000;
+const MAX_CONTEXT_CHARS = 200_000;
+
+const streamRequestSchema = z
+  .object({
+    workflowType: z.enum([
+      'PLAYGROUND',
+      'CODE_REVIEW',
+      'CODE_FIX',
+      'PR_REVIEW',
+      'PR_ANALYSIS',
+      'REPOSITORY_CHAT',
+      'DOCUMENTATION',
+      'TEST_GENERATION',
+      'SECURITY_REVIEW',
+      'ARCHITECTURE_REVIEW',
+    ]),
+    provider: z.enum(['gemini', 'openai', 'anthropic', 'openrouter', 'groq']).default('gemini'),
+    model: z.string().optional(),
+    prompt: z.string().max(MAX_PROMPT_CHARS).optional(),
+    context: z.record(z.unknown()).default({}),
+    temperature: z.number().min(0).max(2).optional(),
+    maxTokens: z.number().min(1).max(100000).optional(),
+    metadata: z.record(z.unknown()).optional(),
+  })
+  .superRefine((value, ctx) => {
+    const contextSize = JSON.stringify(value.context ?? {}).length;
+    if (contextSize > MAX_CONTEXT_CHARS) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `context is too large (${contextSize} chars, max ${MAX_CONTEXT_CHARS})`,
+        path: ['context'],
+      });
+    }
+  });
 
 type StreamRequest = z.infer<typeof streamRequestSchema>;
+
+/** Workflows that operate on a GitHub repository and require a repo scope. */
+const REPO_SCOPED_WORKFLOWS = new Set<string>([
+  'PR_REVIEW',
+  'PR_ANALYSIS',
+  'REPOSITORY_CHAT',
+  'SECURITY_REVIEW',
+  'ARCHITECTURE_REVIEW',
+]);
 
 interface QuotaCharge {
   mode: 'credits' | 'withCredits';
@@ -111,6 +134,10 @@ export async function streamingRoutes(app: FastifyInstance) {
     '/stream',
     {
       preHandler: [authenticate],
+      config: {
+        // AI streaming is expensive — tighter than the global ceiling.
+        rateLimit: { max: 20, timeWindow: '1 minute' },
+      },
       schema: {
         description: 'Stream AI workflow response using Server-Sent Events',
         tags: ['ai', 'streaming'],
@@ -125,7 +152,7 @@ export async function streamingRoutes(app: FastifyInstance) {
               enum: ['gemini', 'openai', 'anthropic', 'openrouter', 'groq'],
             },
             model: { type: 'string' },
-            prompt: { type: 'string' },
+            prompt: { type: 'string', maxLength: MAX_PROMPT_CHARS },
             context: { type: 'object' },
             temperature: { type: 'number', minimum: 0, maximum: 2 },
             maxTokens: { type: 'number', minimum: 1, maximum: 100000 },
@@ -163,11 +190,23 @@ export async function streamingRoutes(app: FastifyInstance) {
         });
       }
 
-      // Repo-scoped workflows must respect the REPOSITORIES plan limit before
-      // any credits are spent. Playground/code-only workflows carry no scope.
       const scope =
         repoScopeFromFields(context.owner, context.repo) ??
         repoScopeFromFields(metadata?.owner, metadata?.repo);
+
+      // Repo-scoped workflows must carry owner/repo and respect the
+      // REPOSITORIES plan limit before any credits are spent.
+      if (REPO_SCOPED_WORKFLOWS.has(workflowType)) {
+        if (!scope) {
+          return reply.status(400).send({
+            success: false,
+            error: {
+              code: 'MISSING_REPO_SCOPE',
+              message: `workflowType '${workflowType}' requires context.owner and context.repo`,
+            },
+          });
+        }
+      }
       if (scope) {
         const access = await usageService.ensureRepositoryAccess(auth.sub, scope.owner, scope.repo);
         if (!access.allowed && access.details) {
@@ -180,37 +219,48 @@ export async function streamingRoutes(app: FastifyInstance) {
         return sendUsageLimitReached(reply, consume.details);
       }
 
-      const env = getEnv();
-      const origin = request.headers.origin;
-      const allowedOrigins =
-        env.CORS_ORIGIN === '*' ? '*' : env.CORS_ORIGIN.split(',').map((o) => o.trim());
-
-      let accessControlOrigin = '*';
-      if (env.CORS_ORIGIN !== '*') {
-        if (origin && allowedOrigins.includes(origin)) {
-          accessControlOrigin = origin;
-        } else if (Array.isArray(allowedOrigins) && allowedOrigins.length > 0) {
-          accessControlOrigin = allowedOrigins[0];
-        }
-      }
+      const accessControlOrigin = resolveCorsOrigin(request.headers.origin);
 
       reply.raw.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         Connection: 'keep-alive',
         'X-Accel-Buffering': 'no',
-        'Access-Control-Allow-Origin': accessControlOrigin,
-        'Access-Control-Allow-Credentials': 'true',
-        'Access-Control-Expose-Headers': 'Set-Cookie',
+        ...(accessControlOrigin
+          ? {
+              'Access-Control-Allow-Origin': accessControlOrigin,
+              ...(accessControlOrigin !== '*'
+                ? { 'Access-Control-Allow-Credentials': 'true' }
+                : {}),
+            }
+          : {}),
       });
 
+      // Abort the provider stream as soon as the client disconnects so we
+      // stop paying for tokens nobody will read.
+      const abortController = new AbortController();
+      let clientGone = false;
+      let streamSettled = false;
+      const onClientClose = () => {
+        clientGone = true;
+        abortController.abort();
+      };
+      request.raw.on('close', onClientClose);
+
       const sendEvent = (data: unknown) => {
+        if (clientGone) return;
         reply.raw.write(`data: ${JSON.stringify(data)}\n\n`);
       };
 
       let streamFailed = false;
 
       try {
+        if (clientGone) {
+          streamSettled = true;
+          await refundStreamQuota(auth.sub, workflowType);
+          return reply;
+        }
+
         const stream = workflowEngine.executeStream({
           workflowType: workflowType as WorkflowType,
           provider,
@@ -220,9 +270,11 @@ export async function streamingRoutes(app: FastifyInstance) {
           temperature,
           maxTokens,
           metadata,
+          signal: abortController.signal,
         });
 
         for await (const chunk of stream) {
+          if (clientGone) break;
           if (chunk.type === 'error') {
             streamFailed = true;
             sendEvent({
@@ -237,27 +289,39 @@ export async function streamingRoutes(app: FastifyInstance) {
           sendEvent(chunk);
         }
 
-        if (streamFailed) {
+        if (streamFailed || clientGone) {
+          // Provider error or client disconnect: refund what was consumed.
+          streamSettled = true;
           await refundStreamQuota(auth.sub, workflowType);
         } else {
+          streamSettled = true;
           sendEvent({ type: 'done' });
         }
       } catch (error) {
-        const classified = classifyAIError(error);
-        request.log.error({ err: error, provider, workflowType }, 'AI stream failed');
-        sendEvent({
-          type: 'error',
-          error: {
-            code: classified.code,
-            message: classified.message,
-            provider,
-            retryable: classified.retryable,
-          },
-        });
-        await refundStreamQuota(auth.sub, workflowType);
+        if (!clientGone) {
+          const classified = classifyAIError(error);
+          request.log.error({ err: error, provider, workflowType }, 'AI stream failed');
+          sendEvent({
+            type: 'error',
+            error: {
+              code: classified.code,
+              message: classified.message,
+              provider,
+              retryable: classified.retryable,
+            },
+          });
+        }
+        if (!streamSettled) {
+          streamSettled = true;
+          await refundStreamQuota(auth.sub, workflowType);
+        }
+      } finally {
+        request.raw.removeListener('close', onClientClose);
       }
 
-      reply.raw.end();
+      if (!clientGone) {
+        reply.raw.end();
+      }
       return reply;
     },
   );

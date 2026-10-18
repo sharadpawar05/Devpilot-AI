@@ -3,7 +3,13 @@ import { Octokit } from 'octokit';
 import { authenticate } from '@/core/auth';
 import { getEnv } from '@/config';
 import { db } from '@/core/db';
-import { getGitHubToken, setGitHubToken, deleteGitHubToken, getOctokit } from '@/core/github/token';
+import {
+  getGitHubToken,
+  setGitHubToken,
+  deleteGitHubToken,
+  getOctokit,
+  revokeGitHubToken,
+} from '@/core/github/token';
 
 export async function githubRoutes(app: FastifyInstance) {
   // GET /github/auth-url
@@ -189,7 +195,10 @@ export async function githubRoutes(app: FastifyInstance) {
         };
 
         if (data.error || !data.access_token) {
-          app.log.error({ github_error: data }, 'GitHub OAuth token exchange failed');
+          // Never log a token, even on the failure path.
+          const safeError: typeof data = { ...data };
+          delete safeError.access_token;
+          app.log.error({ github_error: safeError }, 'GitHub OAuth token exchange failed');
           return reply.status(400).send({
             success: false,
             error: {
@@ -328,6 +337,10 @@ export async function githubRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const auth = (request as { auth: { sub: string } }).auth;
+      const token = await getGitHubToken(auth.sub);
+      if (token) {
+        await revokeGitHubToken(token);
+      }
       await deleteGitHubToken(auth.sub);
       return reply.send({ success: true });
     },

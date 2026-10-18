@@ -9,9 +9,16 @@ services:
     plan: free
     region: oregon
 
-    buildCommand: DATABASE_URL="postgresql://user:pass@localhost:5432/db" DIRECT_URL="postgresql://user:pass@localhost:5432/db" pnpm install --no-frozen-lockfile --ignore-scripts && pnpm --filter @devpilot/api exec prisma generate
+    # prisma generate needs a syntactically-valid DATABASE_URL even though
+    # no database is contacted at build time; the real value is injected
+    # at runtime from the env var below.
+    buildCommand: DATABASE_URL="postgresql://user:pass@localhost:5432/db" DIRECT_URL="postgresql://user:pass@localhost:5432/db" pnpm install --frozen-lockfile --ignore-scripts && pnpm --filter @devpilot/api exec prisma generate
+
+    preDeployCommand: pnpm --filter @devpilot/api db:migrate:prod
 
     startCommand: pnpm --filter @devpilot/api start
+
+    healthCheckPath: /api/v1/health
 
     autoDeployTrigger: commit
 
@@ -22,7 +29,37 @@ services:
         value: 10000
       - key: HOST
         value: 0.0.0.0
+      # Required by env schema — app exits at boot without these.
       - key: DATABASE_URL
         sync: false
       - key: DIRECT_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: ENCRYPTION_SECRET
+        sync: false
+      - key: COOKIE_SECRET
+        sync: false
+      # Optional but needed for GitHub OAuth in production.
+      - key: GITHUB_CLIENT_ID
+        sync: false
+      - key: GITHUB_CLIENT_SECRET
+        sync: false
+      - key: GITHUB_REDIRECT_URI
+        sync: false
+      # Optional AI provider keys (app boots without them; AI features disabled).
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      # CORS allowlist — must include the Vercel frontend origin.
+      - key: CORS_ORIGIN
         sync: false

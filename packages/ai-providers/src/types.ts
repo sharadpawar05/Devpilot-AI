@@ -36,6 +36,8 @@ export interface AIRequest {
   timeout?: number;
   responseFormat?: 'text' | 'json';
   retryPolicy?: Partial<RetryPolicy>;
+  /** Optional abort signal — providers must stop work when it fires. */
+  signal?: AbortSignal;
 }
 
 export interface AIResponse {
@@ -75,6 +77,7 @@ export type AIErrorCode =
   | 'CONTEXT_LENGTH_EXCEEDED'
   | 'NETWORK_ERROR'
   | 'TIMEOUT'
+  | 'ABORTED'
   | 'PROVIDER_UNAVAILABLE'
   | 'NOT_IMPLEMENTED'
   | 'STREAM_ERROR'

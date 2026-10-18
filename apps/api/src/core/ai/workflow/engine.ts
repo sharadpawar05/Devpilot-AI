@@ -16,7 +16,6 @@ import { parseResponse } from './response-parser';
 import { formatResponse, registerResponseFormatter } from './response-formatter';
 import { historyService } from './history-service';
 import { usageMetrics } from './usage-metrics';
-import { executeWithRetry } from './retry-handler';
 import { getWorkflowConfig } from './workflows';
 import { aiService } from '@/core/ai/service';
 
@@ -57,21 +56,13 @@ export class AIWorkflowEngine {
       request.prompt,
     );
 
-    const { result, error, attempts } = await executeWithRetry(
-      () =>
-        executeRequest(userPrompt, systemPrompt, {
-          ...request,
-          maxTokens: effectiveMaxTokens,
-          temperature: effectiveTemperature,
-        }),
-      (err) => ({
-        code: 'RETRY_ERROR',
-        message: err instanceof Error ? err.message : String(err),
-        provider: request.provider,
-        retryable: false,
-      }),
-      { maxAttempts: 2 },
-    );
+    // Single retry layer: the AI gateway already retries transient provider
+    // errors. Wrapping executeRequest in another retry would multiply attempts.
+    const result = await executeRequest(userPrompt, systemPrompt, {
+      ...request,
+      maxTokens: effectiveMaxTokens,
+      temperature: effectiveTemperature,
+    });
 
     let response: WorkflowResponse;
 
@@ -84,8 +75,6 @@ export class AIWorkflowEngine {
         ...parsed,
         formattedResponse: formatted,
       };
-    } else if (error) {
-      response = parseResponse(null, request.workflowType, error);
     } else {
       response = parseResponse(null, request.workflowType, {
         code: 'NO_RESULT',
@@ -96,7 +85,6 @@ export class AIWorkflowEngine {
 
     historyService.log(response, {
       ...request.metadata,
-      attempts,
     });
 
     usageMetrics.record(response);
@@ -126,6 +114,7 @@ export class AIWorkflowEngine {
       model: request.model as never,
       temperature: effectiveTemperature,
       maxTokens: effectiveMaxTokens,
+      signal: request.signal,
     })) {
       if (chunk.type === 'error') {
         yield chunk;

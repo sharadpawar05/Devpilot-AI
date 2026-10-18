@@ -16,6 +16,7 @@ const CODE_STATUS: Record<string, number> = {
   PROVIDER_NOT_IMPLEMENTED: 501,
   NOT_IMPLEMENTED: 501,
   TIMEOUT: 504,
+  ABORTED: 499,
   NETWORK_ERROR: 502,
   STREAM_ERROR: 502,
   RETRY_ERROR: 502,
@@ -87,6 +88,8 @@ function messageForCode(code: string): string | undefined {
       return 'The selected AI provider is not configured or unavailable.';
     case 'TIMEOUT':
       return 'The AI provider timed out. Please try again.';
+    case 'ABORTED':
+      return 'The request was cancelled before completion.';
     case 'NETWORK_ERROR':
       return 'Could not reach the AI provider. Please try again.';
     case 'CONTEXT_LENGTH_EXCEEDED':
@@ -200,6 +203,11 @@ function cleanAIErrorMessage(rawMessage: string): string {
     .replace(/\s*\[?\{.*$/s, '')
     .replace(/For more information.*$/i, '')
     .replace(/To monitor your current usage.*$/i, '')
+    // Redact anything that looks like a provider API key.
+    .replace(
+      /\b(?:sk|ghp|gho|ghu|ghs|ghr|github_pat|xoxb|xoxp|xoxa|xoxs|AIza)[-_A-Za-z0-9]{8,}/g,
+      '[redacted]',
+    )
     .trim();
 
   if (cleanMessage.length > 200) {

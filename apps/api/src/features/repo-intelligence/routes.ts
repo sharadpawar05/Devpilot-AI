@@ -2,8 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { authenticate } from '@/core/auth/middleware';
 import { repositoryIntelligenceService } from './repository-service';
-import { extractCoverage } from './health-trend';
-import { usageService, sendUsageLimitReached } from '@/core/usage';
+import { getMeteredHealth } from './health-metering';
+import { UsageLimitExceededError, sendUsageLimitReached } from '@/core/usage';
 
 const querySchema = z.object({
   owner: z.string().min(1),
@@ -47,10 +47,10 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
       const { owner, repo } = parsed.data;
 
       try {
-        const [metadata, statistics, health, languages, contributors, tree] = await Promise.all([
+        const { health } = await getMeteredHealth(auth.sub, owner, repo);
+        const [metadata, statistics, languages, contributors, tree] = await Promise.all([
           repositoryIntelligenceService.getMetadata(auth.sub, owner, repo),
           repositoryIntelligenceService.getStatistics(auth.sub, owner, repo),
-          repositoryIntelligenceService.getHealth(auth.sub, owner, repo),
           repositoryIntelligenceService.getLanguages(auth.sub, owner, repo),
           repositoryIntelligenceService.getContributors(auth.sub, owner, repo),
           repositoryIntelligenceService.getFileTree(auth.sub, owner, repo),
@@ -61,6 +61,9 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
           data: { metadata, statistics, health, languages, contributors, tree },
         });
       } catch (error: unknown) {
+        if (error instanceof UsageLimitExceededError) {
+          return sendUsageLimitReached(reply, error.details);
+        }
         const err = error as { status?: number; message?: string };
         const status = err.status || 500;
         return reply.status(status).send({
@@ -540,82 +543,12 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
 
       const { owner, repo } = parsed.data;
 
-      let consumed = false;
       try {
-        // Get current commit SHA for cache key
-        const commitSha = await repositoryIntelligenceService.getLatestCommitSha(
-          auth.sub,
-          owner,
-          repo,
-        );
-
-        // Check cache first — cached results consume no quota
-        if (commitSha) {
-          const cached = await usageService.getHealthCache(auth.sub, owner, repo, commitSha);
-          if (cached) {
-            const meta = await repositoryIntelligenceService.getHealthMeta(
-              auth.sub,
-              owner,
-              repo,
-              { score: cached.score, coverage: extractCoverage(cached.summary) },
-              { excludeCommitSha: commitSha, updatedAt: cached.createdAt.toISOString() },
-            );
-            return reply.send({
-              success: true,
-              data: {
-                score: cached.score,
-                passedCount: cached.passedCount,
-                failedCount: cached.failedCount,
-                criticalCount: cached.criticalCount,
-                summary: cached.summary as Record<string, unknown>,
-                scoreBreakdown: cached.scoreBreakdown as Record<string, unknown>,
-                details: cached.details as Record<string, unknown>,
-                updatedAt: meta.updatedAt,
-                trend: meta.trend,
-                cached: true,
-              },
-            });
-          }
-        }
-
-        // Atomically consume the health scan quota before running a new scan.
-        // Health scans are deterministic analysis — they never spend AI credits.
-        const consume = await usageService.consumeQuota(auth.sub, 'HEALTH_SCAN');
-        if (!consume.allowed && consume.details) {
-          return sendUsageLimitReached(reply, consume.details);
-        }
-        consumed = true;
-
-        // Run health analysis
-        const health = await repositoryIntelligenceService.getHealth(auth.sub, owner, repo);
-
-        // Refund quota if analysis failed after consumption
-        // (getHealth throws on failure, so refund happens in catch)
-
-        // Save to cache if we have commit SHA
-        if (commitSha) {
-          await usageService
-            .saveHealthCache(auth.sub, owner, repo, commitSha, {
-              score: health.score,
-              passedCount: health.passedCount,
-              failedCount: health.failedCount,
-              criticalCount: health.criticalCount,
-              structuralScore: health.summary.structuralScore,
-              qualityScore: health.summary.qualityScore,
-              details: health.details,
-              scoreBreakdown: health.scoreBreakdown,
-              summary: health.summary,
-            })
-            .catch(() => {
-              // Best-effort cache save
-            });
-        }
-
-        return reply.send({ success: true, data: health });
+        const { health, cached } = await getMeteredHealth(auth.sub, owner, repo);
+        return reply.send({ success: true, data: { ...health, cached } });
       } catch (error: unknown) {
-        // Refund only if this request actually consumed a health scan quota.
-        if (consumed) {
-          await usageService.refundQuota(auth.sub, 'HEALTH_SCAN');
+        if (error instanceof UsageLimitExceededError) {
+          return sendUsageLimitReached(reply, error.details);
         }
         const err = error as { status?: number; message?: string };
         return reply.status(err.status || 500).send({
@@ -795,6 +728,7 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
       },
     },
     async (request, reply) => {
+      const auth = (request as { auth: { sub: string } }).auth;
       const parsed = invalidateBodySchema.safeParse(request.body);
       if (!parsed.success) {
         return reply
@@ -803,7 +737,7 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
       }
 
       const { owner, repo } = parsed.data;
-      repositoryIntelligenceService.invalidate(owner, repo);
+      repositoryIntelligenceService.invalidate(auth.sub, owner, repo);
       return reply.send({ success: true, data: { message: 'Cache invalidated' } });
     },
   );

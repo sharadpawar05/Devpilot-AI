@@ -1,6 +1,5 @@
 export { repoIntelligenceRoutes } from './routes';
 export { repositoryIntelligenceService } from './repository-service';
-export { intelligenceService } from './intelligence-service';
 export type { HealthTrend, HealthMetricTrend, HealthSnapshotPoint } from './health-trend';
 export type {
   RepositoryIntelligence,

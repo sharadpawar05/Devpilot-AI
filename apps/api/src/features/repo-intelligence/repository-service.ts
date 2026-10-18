@@ -114,8 +114,8 @@ const IMPORTANT_FILES_PATTERNS: { pattern: RegExp; purpose: string }[] = [
 
 // ─── Cache Key Helpers ───────────────────────────────────────────────────────
 
-function cacheKey(parts: string[]): string {
-  return parts.join('::');
+function cacheKey(userId: string, parts: string[]): string {
+  return `${userId}::${parts.join('::')}`;
 }
 
 // ─── Repository Intelligence Service ─────────────────────────────────────────
@@ -138,8 +138,8 @@ export class RepositoryIntelligenceService {
     this.cache.set(key, { data, timestamp: Date.now() });
   }
 
-  invalidate(owner: string, repo: string): void {
-    const prefix = `${owner}/${repo}`;
+  invalidate(userId: string, owner: string, repo: string): void {
+    const prefix = `${userId}::${owner}::${repo}::`;
     for (const key of this.cache.keys()) {
       if (key.startsWith(prefix)) {
         this.cache.delete(key);
@@ -147,10 +147,18 @@ export class RepositoryIntelligenceService {
     }
   }
 
+  /**
+   * Non-computing peek at the in-memory health cache so metering can serve
+   * a warm result without consuming a HEALTH_SCAN quota.
+   */
+  getCachedHealth(userId: string, owner: string, repo: string): RepositoryHealth | null {
+    return this.get<RepositoryHealth>(cacheKey(userId, [owner, repo, 'health']), DEFAULT_CACHE_TTL);
+  }
+
   // ─── Core GitHub Data Fetching ───────────────────────────────────────────
 
   async getMetadata(userId: string, owner: string, repo: string): Promise<RepositoryMetadata> {
-    const key = cacheKey([owner, repo, 'metadata']);
+    const key = cacheKey(userId, [owner, repo, 'metadata']);
     const cached = this.get<RepositoryMetadata>(key);
     if (cached) return cached;
 
@@ -217,7 +225,7 @@ export class RepositoryIntelligenceService {
     branch?: string,
   ): Promise<FileTreeNode[]> {
     const resolvedBranch = branch || (await this.getDefaultBranch(userId, owner, repo));
-    const key = cacheKey([owner, repo, 'tree', resolvedBranch]);
+    const key = cacheKey(userId, [owner, repo, 'tree', resolvedBranch]);
     const cached = this.get<FileTreeNode[]>(key, TREE_CACHE_TTL);
     if (cached) return cached;
 
@@ -246,7 +254,7 @@ export class RepositoryIntelligenceService {
     branch?: string,
   ): Promise<string[]> {
     const resolvedBranch = branch || (await this.getDefaultBranch(userId, owner, repo));
-    const key = cacheKey([owner, repo, 'flatPaths', resolvedBranch]);
+    const key = cacheKey(userId, [owner, repo, 'flatPaths', resolvedBranch]);
     const cached = this.get<string[]>(key, TREE_CACHE_TTL);
     if (cached) return cached;
 
@@ -276,7 +284,7 @@ export class RepositoryIntelligenceService {
     branch?: string,
   ): Promise<FileContent | null> {
     const resolvedBranch = branch || (await this.getDefaultBranch(userId, owner, repo));
-    const key = cacheKey([owner, repo, 'file', resolvedBranch, path]);
+    const key = cacheKey(userId, [owner, repo, 'file', resolvedBranch, path]);
     const cached = this.get<FileContent | null>(key);
     if (cached !== null) return cached;
 
@@ -331,7 +339,7 @@ export class RepositoryIntelligenceService {
   // ─── Languages ───────────────────────────────────────────────────────────
 
   async getLanguages(userId: string, owner: string, repo: string): Promise<Record<string, number>> {
-    const key = cacheKey([owner, repo, 'languages']);
+    const key = cacheKey(userId, [owner, repo, 'languages']);
     const cached = this.get<Record<string, number>>(key);
     if (cached) return cached;
 
@@ -349,7 +357,7 @@ export class RepositoryIntelligenceService {
     repo: string,
     perPage: number = 20,
   ): Promise<Contributor[]> {
-    const key = cacheKey([owner, repo, 'contributors', String(perPage)]);
+    const key = cacheKey(userId, [owner, repo, 'contributors', String(perPage)]);
     const cached = this.get<Contributor[]>(key);
     if (cached) return cached;
 
@@ -374,7 +382,7 @@ export class RepositoryIntelligenceService {
   // ─── Branches ────────────────────────────────────────────────────────────
 
   async getBranches(userId: string, owner: string, repo: string): Promise<Branch[]> {
-    const key = cacheKey([owner, repo, 'branches']);
+    const key = cacheKey(userId, [owner, repo, 'branches']);
     const cached = this.get<Branch[]>(key);
     if (cached) return cached;
 
@@ -405,7 +413,7 @@ export class RepositoryIntelligenceService {
     state: 'open' | 'closed' | 'all' = 'open',
     perPage: number = 50,
   ): Promise<PullRequest[]> {
-    const key = cacheKey([owner, repo, 'pulls', state, String(perPage)]);
+    const key = cacheKey(userId, [owner, repo, 'pulls', state, String(perPage)]);
     const cached = this.get<PullRequest[]>(key);
     if (cached) return cached;
 
@@ -444,7 +452,7 @@ export class RepositoryIntelligenceService {
     repo: string,
     pullNumber: number,
   ): Promise<PullRequest | null> {
-    const key = cacheKey([owner, repo, 'pr', String(pullNumber)]);
+    const key = cacheKey(userId, [owner, repo, 'pr', String(pullNumber)]);
     const cached = this.get<PullRequest | null>(key);
     if (cached !== null) return cached;
 
@@ -482,7 +490,7 @@ export class RepositoryIntelligenceService {
     repo: string,
     pullNumber: number,
   ): Promise<PullRequestFile[]> {
-    const key = cacheKey([owner, repo, 'prFiles', String(pullNumber)]);
+    const key = cacheKey(userId, [owner, repo, 'prFiles', String(pullNumber)]);
     const cached = this.get<PullRequestFile[]>(key);
     if (cached) return cached;
 
@@ -517,7 +525,7 @@ export class RepositoryIntelligenceService {
     perPage: number = 30,
   ): Promise<Commit[]> {
     const resolvedBranch = branch || (await this.getDefaultBranch(userId, owner, repo));
-    const key = cacheKey([owner, repo, 'commits', resolvedBranch, String(perPage)]);
+    const key = cacheKey(userId, [owner, repo, 'commits', resolvedBranch, String(perPage)]);
     const cached = this.get<Commit[]>(key);
     if (cached) return cached;
 
@@ -555,7 +563,7 @@ export class RepositoryIntelligenceService {
     repo: string,
     perPage: number = 30,
   ): Promise<Release[]> {
-    const key = cacheKey([owner, repo, 'releases', String(perPage)]);
+    const key = cacheKey(userId, [owner, repo, 'releases', String(perPage)]);
     const cached = this.get<Release[]>(key);
     if (cached) return cached;
 
@@ -592,7 +600,7 @@ export class RepositoryIntelligenceService {
     state: 'open' | 'closed' | 'all' = 'open',
     perPage: number = 30,
   ): Promise<Issue[]> {
-    const key = cacheKey([owner, repo, 'issues', state, String(perPage)]);
+    const key = cacheKey(userId, [owner, repo, 'issues', state, String(perPage)]);
     const cached = this.get<Issue[]>(key);
     if (cached) return cached;
 
@@ -631,7 +639,7 @@ export class RepositoryIntelligenceService {
     repo: string,
     perPage: number = 30,
   ): Promise<ActivityEvent[]> {
-    const key = cacheKey([owner, repo, 'activity', String(perPage)]);
+    const key = cacheKey(userId, [owner, repo, 'activity', String(perPage)]);
     const cached = this.get<ActivityEvent[]>(key);
     if (cached) return cached;
 
@@ -658,7 +666,7 @@ export class RepositoryIntelligenceService {
   // ─── Commit Activity ─────────────────────────────────────────────────────
 
   async getCommitActivity(userId: string, owner: string, repo: string): Promise<CommitActivity[]> {
-    const key = cacheKey([owner, repo, 'commitActivity']);
+    const key = cacheKey(userId, [owner, repo, 'commitActivity']);
     const cached = this.get<CommitActivity[]>(key);
     if (cached) return cached;
 
@@ -685,7 +693,7 @@ export class RepositoryIntelligenceService {
   // ─── Repository Health ───────────────────────────────────────────────────
 
   async getHealth(userId: string, owner: string, repo: string): Promise<RepositoryHealth> {
-    const key = cacheKey([owner, repo, 'health']);
+    const key = cacheKey(userId, [owner, repo, 'health']);
     const cached = this.get<RepositoryHealth>(key);
     if (cached) return cached;
 
@@ -1279,11 +1287,33 @@ export class RepositoryIntelligenceService {
     const structuralPenalty = measuredStructuralChecks.reduce((sum, d) => sum + d.scorePenalty, 0);
     const qualityPenalty = measuredQualityChecks.reduce((sum, d) => sum + d.scorePenalty, 0);
 
-    // Max penalties — must match the sum of all possible penalties per category.
-    // Structural: README(20) + License(10) + Gitignore(5) + PackageConfig(10) + Docker(0=N/A) + EnvExample(5) = 50
-    // Quality: Testing(30) + ReadmeQuality(25) + CI/CD(30) + Security(20) + Dependencies(12) + Documentation(10) + Complexity(20) + Debt(20) + Hotspots(15) = 182
-    const maxStructuralPenalty = 50;
-    const maxQualityPenalty = 182;
+    // Max penalty per check id — must stay in sync with the scorePenalty
+    // assigned to each check above. Structural sum: 20+10+5+10+0+5 = 50.
+    // Quality sum: 30+25+30+20+12+10+20+20+15 = 182.
+    const MAX_PENALTY_BY_CHECK: Record<string, number> = {
+      readme: 20,
+      license: 10,
+      gitignore: 5,
+      'package-config': 10,
+      docker: 0,
+      'env-example': 5,
+      'test-coverage': 30,
+      'readme-quality': 25,
+      'ci-cd': 30,
+      security: 20,
+      dependencies: 12,
+      documentation: 10,
+      complexity: 20,
+      debt: 20,
+      hotspots: 15,
+    };
+
+    // Renormalize over the MEASURED checks only: a not_measured dimension
+    // must not dilute the penalties of the dimensions that were measured.
+    const measuredMaxPenalty = (checks: typeof measuredStructuralChecks): number =>
+      checks.reduce((sum, d) => sum + (MAX_PENALTY_BY_CHECK[d.id] ?? 0), 0);
+    const maxStructuralPenalty = measuredMaxPenalty(measuredStructuralChecks) || 50;
+    const maxQualityPenalty = measuredMaxPenalty(measuredQualityChecks) || 182;
 
     // Per-check-type max penalties for sub-category scores
     const maxHotspotPenalty = 15;
@@ -1500,21 +1530,36 @@ export class RepositoryIntelligenceService {
     try {
       const localUserId = await resolveLocalUserId(userId);
       const sha = commitSha || (await this.getLatestCommitSha(userId, owner, repo)) || 'unknown';
-      await db.repoHealthSnapshot.create({
-        data: {
+      const snapshotData = {
+        score: health.score,
+        passedCount: health.passedCount,
+        failedCount: health.failedCount,
+        criticalCount: health.criticalCount,
+        structuralScore: health.summary.structuralScore,
+        qualityScore: health.summary.qualityScore,
+        details: JSON.parse(JSON.stringify(health.details)),
+        scoreBreakdown: JSON.parse(JSON.stringify(health.scoreBreakdown)),
+        summary: JSON.parse(JSON.stringify(health.summary)),
+      };
+      // Upsert: @@unique([userId, owner, repo, commitSha]) makes a plain
+      // create throw on re-scan of the same SHA (e.g. commitSha='unknown'),
+      // which silently dropped trend history in the catch below.
+      await db.repoHealthSnapshot.upsert({
+        where: {
+          userId_owner_repo_commitSha: {
+            userId: localUserId,
+            owner,
+            repo,
+            commitSha: sha,
+          },
+        },
+        update: snapshotData,
+        create: {
           userId: localUserId,
           owner,
           repo,
           commitSha: sha,
-          score: health.score,
-          passedCount: health.passedCount,
-          failedCount: health.failedCount,
-          criticalCount: health.criticalCount,
-          structuralScore: health.summary.structuralScore,
-          qualityScore: health.summary.qualityScore,
-          details: JSON.parse(JSON.stringify(health.details)),
-          scoreBreakdown: JSON.parse(JSON.stringify(health.scoreBreakdown)),
-          summary: JSON.parse(JSON.stringify(health.summary)),
+          ...snapshotData,
         },
       });
     } catch {
@@ -2086,7 +2131,7 @@ export class RepositoryIntelligenceService {
         status: 'failed',
         description: 'No package.json found',
         recommendation: 'Add a package.json to manage dependencies.',
-        penalty: 15,
+        penalty: 12,
         score: 0,
         totalDependencies: 0,
         outdatedDependencies: 0,
@@ -2264,7 +2309,7 @@ export class RepositoryIntelligenceService {
   }
 
   async getStatistics(userId: string, owner: string, repo: string): Promise<RepositoryStatistics> {
-    const key = cacheKey([owner, repo, 'statistics']);
+    const key = cacheKey(userId, [owner, repo, 'statistics']);
     const cached = this.get<RepositoryStatistics>(key, STATS_CACHE_TTL);
     if (cached) return cached;
 
@@ -2339,7 +2384,7 @@ export class RepositoryIntelligenceService {
     branch?: string,
   ): Promise<RepositoryIntelligence> {
     const resolvedBranch = branch || (await this.getDefaultBranch(userId, owner, repo));
-    const key = cacheKey([owner, repo, 'intelligence', resolvedBranch]);
+    const key = cacheKey(userId, [owner, repo, 'intelligence', resolvedBranch]);
     const cached = this.get<RepositoryIntelligence>(key);
     if (cached) return cached;
 
@@ -2500,7 +2545,7 @@ export class RepositoryIntelligenceService {
   // ─── Readme Content ──────────────────────────────────────────────────────
 
   async getReadme(userId: string, owner: string, repo: string): Promise<string> {
-    const key = cacheKey([owner, repo, 'readme']);
+    const key = cacheKey(userId, [owner, repo, 'readme']);
     const cached = this.get<string>(key);
     if (cached !== null && cached !== undefined) return cached;
 

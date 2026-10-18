@@ -18,6 +18,8 @@ vi.mock('@/core/ai/workflow/engine', () => ({
   workflowEngine: {
     executeStream: () =>
       (async function* () {
+        // Yield asynchronously so tests can simulate a mid-stream disconnect.
+        await new Promise((resolve) => setTimeout(resolve, 5));
         yield { type: 'error', provider: 'gemini', error: { message: 'provider error' } };
       })(),
   },
@@ -117,7 +119,15 @@ describe('POST /stream repository quota gate', () => {
   });
 
   function request(body: Record<string, unknown>) {
-    return { auth: { sub: 'supa-user' }, headers: {}, body };
+    return {
+      auth: { sub: 'supa-user' },
+      headers: {},
+      body,
+      raw: {
+        on: vi.fn(),
+        removeListener: vi.fn(),
+      },
+    };
   }
 
   it('rejects a repo-scoped workflow beyond the repository limit before spending credits', async () => {
@@ -185,5 +195,39 @@ describe('POST /stream repository quota gate', () => {
     expect(ensureSpy).toHaveBeenCalledWith('supa-user', 'octo', 'api');
     expect(reply.statusCode).toBe(403);
     expect(consumeCreditsSpy).not.toHaveBeenCalled();
+  });
+
+  it('rejects a repo-scoped workflow without owner/repo before spending credits', async () => {
+    ensureSpy.mockResolvedValue(allowedCheck());
+    const reply = makeReply();
+
+    await handler(request({ workflowType: 'REPOSITORY_CHAT', context: {} }), reply);
+
+    expect(reply.statusCode).toBe(400);
+    expect(reply.payload?.error).toMatchObject({ code: 'MISSING_REPO_SCOPE' });
+    expect(ensureSpy).not.toHaveBeenCalled();
+    expect(consumeCreditsSpy).not.toHaveBeenCalled();
+    expect(reply.raw.writeHead).not.toHaveBeenCalled();
+  });
+
+  it('aborts the stream and refunds credits when the client disconnects mid-stream', async () => {
+    ensureSpy.mockResolvedValue(allowedCheck());
+    const refundSpy = vi
+      .spyOn(usageService, 'refundWithCredits')
+      .mockResolvedValue(undefined as never);
+    const reply = makeReply();
+    const req = request({
+      workflowType: 'REPOSITORY_CHAT',
+      context: { owner: 'octo', repo: 'api' },
+    });
+
+    const handlerPromise = handler(req, reply);
+    await new Promise((resolve) => setTimeout(resolve, 1));
+    const closeCall = req.raw.on.mock.calls.find(([event]) => event === 'close');
+    expect(closeCall).toBeDefined();
+    (closeCall as unknown as [string, () => void])[1]();
+    await handlerPromise;
+
+    expect(refundSpy).toHaveBeenCalledWith('supa-user', 'CHAT_MESSAGE', 'REPOSITORY_CHAT');
   });
 });
