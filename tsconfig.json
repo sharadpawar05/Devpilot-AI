@@ -5,12 +5,8 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
-    "allowJs": true,
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
-    "noEmit": true,
     "isolatedModules": true,
+    "noEmit": true,
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
@@ -20,17 +16,16 @@
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "verbatimModuleSyntax": true,
-    "baseUrl": ".",
     "paths": {
-      "@devpilot/ai-core": ["packages/ai-core/src"],
-      "@devpilot/ai-providers": ["packages/ai-providers/src"],
-      "@devpilot/ai-prompts": ["packages/ai-prompts/src"],
-      "@devpilot/ui": ["packages/ui/src"],
-      "@devpilot/config": ["packages/config/src"],
-      "@devpilot/shared": ["packages/shared/src"],
-      "@devpilot/types": ["packages/types/src"],
-      "@devpilot/utils": ["packages/utils/src"]
+      "@devpilot/ai-core": ["./packages/ai-core/src"],
+      "@devpilot/ai-providers": ["./packages/ai-providers/src"],
+      "@devpilot/ai-prompts": ["./packages/ai-prompts/src"],
+      "@devpilot/ui": ["./packages/ui/src"],
+      "@devpilot/config": ["./packages/config/src"],
+      "@devpilot/shared": ["./packages/shared/src"],
+      "@devpilot/types": ["./packages/types/src"],
+      "@devpilot/utils": ["./packages/utils/src"]
     }
   },
-  "exclude": ["node_modules", "dist", "build", "coverage", "*.config.ts", "*.config.js"]
+  "files": []
 }
