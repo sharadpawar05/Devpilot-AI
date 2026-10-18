@@ -110,6 +110,27 @@ describe('getMeteredHealth (health scan cache behavior)', () => {
     expect(getHealth).not.toHaveBeenCalled();
   });
 
+  it('looks up the snapshot by the CURRENT commit SHA and rescans when that SHA is not stored', async () => {
+    // A snapshot exists for an older commit; the cache lookup for the new
+    // SHA returns nothing, so the scan must be re-run (and charged).
+    getLatestCommitSha.mockResolvedValue('sha-new');
+    getHealthCache.mockResolvedValue(null);
+
+    const result = await getMeteredHealth('user-a', 'acme', 'demo');
+
+    expect(getHealthCache).toHaveBeenCalledWith('user-a', 'acme', 'demo', 'sha-new');
+    expect(result.cached).toBe(false);
+    expect(consumeQuota).toHaveBeenCalledWith('user-a', 'HEALTH_SCAN');
+    expect(getHealth).toHaveBeenCalledWith('user-a', 'acme', 'demo');
+    expect(saveHealthCache).toHaveBeenCalledWith(
+      'user-a',
+      'acme',
+      'demo',
+      'sha-new',
+      expect.objectContaining({ score: 82 }),
+    );
+  });
+
   it('consumes one HEALTH_SCAN and saves a snapshot when the cache is stale', async () => {
     getLatestCommitSha.mockResolvedValue('sha1');
     getHealthCache.mockResolvedValue({

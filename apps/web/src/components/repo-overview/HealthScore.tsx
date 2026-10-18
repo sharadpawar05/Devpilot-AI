@@ -1100,6 +1100,9 @@ export function HealthScore({ health, onGenerate, onGenerateReport, className }:
               <p className="mt-1">
                 Each check contributes a penalty (0-30 points). The score starts at 100 and
                 penalties are deducted proportionally based on maximum possible penalties.
+                Unmeasured or not-applicable checks are excluded — weights are renormalized over the
+                dimensions that were actually measured, so missing data never counts as a pass or a
+                failure. The score shown here is exactly the score the API computed.
               </p>
             </div>
             <div className="grid grid-cols-2 gap-3">
