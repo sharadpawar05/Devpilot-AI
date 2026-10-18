@@ -15,6 +15,9 @@ export async function getGitHubToken(userId: string): Promise<string | null> {
     if (
       user.githubAccessToken.startsWith('gho_') ||
       user.githubAccessToken.startsWith('ghp_') ||
+      user.githubAccessToken.startsWith('ghu_') ||
+      user.githubAccessToken.startsWith('ghs_') ||
+      user.githubAccessToken.startsWith('ghr_') ||
       user.githubAccessToken.startsWith('github_pat_')
     ) {
       return user.githubAccessToken;

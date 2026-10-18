@@ -12,7 +12,7 @@ import { encrypt, decrypt } from '../src/core/github/crypto';
  *   pnpm --filter @devpilot/api tokens:reencrypt -- --dry-run
  */
 
-const PLAINTEXT_PREFIXES = ['gho_', 'ghp_', 'github_pat_'];
+const PLAINTEXT_PREFIXES = ['gho_', 'ghp_', 'ghu_', 'ghs_', 'ghr_', 'github_pat_'];
 
 function isPlaintextToken(value: string): boolean {
   return PLAINTEXT_PREFIXES.some((prefix) => value.startsWith(prefix));
