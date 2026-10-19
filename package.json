@@ -35,5 +35,13 @@
     "*.{json,md}": [
       "prettier --write"
     ]
+  },
+  "pnpm": {
+    "overrides": {
+      "brace-expansion@^2.0.0": "2.1.6",
+      "deepmerge-ts": "^8.0.0",
+      "fast-uri@^2.0.0": "2.4.6",
+      "fast-uri@^3.0.0": "3.1.7"
+    }
   }
 }

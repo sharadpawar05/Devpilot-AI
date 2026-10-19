@@ -129,7 +129,7 @@ jobs:
           -e GIT_CONFIG_VALUE_0=/repo
           -v "$GITHUB_WORKSPACE:/repo"
           ghcr.io/gitleaks/gitleaks:v8.30.1
-          detect --source /repo --redact --no-banner
+          detect --source /repo --config /repo/.gitleaks.toml --redact --no-banner
 
   audit-advisory:
     name: audit-advisory
