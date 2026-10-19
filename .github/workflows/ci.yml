@@ -134,11 +134,10 @@ jobs:
   audit-advisory:
     name: audit-advisory
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
       - uses: ./.github/actions/setup
 
-      - name: Full audit report (informational)
-        run: pnpm audit
+      - name: Full audit report (informational, non-blocking)
+        run: pnpm audit || true
