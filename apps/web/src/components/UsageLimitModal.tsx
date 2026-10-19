@@ -9,38 +9,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import type { UsageFeature, UsageLimitDetails } from '@/lib/api-error';
-
-const FEATURE_COPY: Record<
-  UsageFeature,
-  { title: string; blurb: string; unit: (limit: number) => string }
-> = {
-  AI_REPORT: {
-    title: 'Engineering report limit reached',
-    blurb: 'Structured engineering reports generated from your repository data.',
-    unit: (limit) => `Your plan includes ${limit} report${limit === 1 ? '' : 's'} per month.`,
-  },
-  REPOSITORIES: {
-    title: 'Active repository limit reached',
-    blurb: 'Repositories activated and used by DevPilot features.',
-    unit: (limit) => `Your plan includes ${limit} active repositor${limit === 1 ? 'y' : 'ies'}.`,
-  },
-  HEALTH_SCAN: {
-    title: 'Health scan limit reached',
-    blurb: 'Repository health analyses for the current billing period.',
-    unit: (limit) => `Your plan includes ${limit} health scan${limit === 1 ? '' : 's'} per month.`,
-  },
-  CHAT_MESSAGE: {
-    title: 'Chat message limit reached',
-    blurb: 'Messages sent from the Playground and from Repository Chat.',
-    unit: (limit) => `Your plan includes ${limit} chat message${limit === 1 ? '' : 's'} per month.`,
-  },
-  AI_CREDITS: {
-    title: 'AI credit limit reached',
-    blurb: 'Overall AI usage budget for the current billing period.',
-    unit: (limit) => `Your plan includes ${limit} AI credits per month.`,
-  },
-};
+import type { UsageLimitDetails } from '@/lib/api-error';
+import { FEATURE_COPY } from '@/lib/usage-copy';
 
 function formatReset(resetAt?: string): string | null {
   if (!resetAt) return null;
