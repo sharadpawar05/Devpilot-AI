@@ -66,10 +66,51 @@ describe('Error Message Sanitization', () => {
           'Engineering report limit reached. Your plan includes 2 reports per month. Upgrade to generate more reports.',
       });
 
-      expect(result.title).toBe('Usage limit reached');
+      expect(result.title).toBe('Engineering report limit reached');
       expect(result.message).toContain('Engineering report limit reached');
       expect(result.message).toContain('2 reports per month');
       expect(result.retryable).toBe(false);
+    });
+
+    it('should render feature-specific copy for a HEALTH_SCAN envelope', () => {
+      const result = getErrorMessage({
+        code: 'USAGE_LIMIT_REACHED',
+        feature: 'HEALTH_SCAN',
+        used: 2,
+        limit: 2,
+        resetAt: '2026-11-01T00:00:00.000Z',
+        message:
+          'Health scan limit reached. Your plan includes 2 scans per month. Upgrade or wait until reset.',
+      });
+
+      expect(result.title).toBe('Health scan limit reached');
+      expect(result.message).toContain('Health scan limit reached');
+      expect(result.message).toContain('Your plan includes 2 scans per month');
+      expect(result.suggestion).toBe('Repository health analyses for the current billing period.');
+      expect(result.retryable).toBe(false);
+    });
+
+    it('should detect usage limits from the server message when the code was dropped', () => {
+      const result = getErrorMessage({
+        message:
+          'Health scan limit reached. Your plan includes 2 scans per month. Upgrade or wait until reset.',
+      });
+
+      expect(result.title).toBe('Health scan limit reached');
+      expect(result.message).toContain('Your plan includes 2 scans per month');
+      expect(result.suggestion).toBe('Repository health analyses for the current billing period.');
+      expect(result.retryable).toBe(false);
+    });
+
+    it('should surface the server message when no code is available', () => {
+      const result = getErrorMessage({
+        message: 'Failed to fetch repository metadata: upstream returned 502',
+      });
+
+      expect(result.title).toBe('Something went wrong');
+      expect(result.message).toContain('upstream returned 502');
+      expect(result.message).not.toBe('An unexpected error occurred.');
+      expect(result.suggestion).toBe('Try again or switch to a different model.');
     });
 
     it('should show repository quota message from server', () => {

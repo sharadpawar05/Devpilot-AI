@@ -71,6 +71,10 @@ export const repoOverviewApi = {
         };
       return { success: true, data: json.data as RepoOverviewData };
     } catch (error) {
+      // Keep the structured envelope (code, feature, used/limit, resetAt) so
+      // callers can show the real reason (e.g. a usage limit) instead of a
+      // generic "Something went wrong" message.
+      if (error instanceof ApiError) throw error;
       return { success: false, error: error instanceof Error ? error.message : 'Network error' };
     }
   },
