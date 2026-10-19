@@ -1,5 +1,6 @@
 import { repositoryIntelligenceService } from '@/features/repo-intelligence';
 import { aiService } from '@/core/ai/service';
+import { rootLogger } from '@/core/logging/root-logger';
 import type {
   IncidentSummaryRequest,
   IncidentSummaryResponse,
@@ -293,7 +294,10 @@ Respond with JSON in this exact format:
         recommendations: Array.isArray(parsed.recommendations) ? parsed.recommendations : [],
       };
     } catch (error) {
-      console.warn('Failed to parse AI response as JSON, returning raw text:', error);
+      rootLogger.warn(
+        { parseError: error instanceof Error ? error.name : 'unknown' },
+        'Failed to parse AI response as JSON, returning raw text',
+      );
       return {
         executiveSummary: response.slice(0, 2000),
         findings: [],

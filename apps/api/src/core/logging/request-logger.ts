@@ -1,4 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { httpRequestsTotal, httpRequestDurationSeconds, resolveRouteLabel } from '@/core/metrics';
+import { REQUEST_ID_HEADER } from '@/core/http/server-options';
+import { enterRequestContext } from './context';
 
 /**
  * Query parameters whose values must never appear in logs. The GitHub OAuth
@@ -46,24 +49,31 @@ export function redactUrl(url: string): string {
 }
 
 export async function registerRequestLogger(app: FastifyInstance) {
+  app.addHook('onRequest', (request: FastifyRequest, reply: FastifyReply, done) => {
+    (request as FastifyRequest & { startTime: number }).startTime = Date.now();
+    // Bind the correlation ID for the whole async scope of this request so
+    // module-level loggers (rootLogger) can attach it too.
+    enterRequestContext(request.id);
+    // Echo the correlation ID so clients and proxies can join a response to
+    // server logs without parsing bodies.
+    reply.header(REQUEST_ID_HEADER, request.id);
+    done();
+  });
+
   app.addHook('onResponse', (request: FastifyRequest, reply: FastifyReply, done) => {
     const { method } = request;
     const url = redactUrl(request.url);
     const { statusCode } = reply;
-    const duration = Date.now() - (request as FastifyRequest & { startTime: number }).startTime;
+    const durationMs = Date.now() - (request as FastifyRequest & { startTime: number }).startTime;
+    const route = resolveRouteLabel(request.routeOptions?.url);
 
-    app.log.info({
-      method,
-      url,
-      statusCode,
-      duration: `${duration}ms`,
-    });
+    httpRequestsTotal.inc({ method, route, status: statusCode });
+    httpRequestDurationSeconds.observe({ method, route }, durationMs / 1000);
 
-    done();
-  });
+    // `request.log` is Fastify's per-request child logger: it carries the
+    // request ID binding, so this line is correlatable with error logs.
+    request.log.info({ method, url, statusCode, durationMs, route }, 'request completed');
 
-  app.addHook('onRequest', (request: FastifyRequest, _reply: FastifyReply, done) => {
-    (request as FastifyRequest & { startTime: number }).startTime = Date.now();
     done();
   });
 }

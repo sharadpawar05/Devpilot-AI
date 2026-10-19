@@ -136,6 +136,9 @@ export async function prReviewRoutes(app: FastifyInstance) {
     '/github/review',
     {
       preHandler: [authenticate],
+      config: {
+        rateLimit: { max: 20, timeWindow: '1 minute' }, // AI review,
+      },
       schema: {
         description: 'AI-powered review of a GitHub pull request',
         tags: ['github'],
@@ -328,6 +331,9 @@ export async function prReviewRoutes(app: FastifyInstance) {
     '/github/analyze',
     {
       preHandler: [authenticate],
+      config: {
+        rateLimit: { max: 10, timeWindow: '1 minute' }, // AI analysis of every file,
+      },
       schema: {
         description: 'Comprehensive AI-powered PR analysis generating all report sections',
         tags: ['github'],

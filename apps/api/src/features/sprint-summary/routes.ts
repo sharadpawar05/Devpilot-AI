@@ -24,6 +24,9 @@ export async function sprintSummaryRoutes(app: FastifyInstance) {
     '/sprint-summary/generate',
     {
       preHandler: [authenticate],
+      config: {
+        rateLimit: { max: 10, timeWindow: '1 minute' }, // AI report,
+      },
       schema: {
         description: 'Generate a sprint summary from repository activity',
         tags: ['sprint-summary'],
@@ -100,7 +103,7 @@ export async function sprintSummaryRoutes(app: FastifyInstance) {
 
         return reply.send(result);
       } catch (error) {
-        console.error('Sprint summary generation error:', error);
+        request.log.error({ err: error }, 'Sprint summary generation error');
         const classified = classifyAIError(error);
         return reply.status(classified.status === 429 ? 429 : 500).send({
           success: false,

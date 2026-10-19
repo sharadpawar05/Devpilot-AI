@@ -42,33 +42,46 @@ describe('registerRequestLogger', () => {
     vi.clearAllMocks();
   });
 
-  it('logs redacted URLs from the onResponse hook', async () => {
+  it('logs redacted URLs from the onResponse hook and echoes the request ID', async () => {
     const hooks: Record<string, (req: unknown, reply: unknown, done: () => void) => void> = {};
-    const logInfo = vi.fn();
     const app = {
       addHook: (name: string, fn: (req: unknown, reply: unknown, done: () => void) => void) => {
         hooks[name] = fn;
       },
-      log: { info: logInfo },
     } as unknown as FastifyInstance;
 
     await registerRequestLogger(app);
 
+    const logInfo = vi.fn();
     const request = {
+      id: 'req-test-1',
       method: 'GET',
       url: '/api/v1/github/callback?code=topsecretcode&state=topsecretstate',
-      startTime: Date.now() - 5,
+      log: { info: logInfo },
+      routeOptions: { url: '/api/v1/github/callback' },
     } as unknown as FastifyRequest;
-    const reply = { statusCode: 200 } as FastifyReply;
+    const header = vi.fn();
+    const reply = { statusCode: 200, header } as unknown as FastifyReply;
 
     hooks.onRequest(request, reply, () => {});
     hooks.onResponse(request, reply, () => {});
 
+    // onRequest echoes the correlation ID so clients can join responses to logs.
+    expect(header).toHaveBeenCalledWith('x-request-id', 'req-test-1');
+
     expect(logInfo).toHaveBeenCalledTimes(1);
-    const logged = logInfo.mock.calls[0][0] as { url: string };
+    const logged = logInfo.mock.calls[0][0] as {
+      url: string;
+      method: string;
+      statusCode: number;
+      route: string;
+    };
     expect(logged.url).toContain('code=[redacted]');
     expect(logged.url).toContain('state=[redacted]');
     expect(logged.url).not.toContain('topsecretcode');
     expect(logged.url).not.toContain('topsecretstate');
+    expect(logged.method).toBe('GET');
+    expect(logged.statusCode).toBe(200);
+    expect(logged.route).toBe('/api/v1/github/callback');
   });
 });

@@ -1,7 +1,7 @@
-import { Octokit } from 'octokit';
 import { db } from '@/core/db';
 import { getEnv } from '@/config';
 import { encrypt, decrypt } from '@/core/github/crypto';
+import { createGitHubClient } from '@/core/github/client';
 
 export async function getGitHubToken(userId: string): Promise<string | null> {
   const user = await db.user.findUnique({
@@ -100,10 +100,10 @@ export async function revokeGitHubToken(token: string): Promise<void> {
   }
 }
 
-export async function getOctokit(userId: string): Promise<Octokit> {
+export async function getOctokit(userId: string): Promise<ReturnType<typeof createGitHubClient>> {
   const token = await getGitHubToken(userId);
   if (!token) {
     throw new Error('GitHub not connected. Please connect your GitHub account first.');
   }
-  return new Octokit({ auth: token });
+  return createGitHubClient(token);
 }

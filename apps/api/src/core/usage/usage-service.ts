@@ -9,6 +9,7 @@ import {
 } from './plan-limits';
 import { AI_CREDIT_COSTS, type AICreditCostKey } from './credit-costs';
 import type { UsageLimitErrorDetails } from './errors';
+import { aiCreditsConsumedTotal, aiCreditsRefundedTotal } from '@/core/metrics';
 
 export type UsageCounterField =
   'aiCreditsUsed' | 'healthScansUsed' | 'aiReportsUsed' | 'chatMessagesUsed';
@@ -368,6 +369,11 @@ class UsageService {
     });
     const used = result.row[field];
     const allowed = result.count > 0;
+    if (allowed && feature === 'AI_CREDITS') {
+      // AI credit burns are a first-class operational metric; only count
+      // actual consumption, never a rejected attempt.
+      aiCreditsConsumedTotal.inc({ feature }, amount);
+    }
     return {
       allowed,
       consumed: allowed,
@@ -482,6 +488,8 @@ class UsageService {
       };
     }
 
+    aiCreditsConsumedTotal.inc({ feature }, creditCost);
+
     return {
       allowed: true,
       consumed: true,
@@ -503,14 +511,15 @@ class UsageService {
     const localUserId = await resolveLocalUserId(supabaseUserId);
     const { periodStart } = getCurrentMonthPeriod();
     const field = FEATURE_COUNTER[feature];
-    await db.userUsage
+    const updated = await db.userUsage
       .updateMany({
         where: { userId: localUserId, periodStart, [field]: { gte: amount } },
         data: { [field]: { decrement: amount } },
       })
-      .catch(() => {
-        // Best-effort refund; ignore if row missing.
-      });
+      .catch(() => null);
+    if (updated && updated.count > 0 && feature === 'AI_CREDITS') {
+      aiCreditsRefundedTotal.inc({ feature }, amount);
+    }
   }
 
   /**
@@ -525,7 +534,7 @@ class UsageService {
     const localUserId = await resolveLocalUserId(supabaseUserId);
     const { periodStart } = getCurrentMonthPeriod();
     const field = FEATURE_COUNTER[feature];
-    await db.userUsage
+    const updated = await db.userUsage
       .updateMany({
         where: {
           userId: localUserId,
@@ -538,9 +547,10 @@ class UsageService {
           aiCreditsUsed: { decrement: creditCost },
         },
       })
-      .catch(() => {
-        // Best-effort refund.
-      });
+      .catch(() => null);
+    if (updated && updated.count > 0) {
+      aiCreditsRefundedTotal.inc({ feature }, creditCost);
+    }
   }
 
   /**

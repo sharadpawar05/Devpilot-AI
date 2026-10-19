@@ -1,10 +1,10 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { Octokit } from 'octokit';
 import { authenticate } from '@/core/auth';
 import { getEnv } from '@/config';
 import { db } from '@/core/db';
 import { sanitizeError } from '@/core/errors/sanitize';
+import { createGitHubClient } from '@/core/github/client';
 import { GITHUB_OWNER_PATTERN, GITHUB_REPO_PATTERN } from '@/core/validation/repository';
 import {
   getGitHubToken,
@@ -245,6 +245,8 @@ export async function githubRoutes(app: FastifyInstance) {
             client_secret: env.GITHUB_CLIENT_SECRET,
             code,
           }),
+          // Bounded: the OAuth exchange must never hang the callback route.
+          signal: AbortSignal.timeout(10_000),
         });
 
         const data = (await response.json()) as {
@@ -270,7 +272,7 @@ export async function githubRoutes(app: FastifyInstance) {
           });
         }
 
-        const octokit = new Octokit({ auth: data.access_token });
+        const octokit = createGitHubClient(data.access_token);
         const { data: ghUser } = await octokit.rest.users.getAuthenticated();
 
         await setGitHubToken(
@@ -348,7 +350,7 @@ export async function githubRoutes(app: FastifyInstance) {
         if (!token) {
           return reply.send({ success: true, connected: false });
         }
-        const octokit = new Octokit({ auth: token });
+        const octokit = createGitHubClient(token);
         const { data: ghUser } = await octokit.rest.users.getAuthenticated();
 
         await db.user.update({
