@@ -1,8 +1,19 @@
+import { getUsageFeatureCopy } from './usage-copy';
+
 interface ErrorMessageConfig {
   title: string;
   message: string;
   retryable: boolean;
   suggestion?: string;
+}
+
+export interface ErrorMessageInput {
+  code?: string;
+  message?: string;
+  feature?: string;
+  used?: number;
+  limit?: number;
+  resetAt?: string;
 }
 
 const ERROR_MESSAGES: Record<string, ErrorMessageConfig> = {
@@ -265,14 +276,45 @@ function cleanErrorMessage(message: string): string {
   return cleaned;
 }
 
-export function getErrorMessage(
-  error: { code?: string; message?: string } | null | undefined,
-): ErrorMessageConfig {
+function inferUsageFeature(feature: string | undefined, message: string): string | undefined {
+  if (feature) return feature;
+  if (/health scan/i.test(message)) return 'HEALTH_SCAN';
+  if (/active repositor/i.test(message)) return 'REPOSITORIES';
+  if (/chat message/i.test(message)) return 'CHAT_MESSAGE';
+  if (/ai credit/i.test(message)) return 'AI_CREDITS';
+  if (/engineering report|report/i.test(message)) return 'AI_REPORT';
+  return undefined;
+}
+
+function buildUsageLimitConfig(error: ErrorMessageInput, message: string): ErrorMessageConfig {
+  const usageConfig = ERROR_MESSAGES.USAGE_LIMIT_REACHED;
+  const feature = inferUsageFeature(error.feature, message);
+  const copy = getUsageFeatureCopy(feature);
+  const sanitizedMessage = cleanErrorMessage(message);
+  const hasServerMessage = sanitizedMessage && sanitizedMessage !== 'An unexpected error occurred.';
+  const unit =
+    copy && typeof error.limit === 'number' && error.limit > 0 ? copy.unit(error.limit) : undefined;
+
+  return {
+    title: copy?.title ?? usageConfig.title,
+    message: hasServerMessage ? message.trim() : (unit ?? usageConfig.message),
+    retryable: false,
+    suggestion: copy?.blurb ?? usageConfig.suggestion,
+  };
+}
+
+export function getErrorMessage(error: ErrorMessageInput | null | undefined): ErrorMessageConfig {
   if (!error) return DEFAULT_ERROR;
 
-  const code = error.code ?? 'UNKNOWN_ERROR';
+  const code =
+    typeof error.code === 'string' && error.code.trim() !== '' ? error.code.trim() : undefined;
   const message = error.message ?? '';
   const lower = message.toLowerCase();
+
+  // Usage limits always win: the server envelope is actionable for the user.
+  if (code === 'USAGE_LIMIT_REACHED' || code === 'PLAN_LIMIT_REACHED') {
+    return buildUsageLimitConfig(error, message);
+  }
 
   const isRateLimitCode = code === 'RATE_LIMIT_EXCEEDED' || code === 'RATE_LIMIT';
   const isRateLimitMessage =
@@ -308,28 +350,22 @@ export function getErrorMessage(
     };
   }
 
-  const config = ERROR_MESSAGES[code] ?? ERROR_MESSAGES.UNKNOWN_ERROR;
-
-  // Prefer the server's feature-specific usage message when present
-  // (e.g. "Engineering report limit reached. Your plan includes 2 reports…").
-  if (code === 'USAGE_LIMIT_REACHED' || code === 'PLAN_LIMIT_REACHED') {
-    const serverMessage = cleanErrorMessage(message);
-    const hasServerMessage = serverMessage && serverMessage !== 'An unexpected error occurred.';
-    return {
-      ...config,
-      message: hasServerMessage ? (error.message ?? config.message) : config.message,
-    };
+  // For known error codes, use the friendly message from config.
+  // UNKNOWN_ERROR is treated as "no code" so the server message can still win.
+  if (code && code !== 'UNKNOWN_ERROR' && ERROR_MESSAGES[code]) {
+    return ERROR_MESSAGES[code];
   }
 
-  // For known error codes, use the friendly message from config
-  if (ERROR_MESSAGES[code]) {
-    return config;
+  // The code was dropped in transit but the server message is a usage limit
+  // (e.g. "Health scan limit reached. Your plan includes 2 scans per month…").
+  if (/limit reached|plan includes \d+/i.test(message)) {
+    return buildUsageLimitConfig(error, message);
   }
 
-  // For unknown errors, try to extract a cleaner message
+  // For unknown or missing codes, surface the sanitized server message
   return {
-    ...config,
-    message: cleanErrorMessage(message) || config.message,
+    ...ERROR_MESSAGES.UNKNOWN_ERROR,
+    message: cleanErrorMessage(message) || ERROR_MESSAGES.UNKNOWN_ERROR.message,
   };
 }
 

@@ -6,7 +6,7 @@ import { useAuth } from '@/auth';
 import { useGitHub } from '@/hooks/use-github';
 import { repoOverviewApi } from '@/lib/repo-overview/api';
 import { getErrorMessage } from '@/lib/error-messages';
-import { isUsageLimitError } from '@/lib/api-error';
+import { isUsageLimitError, toApiError } from '@/lib/api-error';
 import { useUsageLimitModal } from '@/hooks/use-usage-limit-modal';
 import { UsageLimitModal } from '@/components/UsageLimitModal';
 import { useRunHealthScan } from '@/lib/repo-intelligence';
@@ -103,7 +103,14 @@ export default function HealthOverviewPage() {
   });
   const [overviewData, setOverviewData] = useState<RepoOverviewData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<{ code?: string; message?: string } | null>(null);
+  const [error, setError] = useState<{
+    code?: string;
+    message?: string;
+    feature?: string;
+    used?: number;
+    limit?: number;
+    resetAt?: string;
+  } | null>(null);
   const [scanError, setScanError] = useState<{
     code?: string;
     message?: string;
@@ -159,23 +166,39 @@ export default function HealthOverviewPage() {
 
       setOverviewData(result.data);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
-      let errorCode: string | undefined;
-      try {
-        const parsed = JSON.parse(errorMessage);
-        if (parsed.code) errorCode = parsed.code;
-      } catch {
-        if (errorMessage.includes('not found') || errorMessage.includes('404')) {
-          errorCode = 'REPOSITORY_NOT_FOUND';
-        } else if (errorMessage.includes('authentication') || errorMessage.includes('401')) {
-          errorCode = 'GITHUB_AUTH_FAILED';
-        } else if (errorMessage.includes('rate limit') || errorMessage.includes('429')) {
-          errorCode = 'GITHUB_RATE_LIMIT';
-        } else if (errorMessage.includes('timeout')) {
-          errorCode = 'DATABASE_TIMEOUT';
+      const apiError = toApiError(err, 'Failed to fetch repository overview');
+      const errorMessage = apiError.message;
+
+      let errorCode = apiError.code;
+      if (!errorCode && isUsageLimitError(err)) {
+        errorCode = 'USAGE_LIMIT_REACHED';
+      }
+
+      if (!errorCode) {
+        try {
+          const parsed = JSON.parse(errorMessage);
+          if (parsed.code) errorCode = parsed.code;
+        } catch {
+          if (errorMessage.includes('not found') || errorMessage.includes('404')) {
+            errorCode = 'REPOSITORY_NOT_FOUND';
+          } else if (errorMessage.includes('authentication') || errorMessage.includes('401')) {
+            errorCode = 'GITHUB_AUTH_FAILED';
+          } else if (errorMessage.includes('rate limit') || errorMessage.includes('429')) {
+            errorCode = 'GITHUB_RATE_LIMIT';
+          } else if (errorMessage.includes('timeout')) {
+            errorCode = 'DATABASE_TIMEOUT';
+          }
         }
       }
-      setError({ code: errorCode, message: errorMessage });
+
+      setError({
+        code: errorCode,
+        message: errorMessage,
+        feature: apiError.feature,
+        used: apiError.used,
+        limit: apiError.limit,
+        resetAt: apiError.resetAt,
+      });
     } finally {
       setIsLoading(false);
     }
@@ -531,10 +554,12 @@ export default function HealthOverviewPage() {
                   {getErrorMessage(error).suggestion}
                 </p>
               )}
-              <Button variant="outline" size="sm" className="mt-3" onClick={fetchOverview}>
-                <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-                Try Again
-              </Button>
+              {getErrorMessage(error).retryable && (
+                <Button variant="outline" size="sm" className="mt-3" onClick={fetchOverview}>
+                  <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                  Try Again
+                </Button>
+              )}
             </div>
           </div>
         </div>

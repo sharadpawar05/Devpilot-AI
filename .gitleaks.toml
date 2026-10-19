@@ -1,0 +1,6 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Known historical findings in .env.example committed by dc8bfd1b. Secrets must be rotated; remove this entry once history is scrubbed."
+commits = ["dc8bfd1b1e9320a8b9811b65d67f33c49bf7567d"]
