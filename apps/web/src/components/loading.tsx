@@ -1,4 +1,5 @@
 import { Skeleton } from '@/components/ui/skeleton';
+import { BrandLogo } from '@/components/brand-logo';
 
 export function LoadingSpinner({ className }: { className?: string }) {
   return (
@@ -20,21 +21,8 @@ export function LoadingPage() {
       role="status"
       aria-label="Loading page"
     >
-      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground animate-scale-in">
-        <svg
-          className="h-6 w-6"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden
-        >
-          <path d="M12 2L2 7l10 5 10-5-10-5z" />
-          <path d="M2 17l10 5 10-5" />
-          <path d="M2 12l10 5 10-5" />
-        </svg>
+      <div className="animate-scale-in">
+        <BrandLogo className="h-12 w-12" />
       </div>
       <LoadingSpinner />
       <p className="text-sm text-muted-foreground">Loading DevPilot…</p>

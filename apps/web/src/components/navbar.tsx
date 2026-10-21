@@ -3,6 +3,7 @@ import { Moon, Sun, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/lib/theme';
 import { useAuth } from '@/auth';
+import { BrandLogo } from '@/components/brand-logo';
 
 export function Navbar() {
   const { theme, setTheme } = useTheme();
@@ -12,7 +13,7 @@ export function Navbar() {
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-14 items-center">
         <Link to="/" className="mr-6 flex items-center space-x-2">
-          <img src="/favicon.svg" alt="DevPilot" className="h-6 w-6" />
+          <BrandLogo className="h-6 w-6" />
           <span className="hidden font-bold sm:inline-block">DevPilot</span>
         </Link>
 
