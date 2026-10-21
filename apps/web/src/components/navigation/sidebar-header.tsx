@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { BrandLogo } from '@/components/brand-logo';
 import { useSidebar } from './sidebar-provider';
 
 export function SidebarHeader() {
@@ -19,25 +20,7 @@ export function SidebarHeader() {
         aria-label="DevPilot home"
       >
         <span className="nav-icon" aria-hidden>
-          <div
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-primary-foreground shadow-sm transition-transform duration-200 group-hover:scale-105"
-            style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
-          >
-            <svg
-              className="h-4 w-4"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden
-            >
-              <path d="M12 2L2 7l10 5 10-5-10-5z" />
-              <path d="M2 17l10 5 10-5" />
-              <path d="M2 12l10 5 10-5" />
-            </svg>
-          </div>
+          <BrandLogo className="h-8 w-8 transition-transform duration-200 group-hover:scale-105" />
         </span>
         {(!collapsed || isMobile) && (
           <span className="nav-label text-lg font-bold tracking-tight">DevPilot</span>
