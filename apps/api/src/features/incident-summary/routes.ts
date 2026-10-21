@@ -23,6 +23,9 @@ export async function incidentSummaryRoutes(app: FastifyInstance) {
     '/incident-summary/generate',
     {
       preHandler: [authenticate],
+      config: {
+        rateLimit: { max: 10, timeWindow: '1 minute' }, // AI report,
+      },
       schema: {
         description: 'Generate an incident summary from repository activity',
         tags: ['incident-summary'],
@@ -100,7 +103,7 @@ export async function incidentSummaryRoutes(app: FastifyInstance) {
 
         return reply.send(result);
       } catch (error) {
-        console.error('Incident summary generation error:', error);
+        request.log.error({ err: error }, 'Incident summary generation error');
         return reply.status(500).send({
           success: false,
           error: {

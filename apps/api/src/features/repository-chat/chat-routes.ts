@@ -10,6 +10,7 @@ import { buildTreeSummary, findFilesByKeywords } from './parser';
 import { db } from '@/core/db';
 import { config } from '@devpilot/config';
 import { usageService, sendUsageLimitReached, AI_CREDIT_COSTS } from '@/core/usage';
+import { runBackgroundJob } from '@/core/logging';
 import {
   githubOwnerSchema,
   githubRepoSchema,
@@ -91,6 +92,10 @@ export async function repositoryChatRoutes(app: FastifyInstance) {
     '/repository-chat/index',
     {
       preHandler: [authenticate],
+      config: {
+        // Indexing fans out into many GitHub calls — tighter than the global ceiling.
+        rateLimit: { max: 10, timeWindow: '1 minute' },
+      },
       schema: {
         description: 'Index a GitHub repository for AI chat',
         tags: ['repository-chat'],
@@ -133,31 +138,37 @@ export async function repositoryChatRoutes(app: FastifyInstance) {
           }
         }
 
-        if (existingStatus === 'INDEXING') {
-          return reply.status(409).send({
-            success: false,
-            error: { message: 'Indexing already in progress' },
-          });
-        }
-
         // Reject activating a new repository beyond the plan limit before indexing.
         const repoAccess = await usageService.ensureRepositoryAccess(auth.sub, owner, repo);
         if (!repoAccess.allowed && repoAccess.details) {
           return sendUsageLimitReached(reply, repoAccess.details);
         }
 
-        await repositoryStatusService.markIndexing(auth.sub, owner, repo, branch);
+        // Atomic claim: exactly one concurrent request gets to start the job.
+        const claimed = await repositoryStatusService.claimIndexing(auth.sub, owner, repo, branch);
+        if (!claimed) {
+          return reply.status(409).send({
+            success: false,
+            error: { code: 'INDEXING_IN_PROGRESS', message: 'Indexing already in progress' },
+          });
+        }
 
-        repositoryIndexer.index(auth.sub, owner, repo, branch).catch(async (err) => {
-          app.log.error({ err, owner, repo, branch }, 'Background indexing failed');
-          await repositoryStatusService.markFailed(
-            auth.sub,
-            owner,
-            repo,
-            branch,
-            err.message || 'Unknown error',
-          );
-        });
+        runBackgroundJob(
+          request,
+          'repository-index',
+          () => repositoryIndexer.index(auth.sub, owner, repo, branch),
+          {
+            onError: async (err) => {
+              await repositoryStatusService.markFailed(
+                auth.sub,
+                owner,
+                repo,
+                branch,
+                err instanceof Error ? err.message.slice(0, 500) : 'Unknown error',
+              );
+            },
+          },
+        );
 
         return reply.send({
           success: true,

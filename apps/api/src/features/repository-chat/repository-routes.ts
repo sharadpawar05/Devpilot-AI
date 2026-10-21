@@ -5,6 +5,7 @@ import { repositoryIndexer } from './indexer';
 import { repositoryStatusService } from './status';
 import { repositoryCache } from './cache';
 import { usageService, sendUsageLimitReached } from '@/core/usage';
+import { runBackgroundJob } from '@/core/logging';
 import {
   githubOwnerSchema,
   githubRepoSchema,
@@ -67,6 +68,10 @@ export default async function repositoryRoutes(app: FastifyInstance) {
     '/repositories/:owner/:repo/index',
     {
       preHandler: [authenticate],
+      config: {
+        // Indexing fans out into many GitHub calls — tighter than the global ceiling.
+        rateLimit: { max: 10, timeWindow: '1 minute' },
+      },
     },
     async (request, reply) => {
       const params = repoParamsSchema.safeParse(request.params);
@@ -81,23 +86,37 @@ export default async function repositoryRoutes(app: FastifyInstance) {
       const branch = body.data.branch;
       const userId = request.auth!.sub;
 
-      const existingStatus = await repositoryStatusService.getStatus(userId, owner, repo, branch);
-      if (existingStatus === 'INDEXING') {
-        return reply.status(409).send({
-          success: false,
-          error: { message: 'Indexing already in progress' },
-        });
-      }
-
       // Reject activating a new repository beyond the plan limit before indexing.
       const repoAccess = await usageService.ensureRepositoryAccess(userId, owner, repo);
       if (!repoAccess.allowed && repoAccess.details) {
         return sendUsageLimitReached(reply, repoAccess.details);
       }
 
-      repositoryIndexer.index(userId, owner, repo, branch).catch((err) => {
-        app.log.error({ err, owner, repo, branch }, 'Background indexing failed');
-      });
+      // Atomic claim: exactly one concurrent request gets to start the job.
+      const claimed = await repositoryStatusService.claimIndexing(userId, owner, repo, branch);
+      if (!claimed) {
+        return reply.status(409).send({
+          success: false,
+          error: { code: 'INDEXING_IN_PROGRESS', message: 'Indexing already in progress' },
+        });
+      }
+
+      runBackgroundJob(
+        request,
+        'repository-index',
+        () => repositoryIndexer.index(userId, owner, repo, branch),
+        {
+          onError: async (err) => {
+            await repositoryStatusService.markFailed(
+              userId,
+              owner,
+              repo,
+              branch,
+              err instanceof Error ? err.message.slice(0, 500) : 'Unknown error',
+            );
+          },
+        },
+      );
 
       return {
         success: true,
@@ -111,6 +130,10 @@ export default async function repositoryRoutes(app: FastifyInstance) {
     '/repositories/:owner/:repo/reindex',
     {
       preHandler: [authenticate],
+      config: {
+        // Indexing fans out into many GitHub calls — tighter than the global ceiling.
+        rateLimit: { max: 10, timeWindow: '1 minute' },
+      },
     },
     async (request, reply) => {
       const params = repoParamsSchema.safeParse(request.params);
@@ -125,25 +148,37 @@ export default async function repositoryRoutes(app: FastifyInstance) {
       const branch = body.data.branch;
       const userId = request.auth!.sub;
 
-      const existingStatus = await repositoryStatusService.getStatus(userId, owner, repo, branch);
-      if (existingStatus === 'INDEXING') {
-        return reply.status(409).send({
-          success: false,
-          error: { message: 'Indexing already in progress' },
-        });
-      }
-
       // Reject activating a new repository beyond the plan limit before reindexing.
       const repoAccess = await usageService.ensureRepositoryAccess(userId, owner, repo);
       if (!repoAccess.allowed && repoAccess.details) {
         return sendUsageLimitReached(reply, repoAccess.details);
       }
 
-      await repositoryStatusService.markOutdated(userId, owner, repo, branch);
+      // Atomic claim: exactly one concurrent request gets to start the job.
+      const claimed = await repositoryStatusService.claimIndexing(userId, owner, repo, branch);
+      if (!claimed) {
+        return reply.status(409).send({
+          success: false,
+          error: { code: 'INDEXING_IN_PROGRESS', message: 'Indexing already in progress' },
+        });
+      }
 
-      repositoryIndexer.index(userId, owner, repo, branch).catch((err) => {
-        app.log.error({ err, owner, repo, branch }, 'Background reindexing failed');
-      });
+      runBackgroundJob(
+        request,
+        'repository-reindex',
+        () => repositoryIndexer.index(userId, owner, repo, branch),
+        {
+          onError: async (err) => {
+            await repositoryStatusService.markFailed(
+              userId,
+              owner,
+              repo,
+              branch,
+              err instanceof Error ? err.message.slice(0, 500) : 'Unknown error',
+            );
+          },
+        },
+      );
 
       return {
         success: true,

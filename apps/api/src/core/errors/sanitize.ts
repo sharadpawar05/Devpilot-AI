@@ -2,8 +2,12 @@
  * Error sanitization utilities
  *
  * Prevents internal error details (stack traces, SQL queries, file paths, etc.)
- * from being exposed to clients. Logs full errors server-side only.
+ * from being exposed to clients. Logs full errors server-side only, through
+ * the redacting structured logger.
  */
+
+import { rootLogger } from '@/core/logging/root-logger';
+import { getCurrentRequestId } from '@/core/logging/context';
 
 export interface SanitizedError {
   code: string;
@@ -134,10 +138,17 @@ function mapToKnownError(
 /**
  * Sanitizes an error for client exposure
  *
+ * The raw error is logged server-side through the redacting pino logger
+ * (`rootLogger`), tagged with the current correlation ID when called inside a
+ * request or background job — never through `console.*`, which would bypass
+ * secret redaction.
+ *
  * @param error - The original error (may be any type)
  * @param fallbackCode - Default error code if no mapping found
  * @param fallbackMessage - Default message if no mapping found
  * @param fallbackStatusCode - Default HTTP status code if no mapping found
+ * @param logError - Set false when the caller already logs the error with
+ *   request context (avoids duplicate log lines).
  * @returns Sanitized error safe for client exposure
  */
 export function sanitizeError(
@@ -145,17 +156,18 @@ export function sanitizeError(
   fallbackCode: string = 'REPOSITORY_LOAD_FAILED',
   fallbackMessage: string = 'Unable to load repository information.',
   fallbackStatusCode: number = 500,
+  logError = true,
 ): SanitizedError {
   // Extract message from error
   const rawMessage =
     error instanceof Error ? error.message : typeof error === 'string' ? error : 'Unknown error';
 
-  // Log the full error server-side
-  console.error('[Repository Overview Error]', {
-    message: rawMessage,
-    stack: error instanceof Error ? error.stack : undefined,
-    timestamp: new Date().toISOString(),
-  });
+  if (logError) {
+    rootLogger.error(
+      { requestId: getCurrentRequestId(), err: error, fallbackCode },
+      'Sanitizing error for client response',
+    );
+  }
 
   // Check if the raw message contains internal details
   if (containsInternalDetails(rawMessage)) {
@@ -196,6 +208,17 @@ export function createErrorResponse(
   fallbackStatusCode?: number,
 ): { success: false; error: { code: string; message: string } } {
   const sanitized = sanitizeError(error, fallbackCode, fallbackMessage, fallbackStatusCode);
+  return createSanitizedErrorResponse(sanitized);
+}
+
+/**
+ * Builds the standard error body from an already-sanitized error, avoiding a
+ * second sanitize pass (and a duplicate log line).
+ */
+export function createSanitizedErrorResponse(sanitized: SanitizedError): {
+  success: false;
+  error: { code: string; message: string };
+} {
   return {
     success: false,
     error: {

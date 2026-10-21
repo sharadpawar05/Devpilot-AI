@@ -4,3 +4,10 @@ useDefault = true
 [[allowlists]]
 description = "Known historical findings in .env.example committed by dc8bfd1b. Secrets must be rotated; remove this entry once history is scrubbed."
 commits = ["dc8bfd1b1e9320a8b9811b65d67f33c49bf7567d"]
+
+[[allowlists]]
+description = "Synthetic tokens in unit tests that exercise the log-redaction patterns (ghp_*, JWTs). Not real credentials."
+paths = [
+  '''apps/api/src/core/logging/__tests__/redact\.test\.ts''',
+  '''apps/api/src/core/http/__tests__/server\-options\.test\.ts''',
+]

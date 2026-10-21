@@ -27,6 +27,9 @@ export async function releaseNotesRoutes(app: FastifyInstance) {
     '/release-notes/generate',
     {
       preHandler: [authenticate],
+      config: {
+        rateLimit: { max: 10, timeWindow: '1 minute' }, // AI report,
+      },
       schema: {
         description: 'Generate release notes from repository activity',
         tags: ['release-notes'],

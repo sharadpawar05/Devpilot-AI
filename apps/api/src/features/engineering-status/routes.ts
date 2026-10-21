@@ -30,6 +30,9 @@ export async function engineeringStatusRoutes(app: FastifyInstance) {
     '/engineering-status/generate',
     {
       preHandler: [authenticate],
+      config: {
+        rateLimit: { max: 10, timeWindow: '1 minute' }, // AI report,
+      },
       schema: {
         description: 'Generate an engineering status report',
         tags: ['engineering-status'],

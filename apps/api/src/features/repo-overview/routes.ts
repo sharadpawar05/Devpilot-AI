@@ -6,7 +6,7 @@ import { aiService } from '@/core/ai/service';
 import { repoOverviewService } from './overview-service';
 import { generatorService } from './generator-service';
 import { repositoryAnalyzer } from './analyzer-service';
-import { sanitizeError, createErrorResponse } from '@/core/errors/sanitize';
+import { sanitizeError, createSanitizedErrorResponse } from '@/core/errors/sanitize';
 import {
   usageService,
   sendUsageLimitReached,
@@ -72,7 +72,7 @@ export async function repoOverviewRoutes(app: FastifyInstance) {
           'Unable to load repository information.',
           500,
         );
-        return reply.status(sanitized.statusCode).send(createErrorResponse(error));
+        return reply.status(sanitized.statusCode).send(createSanitizedErrorResponse(sanitized));
       }
     },
   );
@@ -146,7 +146,7 @@ export async function repoOverviewRoutes(app: FastifyInstance) {
           'Unable to load repository structure.',
           500,
         );
-        return reply.status(sanitized.statusCode).send(createErrorResponse(error));
+        return reply.status(sanitized.statusCode).send(createSanitizedErrorResponse(sanitized));
       }
     },
   );
@@ -205,7 +205,7 @@ export async function repoOverviewRoutes(app: FastifyInstance) {
           'Unable to load file content.',
           500,
         );
-        return reply.status(sanitized.statusCode).send(createErrorResponse(error));
+        return reply.status(sanitized.statusCode).send(createSanitizedErrorResponse(sanitized));
       }
     },
   );
@@ -214,6 +214,9 @@ export async function repoOverviewRoutes(app: FastifyInstance) {
     '/repo-overview/summary',
     {
       preHandler: [authenticate],
+      config: {
+        rateLimit: { max: 20, timeWindow: '1 minute' }, // AI report,
+      },
       schema: {
         description: 'Generate AI summary of repository',
         tags: ['repo-overview'],
@@ -370,7 +373,7 @@ Keep each section concise. Do not add any other sections.`;
           'Unable to load contributors.',
           500,
         );
-        return reply.status(sanitized.statusCode).send(createErrorResponse(error));
+        return reply.status(sanitized.statusCode).send(createSanitizedErrorResponse(sanitized));
       }
     },
   );
@@ -409,7 +412,7 @@ Keep each section concise. Do not add any other sections.`;
           'Unable to analyze repository.',
           500,
         );
-        return reply.status(sanitized.statusCode).send(createErrorResponse(error));
+        return reply.status(sanitized.statusCode).send(createSanitizedErrorResponse(sanitized));
       }
     },
   );
@@ -441,6 +444,9 @@ Keep each section concise. Do not add any other sections.`;
     '/repo-overview/generate',
     {
       preHandler: [authenticate],
+      config: {
+        rateLimit: { max: 10, timeWindow: '1 minute' }, // AI + health scan,
+      },
       schema: {
         description: 'Generate an AI-powered artifact for repository health',
         tags: ['repo-overview'],

@@ -13,6 +13,7 @@ const CODE_STATUS: Record<string, number> = {
   CONTEXT_LENGTH_EXCEEDED: 400,
   INVALID_REQUEST: 400,
   PROVIDER_UNAVAILABLE: 503,
+  AI_OVERLOADED: 503,
   PROVIDER_NOT_IMPLEMENTED: 501,
   NOT_IMPLEMENTED: 501,
   TIMEOUT: 504,
@@ -86,6 +87,8 @@ function messageForCode(code: string): string | undefined {
       return 'The selected model is not available. Please try a different provider.';
     case 'PROVIDER_UNAVAILABLE':
       return 'The selected AI provider is not configured or unavailable.';
+    case 'AI_OVERLOADED':
+      return 'The AI service is at capacity. Please try again in a moment.';
     case 'TIMEOUT':
       return 'The AI provider timed out. Please try again.';
     case 'ABORTED':

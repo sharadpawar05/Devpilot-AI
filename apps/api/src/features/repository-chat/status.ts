@@ -26,6 +26,21 @@ export class RepositoryStatusService {
     await this.setStatus(userId, owner, repo, branch, 'INDEXING');
   }
 
+  /**
+   * Atomically claim the indexing job. Returns false when another request
+   * already holds a fresh claim (or a valid claim exists) — callers must
+   * respond 409 instead of starting a duplicate job.
+   */
+  async claimIndexing(
+    userId: string,
+    owner: string,
+    repo: string,
+    branch: string,
+    staleMs?: number,
+  ): Promise<boolean> {
+    return repositoryCache.claimIndexing(userId, owner, repo, branch, staleMs);
+  }
+
   async markReady(userId: string, owner: string, repo: string, branch: string): Promise<void> {
     await this.setStatus(userId, owner, repo, branch, 'READY');
   }

@@ -1,5 +1,6 @@
 import { repositoryIntelligenceService } from '@/features/repo-intelligence';
 import { aiService } from '@/core/ai/service';
+import { rootLogger } from '@/core/logging/root-logger';
 import { classifyAIError } from '@/core/ai/classify-error';
 import type {
   EngineeringStatusRequest,
@@ -106,7 +107,7 @@ export class EngineeringStatusService {
       };
     } catch (error) {
       const classified = classifyAIError(error);
-      console.error('Engineering status AI generation failed:', error);
+      rootLogger.error({ err: error }, 'Engineering status AI generation failed');
       return {
         success: false,
         error: {

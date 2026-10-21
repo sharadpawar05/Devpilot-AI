@@ -6,13 +6,16 @@ const getCommitSha = vi.fn();
 const getIndex = vi.fn();
 const ensureRepositoryAccess = vi.fn();
 const index = vi.fn();
+const claimIndexing = vi.fn();
+const markFailed = vi.fn();
 
 vi.mock('@/features/repository-chat/status', () => ({
   repositoryStatusService: {
     getStatus: (...args: unknown[]) => getStatus(...args),
+    claimIndexing: (...args: unknown[]) => claimIndexing(...args),
     markIndexing: vi.fn(),
     markOutdated: vi.fn(),
-    markFailed: vi.fn(),
+    markFailed: (...args: unknown[]) => markFailed(...args),
   },
 }));
 
@@ -100,6 +103,8 @@ describe('repository routes input validation', () => {
     getIndex.mockReset().mockResolvedValue(null);
     ensureRepositoryAccess.mockReset().mockResolvedValue({ allowed: true });
     index.mockReset().mockResolvedValue(undefined);
+    claimIndexing.mockReset().mockResolvedValue(true);
+    markFailed.mockReset().mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -195,5 +200,61 @@ describe('repository routes input validation', () => {
       commitSha: 'sha',
       branch: 'main',
     });
+  });
+});
+
+describe('repository index claims', () => {
+  let handlers: Record<string, Handler>;
+
+  beforeEach(async () => {
+    handlers = await loadHandlers();
+    getStatus.mockReset().mockResolvedValue('READY');
+    getIndex.mockReset().mockResolvedValue(null);
+    ensureRepositoryAccess.mockReset().mockResolvedValue({ allowed: true });
+    index.mockReset().mockResolvedValue(undefined);
+    claimIndexing.mockReset().mockResolvedValue(true);
+    markFailed.mockReset().mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('starts indexing through the atomic claim and returns immediately', async () => {
+    const reply = makeReply();
+    const result = (await handlers['POST /repositories/:owner/:repo/index'](
+      makeRequest({ params: { owner: 'octo', repo: 'api' }, body: {} }),
+      reply,
+    )) as Record<string, unknown>;
+
+    expect(claimIndexing).toHaveBeenCalledWith('user-a', 'octo', 'api', 'main');
+    expect(result).toMatchObject({ success: true, status: 'INDEXING' });
+  });
+
+  it('rejects a second index request while a claim is held', async () => {
+    claimIndexing.mockResolvedValue(false);
+
+    const reply = makeReply();
+    await handlers['POST /repositories/:owner/:repo/index'](
+      makeRequest({ params: { owner: 'octo', repo: 'api' }, body: {} }),
+      reply,
+    );
+
+    expect(reply.statusCode).toBe(409);
+    expect(reply.payload?.error).toMatchObject({ code: 'INDEXING_IN_PROGRESS' });
+    expect(index).not.toHaveBeenCalled();
+  });
+
+  it('claims before reindexing too', async () => {
+    claimIndexing.mockResolvedValue(false);
+
+    const reply = makeReply();
+    await handlers['POST /repositories/:owner/:repo/reindex'](
+      makeRequest({ params: { owner: 'octo', repo: 'api' }, body: {} }),
+      reply,
+    );
+
+    expect(claimIndexing).toHaveBeenCalledWith('user-a', 'octo', 'api', 'main');
+    expect(reply.statusCode).toBe(409);
   });
 });

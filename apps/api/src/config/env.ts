@@ -22,6 +22,12 @@ const envSchema = z.object({
   GROAK_API_KEY: z.string().default(''),
   GROQ_API_KEY: z.string().default(''),
   AI_DEFAULT_MODEL: z.string().default('gemini-3.6-flash'),
+  // Outbound AI call bounds (read by core/ai/concurrency.ts via process.env;
+  // validated here so a malformed value fails fast at boot).
+  AI_MAX_CONCURRENT: z.coerce.number().int().min(1).max(64).default(4),
+  AI_MAX_QUEUE: z.coerce.number().int().min(0).max(1000).default(16),
+  AI_QUEUE_TIMEOUT_MS: z.coerce.number().int().min(100).max(300_000).default(30_000),
+  AI_STREAM_IDLE_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(600_000).default(60_000),
 });
 
 export type Env = z.infer<typeof envSchema>;

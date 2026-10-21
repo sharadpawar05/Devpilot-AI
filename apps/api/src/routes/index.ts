@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { healthRoutes } from './health';
+import { metricsRoutes } from './metrics';
 import { versionRoutes } from './version';
 import { meRoutes } from './me';
 import { dashboardRoutes } from './dashboard';
@@ -21,6 +22,7 @@ import { incidentSummaryRoutes } from '@/features/incident-summary';
 
 export async function apiV1Routes(app: FastifyInstance) {
   await app.register(healthRoutes);
+  await app.register(metricsRoutes);
   await app.register(versionRoutes);
   await app.register(meRoutes);
   await app.register(dashboardRoutes);
