@@ -18,6 +18,10 @@ export async function isAuthServiceReachable(timeoutMs = DEFAULT_TIMEOUT_MS): Pr
   try {
     const response = await fetch(`${env.VITE_SUPABASE_URL}/auth/v1/health`, {
       method: 'GET',
+      headers: {
+        apikey: env.VITE_SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${env.VITE_SUPABASE_ANON_KEY}`,
+      },
       signal: controller.signal,
     });
     return response.ok;
