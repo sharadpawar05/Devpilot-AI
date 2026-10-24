@@ -1,3 +1,4 @@
+import { guardUntrusted, UNTRUSTED_FIELDS } from './guard';
 import type {
   PromptTemplate,
   PromptVariable,
@@ -180,7 +181,11 @@ export class PromptRenderer {
     result = result.replace(/\{\{(\w+)\}\}/g, (match, key) => {
       if (key in variables) {
         const value = variables[key];
-        return value === undefined || value === null ? '' : String(value);
+        if (value === undefined || value === null) return '';
+        const str = String(value);
+        // Auto-wrap untrusted data fields so injected instructions are framed
+        // as data, not as prompt instructions.
+        return UNTRUSTED_FIELDS.has(key) ? guardUntrusted(str) : str;
       }
       return match;
     });

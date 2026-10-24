@@ -11,6 +11,7 @@ import { db } from '@/core/db';
 import { config } from '@devpilot/config';
 import { usageService, sendUsageLimitReached, AI_CREDIT_COSTS } from '@/core/usage';
 import { runBackgroundJob } from '@/core/logging';
+import { guardUntrusted } from '@devpilot/ai-prompts';
 import {
   githubOwnerSchema,
   githubRepoSchema,
@@ -322,13 +323,13 @@ export async function repositoryChatRoutes(app: FastifyInstance) {
       const treeSummary = buildTreeSummary(index.tree);
       const keyFilesContext = buildKeyFilesContext({});
       const relevantContext = Object.entries(fileContents)
-        .map(([path, content]) => `--- ${path} ---\n${content}`)
+        .map(([path, content]) => `--- ${path} ---\n${guardUntrusted(content)}`)
         .join('\n\n');
 
       const conversationContext =
         conversationHistory.length > 0
           ? '\n\nPrevious conversation:\n' +
-            conversationHistory.map((m) => `${m.role}: ${m.content}`).join('\n')
+            guardUntrusted(conversationHistory.map((m) => `${m.role}: ${m.content}`).join('\n'))
           : '';
 
       const systemPrompt = `You are a helpful code assistant chatbot, similar to GitHub Copilot Chat or ChatGPT.
@@ -364,7 +365,7 @@ Relevant Code Files:
 ${relevantContext || '(No specific files matched - provide a general answer based on the repository structure)'}
 ${conversationContext}
 
-Question: ${question}`;
+Question: ${guardUntrusted(question)}`;
 
       const questionLower = question.toLowerCase();
       const isReportRequest =
