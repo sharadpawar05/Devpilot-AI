@@ -62,7 +62,8 @@ function getFindingCopy(detail: RepoHealthDetail): { title: string; description:
 interface NeedsAttentionCardProps {
   details: RepoHealthDetail[] | null | undefined;
   isLoading: boolean;
-  error: string | null;
+  /** Structured error: message plus whether a retry can succeed. */
+  error: { message: string; retryable?: boolean } | null;
   onRetry: () => void;
   hasRepo: boolean;
 }
@@ -109,11 +110,13 @@ export const NeedsAttentionCard = memo(function NeedsAttentionCard({
       <div className="rounded-2xl border border-input bg-card p-6 shadow-sm">
         {header}
         <div className="flex flex-col items-start gap-3">
-          <p className="text-sm text-muted-foreground">{error}</p>
-          <Button variant="outline" size="sm" onClick={onRetry} className="gap-1.5">
-            <RefreshCw className="h-3.5 w-3.5" />
-            Retry
-          </Button>
+          <p className="text-sm text-muted-foreground">{error.message}</p>
+          {error.retryable !== false && (
+            <Button variant="outline" size="sm" onClick={onRetry} className="gap-1.5">
+              <RefreshCw className="h-3.5 w-3.5" />
+              Retry
+            </Button>
+          )}
         </div>
       </div>
     );

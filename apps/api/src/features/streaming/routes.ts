@@ -34,10 +34,10 @@ const streamRequestSchema = z
     provider: z.enum(['gemini', 'openai', 'anthropic', 'openrouter', 'groq']).default('gemini'),
     model: z.string().optional(),
     prompt: z.string().max(MAX_PROMPT_CHARS).optional(),
-    context: z.record(z.unknown()).default({}),
+    context: z.record(z.string(), z.unknown()).default({}),
     temperature: z.number().min(0).max(2).optional(),
     maxTokens: z.number().min(1).max(100000).optional(),
-    metadata: z.record(z.unknown()).optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
   })
   .superRefine((value, ctx) => {
     const contextSize = JSON.stringify(value.context ?? {}).length;
@@ -171,7 +171,7 @@ export async function streamingRoutes(app: FastifyInstance) {
           success: false,
           error: {
             code: 'VALIDATION_ERROR',
-            message: parsed.error.errors.map((e) => e.message).join(', '),
+            message: parsed.error.issues.map((e) => e.message).join(', '),
           },
         });
       }

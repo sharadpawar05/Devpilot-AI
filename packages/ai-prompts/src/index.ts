@@ -30,6 +30,8 @@ export { compilePrompt, estimateTokens } from './utils';
 export { PromptRenderer } from './renderer';
 export { PromptRegistry } from './registry';
 
+export { guardUntrusted, guardOptional, UNTRUSTED_DELIMITER, UNTRUSTED_FIELDS } from './guard';
+
 export { loadMarkdownPrompts, getMarkdownPrompt, MARKDOWN_PROMPT_IDS } from './markdown-templates';
 
 export { parseMarkdownPrompt, parseMarkdownPrompts } from './loader';

@@ -39,7 +39,8 @@ interface HealthSnapshotCardProps {
   repoFullName: string | null;
   health: RepoHealthCheck | null | undefined;
   isLoading: boolean;
-  error: string | null;
+  /** Structured error: message plus whether a retry can succeed and when a usage limit resets. */
+  error: { message: string; retryable?: boolean; resetAt?: string | null } | null;
   onRetry: () => void;
 }
 
@@ -88,11 +89,31 @@ export const HealthSnapshotCard = memo(function HealthSnapshotCard({
       <div className="rounded-2xl border border-input bg-card p-6 shadow-sm">
         {header}
         <div className="flex flex-col items-start gap-3">
-          <p className="text-sm text-muted-foreground">{error}</p>
-          <Button variant="outline" size="sm" onClick={onRetry} className="gap-1.5">
-            <RefreshCw className="h-3.5 w-3.5" />
-            Retry
-          </Button>
+          <p className="text-sm text-muted-foreground">{error.message}</p>
+          {error.resetAt && (
+            <p className="text-xs text-muted-foreground">
+              Resets{' '}
+              {new Date(error.resetAt).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+              })}
+            </p>
+          )}
+          {error.retryable === false ? (
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => navigate('/settings')}
+              className="gap-1.5"
+            >
+              Upgrade
+            </Button>
+          ) : (
+            <Button variant="outline" size="sm" onClick={onRetry} className="gap-1.5">
+              <RefreshCw className="h-3.5 w-3.5" />
+              Retry
+            </Button>
+          )}
         </div>
       </div>
     );

@@ -1,11 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { UsageLimits } from '@/components/dashboard/UsageLimits';
 import { useUsage } from '@/hooks/use-usage';
 
 vi.mock('@/hooks/use-usage');
 
 const mockUseUsage = vi.mocked(useUsage);
+
+function renderUsage() {
+  return render(
+    <MemoryRouter>
+      <UsageLimits />
+    </MemoryRouter>,
+  );
+}
 
 function mockPending() {
   return {
@@ -123,7 +132,7 @@ describe('UsageLimits', () => {
   it('should show loading skeleton while pending', () => {
     mockUseUsage.mockReturnValue(mockPending() as ReturnType<typeof useUsage>);
 
-    const { container } = render(<UsageLimits />);
+    const { container } = renderUsage();
     expect(screen.getByText('Usage & Limits')).toBeTruthy();
     expect(container.querySelector('[aria-busy="true"]')).toBeTruthy();
   });
@@ -146,7 +155,7 @@ describe('UsageLimits', () => {
       }) as ReturnType<typeof useUsage>,
     );
 
-    render(<UsageLimits />);
+    renderUsage();
     expect(screen.getByText('Usage & Limits')).toBeTruthy();
     // AI Credits primary row
     expect(screen.getByText('3 / 50')).toBeTruthy();
@@ -188,7 +197,7 @@ describe('UsageLimits', () => {
       }) as ReturnType<typeof useUsage>,
     );
 
-    render(<UsageLimits />);
+    renderUsage();
     // Progress bars clamp at 100%
     const bars = screen.getAllByRole('progressbar');
     for (const bar of bars) {
@@ -215,7 +224,7 @@ describe('UsageLimits', () => {
       }) as ReturnType<typeof useUsage>,
     );
 
-    render(<UsageLimits />);
+    renderUsage();
     const limitMessages = screen.getAllByText('Plan limit reached');
     expect(limitMessages.length).toBeGreaterThan(0);
     expect(screen.getByText('AI credits exhausted')).toBeTruthy();
@@ -240,7 +249,7 @@ describe('UsageLimits', () => {
       }) as ReturnType<typeof useUsage>,
     );
 
-    render(<UsageLimits />);
+    renderUsage();
     expect(screen.getByText('1 / 1 used')).toBeTruthy();
     expect(screen.queryByText('Plan limit reached')).toBeNull();
     expect(screen.queryByText('AI credits exhausted')).toBeNull();
@@ -264,7 +273,7 @@ describe('UsageLimits', () => {
       }) as ReturnType<typeof useUsage>,
     );
 
-    render(<UsageLimits />);
+    renderUsage();
     expect(screen.queryByText('AI credits exhausted')).toBeNull();
     expect(screen.queryByText('Plan limit reached')).toBeNull();
     expect(screen.getByText('1 remaining')).toBeTruthy();
@@ -273,7 +282,7 @@ describe('UsageLimits', () => {
   it('should show error state with retry when query fails', () => {
     mockUseUsage.mockReturnValue(mockError('Failed to fetch usage') as ReturnType<typeof useUsage>);
 
-    render(<UsageLimits />);
+    renderUsage();
     expect(screen.getByText('Failed to fetch usage')).toBeTruthy();
     expect(screen.getByRole('button', { name: /Retry/i })).toBeTruthy();
   });
@@ -281,7 +290,7 @@ describe('UsageLimits', () => {
   it('should show fallback error copy when error has no message', () => {
     mockUseUsage.mockReturnValue(mockError('') as ReturnType<typeof useUsage>);
 
-    render(<UsageLimits />);
+    renderUsage();
     expect(screen.getByText('Unable to load usage and limits.')).toBeTruthy();
   });
 });

@@ -38,7 +38,10 @@ export function sendUsageLimitReached(
     FEATURE_MESSAGES[details.feature]?.(details) ??
     `You have reached your ${featureLabel} limit (${details.used}/${details.limit}). Upgrade your plan or wait until the next billing period.`;
 
-  return reply.status(403).send({
+  // 402 Payment Required: the user has exhausted a plan quota and must
+  // upgrade (or wait for reset). Distinct from 403, which we reserve for
+  // authentication/authorization failures.
+  return reply.status(402).send({
     success: false,
     error: {
       code: 'USAGE_LIMIT_REACHED',

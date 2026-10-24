@@ -121,4 +121,31 @@ describe('HealthSnapshotCard', () => {
     expect(screen.getByText('+3 pts')).toBeInTheDocument();
     expect(screen.queryByText('· No change')).toBeNull();
   });
+
+  it('renders a usage-limit error once with Upgrade and no Retry button', () => {
+    const onRetry = vi.fn();
+    render(
+      <MemoryRouter>
+        <HealthSnapshotCard
+          repoFullName="acme/api"
+          health={null}
+          isLoading={false}
+          error={{
+            message: 'Health scan limit reached. Your plan includes 2 scans per month.',
+            retryable: false,
+            resetAt: '2026-11-01T00:00:00.000Z',
+          }}
+          onRetry={onRetry}
+        />
+      </MemoryRouter>,
+    );
+
+    // Message rendered exactly once.
+    expect(screen.getAllByText(/Health scan limit reached/)).toHaveLength(1);
+    // Non-retryable: Upgrade CTA, no Retry button.
+    expect(screen.getByRole('button', { name: /upgrade/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /retry/i })).toBeNull();
+    // Reset date surfaced.
+    expect(screen.getByText(/Resets/)).toBeInTheDocument();
+  });
 });

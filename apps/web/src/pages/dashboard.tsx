@@ -16,12 +16,17 @@ import { HealthSnapshotCard } from '@/components/dashboard/HealthSnapshotCard';
 import { NeedsAttentionCard } from '@/components/dashboard/NeedsAttentionCard';
 import { DashboardFullSkeleton } from '@/components/dashboard/skeletons';
 import { aiHistoryApi } from '@/lib/ai-history';
+import { getErrorMessage } from '@/lib/error-messages';
 
 export function DashboardPage() {
   const { user, session } = useAuth();
   const token = session?.accessToken;
   const gh = useGitHub();
   const { data: dashboardData, isLoading: dashboardLoading } = useDashboard(token);
+
+  // Server-side MAX(createdAt) from GET /dashboard. React Query refetches this
+  // key on invalidation (e.g. after AI actions), so lastActive stays fresh.
+  const lastActivityAt = dashboardData?.stats?.lastActivityAt ?? null;
   const fetchedPRsForRepo = useRef<string | null>(null);
   const [stats, setStats] = useState({
     aiRequestsToday: 0,
@@ -49,11 +54,22 @@ export function DashboardPage() {
     refetch: refetchHealth,
   } = useRepoOverview(healthOwner, healthRepo);
 
-  const healthErrorMessage = healthIsError
-    ? healthError instanceof Error
-      ? healthError.message
-      : 'Failed to load health data.'
-    : null;
+  // Single structured error surfaced once. Usage-limit failures are non-retryable
+  // and carry a resetAt so the card can offer Upgrade instead of a pointless Retry.
+  const healthErrorMessage = useMemo(() => {
+    if (!healthIsError || !healthError) return null;
+    const config = getErrorMessage({
+      message: healthError.message,
+    });
+    const isLimit =
+      healthError.message.toLowerCase().includes('limit reached') ||
+      /includes \d+ .* per month|includes \d+ active repository/i.test(healthError.message);
+    return {
+      message: config.message,
+      retryable: isLimit ? false : (config.retryable ?? true),
+      resetAt: null as string | null,
+    };
+  }, [healthIsError, healthError]);
 
   useEffect(() => {
     if (!token) return;
@@ -71,10 +87,10 @@ export function DashboardPage() {
         today.setHours(0, 0, 0, 0);
         const todaySessions = sessions.filter((s) => new Date(s.createdAt) >= today);
 
-        const mostRecent = sessions.length > 0 ? sessions[0] : null;
         const avgReviewMs = reviewSessions.length > 0 ? reviewLatency / reviewSessions.length : 0;
 
-        setStats({
+        setStats((prev) => ({
+          ...prev,
           aiRequestsToday: todaySessions.length,
           codeReviews: reviewSessions.length,
           avgReviewTime:
@@ -84,8 +100,9 @@ export function DashboardPage() {
                 ? '< 1s'
                 : `${Math.round(avgReviewMs / 1000)}s`,
           lastSyncedAt: gh.connected ? new Date().toISOString() : null,
-          lastActivityAt: mostRecent?.createdAt ?? null,
-        });
+          // lastActivityAt comes from the server (MAX(createdAt)); sessions[0] is
+          // pinned-first, not most-recent, so it is not a valid fallback here.
+        }));
       } catch {
         // Keep default stats
       }
@@ -132,7 +149,7 @@ export function DashboardPage() {
           user={user}
           gh={gh}
           aiRequestsToday={stats.aiRequestsToday}
-          lastActivityAt={stats.lastActivityAt}
+          lastActivityAt={lastActivityAt ?? stats.lastActivityAt}
         />
         <QuickActions />
         <EmptyState />
@@ -146,7 +163,7 @@ export function DashboardPage() {
         user={user}
         gh={gh}
         aiRequestsToday={stats.aiRequestsToday}
-        lastActivityAt={stats.lastActivityAt}
+        lastActivityAt={lastActivityAt ?? stats.lastActivityAt}
       />
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -162,7 +179,7 @@ export function DashboardPage() {
         <NeedsAttentionCard
           details={overview?.health?.details ?? null}
           isLoading={healthLoading}
-          error={healthErrorMessage}
+          error={null}
           onRetry={() => {
             void refetchHealth();
           }}
@@ -180,7 +197,7 @@ export function DashboardPage() {
             codeReviews={stats.codeReviews}
             avgReviewTime={stats.avgReviewTime}
             githubRepos={gh.repositories.length}
-            openPRs={gh.pulls.length}
+            openPRs={gh.error && gh.pulls.length === 0 ? null : gh.pulls.length}
             connectedSince={dashboardData?.github?.connectedAt ?? null}
           />
         </div>

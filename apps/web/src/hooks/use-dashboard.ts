@@ -25,6 +25,7 @@ export interface DashboardActivity {
 export interface DashboardData {
   success: boolean;
   github: DashboardGitHub;
+  stats?: { lastActivityAt?: string | null };
   activity: DashboardActivity[];
 }
 

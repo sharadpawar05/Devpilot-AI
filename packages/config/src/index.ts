@@ -31,12 +31,10 @@ function loadEnv(): Env {
   const result = envSchema.safeParse(process.env);
 
   if (!result.success) {
-    const formatted = result.error.format();
-    const errors = Object.entries(formatted)
-      .filter(([key]) => key !== '_errors')
-      .map(([key, value]) => {
-        const errors = (value as { _errors?: string[] })._errors;
-        return errors?.length ? `${key}: ${errors.join(', ')}` : null;
+    const errors = result.error.issues
+      .map((issue) => {
+        const key = issue.path.length > 0 ? issue.path.join('.') : '(root)';
+        return `${key}: ${issue.message}`;
       })
       .filter(Boolean);
 

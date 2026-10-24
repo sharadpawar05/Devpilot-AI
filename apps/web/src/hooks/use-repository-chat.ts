@@ -114,6 +114,9 @@ export function useRepositoryChat(token: string | undefined) {
     question: string;
     provider: string;
     model?: string;
+    /** Idempotency key reused by retryLastMessage so a retry of the same
+     * message can never create a second history session. */
+    clientRequestId: string;
   } | null>(null);
 
   useEffect(() => {
@@ -185,7 +188,16 @@ export function useRepositoryChat(token: string | undefined) {
       setIsChatting(true);
       setError(null);
 
-      lastMessageParamsRef.current = { owner, repo, branch, question, provider, model };
+      lastMessageParamsRef.current = {
+        owner,
+        repo,
+        branch,
+        question,
+        provider,
+        model,
+        clientRequestId: crypto.randomUUID(),
+      };
+      const clientRequestId = lastMessageParamsRef.current.clientRequestId;
 
       const userMsg: ChatMessage = {
         id: crypto.randomUUID(),
@@ -248,6 +260,7 @@ export function useRepositoryChat(token: string | undefined) {
               title,
               provider: (data.provider || provider) as never,
               model: (data.model || model || 'gemini') as never,
+              clientRequestId,
               messages: allMessages.map((m) => ({
                 id: m.id,
                 role: m.role,
@@ -277,7 +290,7 @@ export function useRepositoryChat(token: string | undefined) {
     const params = lastMessageParamsRef.current;
     if (!params || !token) return null;
 
-    const { owner, repo, branch, question, provider, model } = params;
+    const { owner, repo, branch, question, provider, model, clientRequestId } = params;
 
     setIsChatting(true);
     setError(null);
@@ -353,6 +366,7 @@ export function useRepositoryChat(token: string | undefined) {
             title,
             provider: (data.provider || provider) as never,
             model: (data.model || model || 'gemini') as never,
+            clientRequestId,
             messages: allMessages.map((m) => ({
               id: m.id,
               role: m.role,

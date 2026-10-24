@@ -44,6 +44,9 @@ const createSessionSchema = z.object({
       tokens: z.number().optional().default(0),
     }),
   ),
+  // Idempotency key: retried/duplicated requests for the same user action
+  // resolve to the same session instead of creating a second row.
+  clientRequestId: z.string().min(8).max(128).optional(),
 });
 
 const updateSessionSchema = z.object({
@@ -105,6 +108,58 @@ const workflowTypeReverseMap: Record<string, string> = {
   ARCHITECTURE_REVIEW: 'architecture-review',
 };
 
+type SessionWithMessages = {
+  id: string;
+  workflowType: string;
+  repository: string | null;
+  title: string;
+  provider: string;
+  model: string;
+  totalLatency: number;
+  totalTokens: number;
+  pinned: boolean;
+  archived: boolean;
+  favorite: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  messages: Array<{
+    id: string;
+    role: string;
+    content: string;
+    latency: number;
+    tokens: number;
+    createdAt: Date;
+  }>;
+};
+
+function mapSessionResponse(session: SessionWithMessages) {
+  return {
+    success: true,
+    id: session.id,
+    workflowType:
+      workflowTypeReverseMap[session.workflowType] || session.workflowType.toLowerCase(),
+    repository: session.repository,
+    title: session.title,
+    provider: session.provider,
+    model: session.model,
+    totalLatency: session.totalLatency,
+    totalTokens: session.totalTokens,
+    pinned: session.pinned,
+    archived: session.archived,
+    favorite: session.favorite,
+    createdAt: session.createdAt.toISOString(),
+    updatedAt: session.updatedAt.toISOString(),
+    messages: session.messages.map((m) => ({
+      id: m.id,
+      role: m.role,
+      content: m.content,
+      latency: m.latency,
+      tokens: m.tokens,
+      timestamp: m.createdAt.toISOString(),
+    })),
+  };
+}
+
 export async function aiHistoryRoutes(app: FastifyInstance) {
   app.post(
     '/ai-history/sessions',
@@ -123,7 +178,7 @@ export async function aiHistoryRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return reply.status(400).send({
           success: false,
-          error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0].message },
+          error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0].message },
         });
       }
 
@@ -153,64 +208,75 @@ export async function aiHistoryRoutes(app: FastifyInstance) {
       const totalLatency = messages.reduce((sum, m) => sum + m.latency, 0);
       const totalTokens = messages.reduce((sum, m) => sum + m.tokens, 0);
 
-      const session = await db.aIHistorySession.create({
-        data: {
-          userId: user.id,
-          workflowType: workflowTypeMap[sessionData.workflowType] as never,
-          repository: sessionData.repository,
-          title: sessionData.title,
-          provider: sessionData.provider,
-          model: sessionData.model,
-          totalLatency,
-          totalTokens,
-          messages: {
-            create: messages.map((m) => ({
-              role: m.role,
-              content: m.content,
-              latency: m.latency,
-              tokens: m.tokens,
-            })),
+      // Idempotent create: a duplicate clientRequestId returns the existing
+      // session (covers retries and double-fired callbacks for one action).
+      if (sessionData.clientRequestId) {
+        const existing = await db.aIHistorySession.findUnique({
+          where: {
+            userId_clientRequestId: {
+              userId: user.id,
+              clientRequestId: sessionData.clientRequestId,
+            },
           },
-        },
-        include: {
-          messages: { orderBy: { createdAt: 'asc' } },
-        },
-      });
+          include: { messages: { orderBy: { createdAt: 'asc' } } },
+        });
+        if (existing) {
+          return reply.send(mapSessionResponse(existing));
+        }
+      }
 
-      return reply.send({
-        success: true,
-        id: session.id,
-        workflowType:
-          workflowTypeReverseMap[session.workflowType] || session.workflowType.toLowerCase(),
-        repository: session.repository,
-        title: session.title,
-        provider: session.provider,
-        model: session.model,
-        totalLatency: session.totalLatency,
-        totalTokens: session.totalTokens,
-        pinned: session.pinned,
-        archived: session.archived,
-        favorite: session.favorite,
-        createdAt: session.createdAt.toISOString(),
-        updatedAt: session.updatedAt.toISOString(),
-        messages: session.messages.map(
-          (m: {
-            id: string;
-            role: string;
-            content: string;
-            latency: number;
-            tokens: number;
-            createdAt: Date;
-          }) => ({
-            id: m.id,
-            role: m.role,
-            content: m.content,
-            latency: m.latency,
-            tokens: m.tokens,
-            timestamp: m.createdAt.toISOString(),
-          }),
-        ),
-      });
+      let session;
+      try {
+        session = await db.aIHistorySession.create({
+          data: {
+            userId: user.id,
+            workflowType: workflowTypeMap[sessionData.workflowType] as never,
+            repository: sessionData.repository,
+            title: sessionData.title,
+            provider: sessionData.provider,
+            model: sessionData.model,
+            totalLatency,
+            totalTokens,
+            clientRequestId: sessionData.clientRequestId ?? null,
+            messages: {
+              create: messages.map((m) => ({
+                role: m.role,
+                content: m.content,
+                latency: m.latency,
+                tokens: m.tokens,
+              })),
+            },
+          },
+          include: {
+            messages: { orderBy: { createdAt: 'asc' } },
+          },
+        });
+      } catch (error) {
+        // Concurrent duplicate (unique userId+clientRequestId): return the
+        // row the winner created.
+        const isDuplicateKey =
+          sessionData.clientRequestId &&
+          typeof error === 'object' &&
+          error !== null &&
+          (error as { code?: string }).code === 'P2002';
+        if (isDuplicateKey) {
+          const existing = await db.aIHistorySession.findUnique({
+            where: {
+              userId_clientRequestId: {
+                userId: user.id,
+                clientRequestId: sessionData.clientRequestId!,
+              },
+            },
+            include: { messages: { orderBy: { createdAt: 'asc' } } },
+          });
+          if (existing) {
+            return reply.send(mapSessionResponse(existing));
+          }
+        }
+        throw error;
+      }
+
+      return reply.send(mapSessionResponse(session));
     },
   );
 
@@ -457,7 +523,7 @@ export async function aiHistoryRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return reply.status(400).send({
           success: false,
-          error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0].message },
+          error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0].message },
         });
       }
 
@@ -525,7 +591,7 @@ export async function aiHistoryRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return reply.status(400).send({
           success: false,
-          error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0].message },
+          error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0].message },
         });
       }
 

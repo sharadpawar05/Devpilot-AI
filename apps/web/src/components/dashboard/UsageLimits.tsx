@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { BarChart3, AlertTriangle, RefreshCw, HelpCircle, Coins } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -12,6 +13,7 @@ const CHAT_MESSAGES_HELP =
 
 export const UsageLimits = memo(function UsageLimits() {
   const { data: usage, isPending, isFetching, isError, error, refetch } = useUsage();
+  const navigate = useNavigate();
 
   const isLoading = isPending || isFetching;
 
@@ -141,6 +143,13 @@ export const UsageLimits = memo(function UsageLimits() {
                 Your monthly AI allowance has been used.
                 {periodLabel ? ` ${periodLabel}.` : ''}
               </p>
+              <Button
+                size="sm"
+                className="mt-1 h-7 px-3 text-xs"
+                onClick={() => navigate('/settings')}
+              >
+                Upgrade plan
+              </Button>
             </div>
           )}
         </div>

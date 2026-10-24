@@ -48,7 +48,7 @@ export async function engineeringStatusRoutes(app: FastifyInstance) {
           success: false,
           error: {
             code: 'VALIDATION_ERROR',
-            message: parsed.error.errors.map((e) => e.message).join(', '),
+            message: parsed.error.issues.map((e) => e.message).join(', '),
           },
         });
       }

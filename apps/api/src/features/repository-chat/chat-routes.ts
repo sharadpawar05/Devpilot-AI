@@ -11,6 +11,7 @@ import { db } from '@/core/db';
 import { config } from '@devpilot/config';
 import { usageService, sendUsageLimitReached, AI_CREDIT_COSTS } from '@/core/usage';
 import { runBackgroundJob } from '@/core/logging';
+import { guardUntrusted } from '@devpilot/ai-prompts';
 import {
   githubOwnerSchema,
   githubRepoSchema,
@@ -108,7 +109,7 @@ export async function repositoryChatRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return reply
           .status(400)
-          .send({ success: false, error: { message: parsed.error.errors[0].message } });
+          .send({ success: false, error: { message: parsed.error.issues[0].message } });
       }
 
       const { owner, repo, branch } = parsed.data;
@@ -213,7 +214,7 @@ export async function repositoryChatRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return reply.status(400).send({
           success: false,
-          error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message },
+          error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message },
         });
       }
       const { owner, repo, branch } = parsed.data;
@@ -255,7 +256,7 @@ export async function repositoryChatRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return reply
           .status(400)
-          .send({ success: false, error: { message: parsed.error.errors[0].message } });
+          .send({ success: false, error: { message: parsed.error.issues[0].message } });
       }
 
       const { owner, repo, branch, question, conversationHistory, provider, model, fileFilter } =
@@ -322,13 +323,13 @@ export async function repositoryChatRoutes(app: FastifyInstance) {
       const treeSummary = buildTreeSummary(index.tree);
       const keyFilesContext = buildKeyFilesContext({});
       const relevantContext = Object.entries(fileContents)
-        .map(([path, content]) => `--- ${path} ---\n${content}`)
+        .map(([path, content]) => `--- ${path} ---\n${guardUntrusted(content)}`)
         .join('\n\n');
 
       const conversationContext =
         conversationHistory.length > 0
           ? '\n\nPrevious conversation:\n' +
-            conversationHistory.map((m) => `${m.role}: ${m.content}`).join('\n')
+            guardUntrusted(conversationHistory.map((m) => `${m.role}: ${m.content}`).join('\n'))
           : '';
 
       const systemPrompt = `You are a helpful code assistant chatbot, similar to GitHub Copilot Chat or ChatGPT.
@@ -364,7 +365,7 @@ Relevant Code Files:
 ${relevantContext || '(No specific files matched - provide a general answer based on the repository structure)'}
 ${conversationContext}
 
-Question: ${question}`;
+Question: ${guardUntrusted(question)}`;
 
       const questionLower = question.toLowerCase();
       const isReportRequest =
@@ -451,7 +452,7 @@ Question: ${question}`;
       if (!parsed.success) {
         return reply.status(400).send({
           success: false,
-          error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message },
+          error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message },
         });
       }
       const { owner, repo, branch } = parsed.data;

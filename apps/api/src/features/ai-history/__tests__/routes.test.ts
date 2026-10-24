@@ -8,7 +8,7 @@ import { db } from '@/core/db';
 vi.mock('@/core/db', () => ({
   db: {
     user: { findUnique: vi.fn() },
-    aIHistorySession: { create: vi.fn() },
+    aIHistorySession: { create: vi.fn(), findUnique: vi.fn() },
   },
 }));
 
@@ -120,7 +120,7 @@ describe('POST /ai-history/sessions repository quota gate', () => {
     await handler({ auth: { sub: 'supa-user' }, body: validBody }, reply);
 
     expect(ensureSpy).toHaveBeenCalledWith('supa-user', 'octo', 'api');
-    expect(reply.statusCode).toBe(403);
+    expect(reply.statusCode).toBe(402);
     expect(reply.payload?.error).toMatchObject({
       code: 'USAGE_LIMIT_REACHED',
       feature: 'REPOSITORIES',
@@ -169,5 +169,114 @@ describe('POST /ai-history/sessions repository quota gate', () => {
 
     expect(ensureSpy).not.toHaveBeenCalled();
     expect(create).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('POST /ai-history/sessions idempotency (clientRequestId)', () => {
+  let handler: Handler;
+  let findUser: ReturnType<typeof vi.fn>;
+  let create: ReturnType<typeof vi.fn>;
+  let sessionFindUnique: ReturnType<typeof vi.fn>;
+
+  const existingSession = {
+    id: 'session-existing',
+    workflowType: 'PLAYGROUND',
+    repository: null,
+    title: 'Prompt',
+    provider: 'gemini',
+    model: 'gemini-3.6-flash',
+    totalLatency: 0,
+    totalTokens: 0,
+    pinned: false,
+    archived: false,
+    favorite: false,
+    createdAt: new Date('2026-10-20T00:00:00.000Z'),
+    updatedAt: new Date('2026-10-20T00:00:00.000Z'),
+    messages: [],
+  };
+
+  const bodyWithKey = {
+    workflowType: 'playground',
+    title: 'Prompt',
+    provider: 'gemini',
+    model: 'gemini-3.6-flash',
+    messages: [{ role: 'user', content: 'hi' }],
+    clientRequestId: 'client-req-0001',
+  };
+
+  beforeEach(async () => {
+    handler = await createSessionHandler();
+    vi.spyOn(usageService, 'ensureRepositoryAccess').mockResolvedValue(allowed);
+    findUser = db.user.findUnique as ReturnType<typeof vi.fn>;
+    create = db.aIHistorySession.create as ReturnType<typeof vi.fn>;
+    sessionFindUnique = db.aIHistorySession.findUnique as ReturnType<typeof vi.fn>;
+    findUser.mockResolvedValue({ id: 'local-user' });
+    create.mockResolvedValue({ ...existingSession, id: 'session-1' });
+    sessionFindUnique.mockResolvedValue(null);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('returns the existing session instead of creating a duplicate row', async () => {
+    sessionFindUnique.mockResolvedValue(existingSession);
+    const reply = makeReply();
+
+    await handler({ auth: { sub: 'supa-user' }, body: bodyWithKey }, reply);
+
+    expect(sessionFindUnique).toHaveBeenCalledWith({
+      where: {
+        userId_clientRequestId: {
+          userId: 'local-user',
+          clientRequestId: 'client-req-0001',
+        },
+      },
+      include: { messages: { orderBy: { createdAt: 'asc' } } },
+    });
+    expect(create).not.toHaveBeenCalled();
+    expect(reply.payload?.success).toBe(true);
+    expect(reply.payload?.id).toBe('session-existing');
+  });
+
+  it('creates the session when the key is new', async () => {
+    const reply = makeReply();
+
+    await handler({ auth: { sub: 'supa-user' }, body: bodyWithKey }, reply);
+
+    expect(create).toHaveBeenCalledTimes(1);
+    const createArgs = create.mock.calls[0][0] as { data: { clientRequestId?: string } };
+    expect(createArgs.data.clientRequestId).toBe('client-req-0001');
+    expect(reply.payload?.id).toBe('session-1');
+  });
+
+  it('maps a concurrent unique violation (P2002) to the winning session', async () => {
+    create.mockRejectedValueOnce(
+      Object.assign(new Error('Unique constraint failed'), { code: 'P2002' }),
+    );
+    sessionFindUnique.mockResolvedValueOnce(null).mockResolvedValue(existingSession);
+    const reply = makeReply();
+
+    await handler({ auth: { sub: 'supa-user' }, body: bodyWithKey }, reply);
+
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(reply.payload?.success).toBe(true);
+    expect(reply.payload?.id).toBe('session-existing');
+  });
+
+  it('does not create two rows for two identical requests', async () => {
+    // First request: key not yet present.
+    sessionFindUnique.mockResolvedValueOnce(null);
+    const reply1 = makeReply();
+    await handler({ auth: { sub: 'supa-user' }, body: bodyWithKey }, reply1);
+
+    // Second request (retry/double-fire): key now present.
+    sessionFindUnique.mockResolvedValueOnce(existingSession);
+    const reply2 = makeReply();
+    await handler({ auth: { sub: 'supa-user' }, body: bodyWithKey }, reply2);
+
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(reply1.payload?.id).toBe('session-1');
+    expect(reply2.payload?.id).toBe('session-existing');
   });
 });

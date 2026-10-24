@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, BarChart3, CalendarClock, X } from 'lucide-react';
 import {
   AlertDialog,
@@ -34,6 +35,8 @@ export const UsageLimitModal = memo(function UsageLimitModal({
   open,
   onOpenChange,
 }: UsageLimitModalProps) {
+  const navigate = useNavigate();
+
   if (!details) return null;
 
   const copy = FEATURE_COPY[details.feature] ?? FEATURE_COPY.AI_REPORT;
@@ -99,6 +102,15 @@ export const UsageLimitModal = memo(function UsageLimitModal({
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogAction onClick={() => onOpenChange(false)}>Got it</AlertDialogAction>
+          <AlertDialogAction
+            onClick={() => {
+              onOpenChange(false);
+              navigate('/settings');
+            }}
+            className="bg-primary text-primary-foreground hover:bg-primary/90"
+          >
+            Upgrade plan
+          </AlertDialogAction>
         </AlertDialogFooter>
         <button
           type="button"

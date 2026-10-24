@@ -31,7 +31,7 @@ describe('repoOverviewApi.getOverview', () => {
   it('propagates the USAGE_LIMIT_REACHED envelope instead of flattening it', async () => {
     fetchMock.mockResolvedValue({
       ok: false,
-      status: 403,
+      status: 402,
       text: async () => JSON.stringify(usageEnvelope),
     });
 
@@ -52,7 +52,7 @@ describe('repoOverviewApi.getOverview', () => {
   it('keeps enough detail for the error card copy', async () => {
     fetchMock.mockResolvedValue({
       ok: false,
-      status: 403,
+      status: 402,
       text: async () => JSON.stringify(usageEnvelope),
     });
 

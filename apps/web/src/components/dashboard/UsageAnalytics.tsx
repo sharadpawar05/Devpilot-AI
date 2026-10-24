@@ -6,7 +6,8 @@ interface UsageAnalyticsProps {
   codeReviews: number;
   avgReviewTime: string;
   githubRepos: number;
-  openPRs: number;
+  /** null = fetch failed; render "–" instead of a misleading 0. */
+  openPRs: number | null;
   connectedSince: string | null;
 }
 
@@ -58,7 +59,7 @@ export const UsageAnalytics = memo(function UsageAnalytics({
             <MetricCard
               icon={GitPullRequest}
               label="Open PRs"
-              value={openPRs}
+              value={openPRs ?? '–'}
               color="text-purple-500"
             />
             <MetricCard

@@ -58,6 +58,7 @@ export function useChat() {
       response: string;
       latencyMs: number;
       tokens: number;
+      clientRequestId?: string;
     }): Promise<AIHistorySession> => {
       if (!token) throw new Error('Not authenticated');
       return aiHistoryApi.createSession(token, {
@@ -65,6 +66,7 @@ export function useChat() {
         title: generateTitle(params.prompt),
         provider: params.provider as AIHistorySession['provider'],
         model: params.model as AIHistorySession['model'],
+        clientRequestId: params.clientRequestId,
         messages: [
           {
             id: generateId(),
@@ -154,6 +156,8 @@ export function useChat() {
 
       const response = data as ChatResponse;
 
+      // One chat action = one history row (dedupe key sent to the server).
+      const clientRequestId = generateId();
       if (request.sessionId) {
         await appendToSession(request.sessionId, {
           prompt: request.prompt,
@@ -169,6 +173,7 @@ export function useChat() {
           response: response.response,
           latencyMs: response.latencyMs,
           tokens: response.usage.total,
+          clientRequestId,
         });
       }
 

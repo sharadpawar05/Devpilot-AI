@@ -47,7 +47,7 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return reply
           .status(400)
-          .send({ success: false, error: { message: parsed.error.errors[0]?.message } });
+          .send({ success: false, error: { message: parsed.error.issues[0]?.message } });
       }
 
       const { owner, repo } = parsed.data;
@@ -103,7 +103,7 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return reply
           .status(400)
-          .send({ success: false, error: { message: parsed.error.errors[0]?.message } });
+          .send({ success: false, error: { message: parsed.error.issues[0]?.message } });
       }
 
       const { owner, repo } = parsed.data;
@@ -140,7 +140,7 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return reply
           .status(400)
-          .send({ success: false, error: { message: parsed.error.errors[0]?.message } });
+          .send({ success: false, error: { message: parsed.error.issues[0]?.message } });
       }
 
       const { owner, repo } = parsed.data;
@@ -183,7 +183,7 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return reply
           .status(400)
-          .send({ success: false, error: { message: parsed.error.errors[0]?.message } });
+          .send({ success: false, error: { message: parsed.error.issues[0]?.message } });
       }
 
       const { owner, repo, state } = parsed.data;
@@ -230,7 +230,7 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return reply
           .status(400)
-          .send({ success: false, error: { message: parsed.error.errors[0]?.message } });
+          .send({ success: false, error: { message: parsed.error.issues[0]?.message } });
       }
 
       const { owner, repo, pull_number } = parsed.data;
@@ -272,7 +272,7 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return reply
           .status(400)
-          .send({ success: false, error: { message: parsed.error.errors[0]?.message } });
+          .send({ success: false, error: { message: parsed.error.issues[0]?.message } });
       }
 
       const { owner, repo, branch } = parsed.data;
@@ -314,7 +314,7 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return reply
           .status(400)
-          .send({ success: false, error: { message: parsed.error.errors[0]?.message } });
+          .send({ success: false, error: { message: parsed.error.issues[0]?.message } });
       }
 
       const { owner, repo } = parsed.data;
@@ -353,7 +353,7 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return reply
           .status(400)
-          .send({ success: false, error: { message: parsed.error.errors[0]?.message } });
+          .send({ success: false, error: { message: parsed.error.issues[0]?.message } });
       }
 
       const { owner, repo, state } = parsed.data;
@@ -390,7 +390,7 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return reply
           .status(400)
-          .send({ success: false, error: { message: parsed.error.errors[0]?.message } });
+          .send({ success: false, error: { message: parsed.error.issues[0]?.message } });
       }
 
       const { owner, repo } = parsed.data;
@@ -431,7 +431,7 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return reply
           .status(400)
-          .send({ success: false, error: { message: parsed.error.errors[0]?.message } });
+          .send({ success: false, error: { message: parsed.error.issues[0]?.message } });
       }
 
       const { owner, repo } = parsed.data;
@@ -477,7 +477,7 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return reply
           .status(400)
-          .send({ success: false, error: { message: parsed.error.errors[0]?.message } });
+          .send({ success: false, error: { message: parsed.error.issues[0]?.message } });
       }
 
       const { owner, repo, branch } = parsed.data;
@@ -570,7 +570,7 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return reply
           .status(400)
-          .send({ success: false, error: { message: parsed.error.errors[0]?.message } });
+          .send({ success: false, error: { message: parsed.error.issues[0]?.message } });
       }
 
       const { owner, repo } = parsed.data;
@@ -612,7 +612,7 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return reply
           .status(400)
-          .send({ success: false, error: { message: parsed.error.errors[0]?.message } });
+          .send({ success: false, error: { message: parsed.error.issues[0]?.message } });
       }
 
       const { owner, repo, limit } = parsed.data;
@@ -659,7 +659,7 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return reply
           .status(400)
-          .send({ success: false, error: { message: parsed.error.errors[0]?.message } });
+          .send({ success: false, error: { message: parsed.error.issues[0]?.message } });
       }
 
       const { owner, repo, branch } = parsed.data;
@@ -701,7 +701,7 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return reply
           .status(400)
-          .send({ success: false, error: { message: parsed.error.errors[0]?.message } });
+          .send({ success: false, error: { message: parsed.error.issues[0]?.message } });
       }
 
       const { owner, repo } = parsed.data;
@@ -738,7 +738,7 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return reply
           .status(400)
-          .send({ success: false, error: { message: parsed.error.errors[0]?.message } });
+          .send({ success: false, error: { message: parsed.error.issues[0]?.message } });
       }
 
       const { owner, repo } = parsed.data;
@@ -775,7 +775,7 @@ export async function repoIntelligenceRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return reply
           .status(400)
-          .send({ success: false, error: { message: parsed.error.errors[0]?.message } });
+          .send({ success: false, error: { message: parsed.error.issues[0]?.message } });
       }
 
       const { owner, repo } = parsed.data;
