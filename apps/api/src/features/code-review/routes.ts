@@ -5,6 +5,7 @@ import { classifyAIError } from '@/core/ai/classify-error';
 import { authenticate } from '@/core/auth/middleware';
 import { usageService, sendUsageLimitReached, AI_CREDIT_COSTS } from '@/core/usage';
 import { PromptRegistry, loadMarkdownPrompts } from '@devpilot/ai-prompts';
+import { resolveAIRequestDefaults } from '@/features/settings/ai-prefs';
 
 const registry = new PromptRegistry();
 registry.registerAll(loadMarkdownPrompts());
@@ -105,7 +106,13 @@ export async function codeReviewRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const auth = (request as { auth: { sub: string } }).auth;
-      const parsed = codeReviewSchema.safeParse(request.body);
+      // Fill any omitted AI fields from the user's saved preferences so the
+      // settings tab is the source of truth; explicit values always win.
+      const body = await resolveAIRequestDefaults(
+        auth.sub,
+        request.body as Record<string, unknown>,
+      );
+      const parsed = codeReviewSchema.safeParse(body);
 
       if (!parsed.success) {
         return reply.status(400).send({

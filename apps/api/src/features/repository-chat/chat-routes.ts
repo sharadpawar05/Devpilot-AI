@@ -12,6 +12,7 @@ import { config } from '@devpilot/config';
 import { usageService, sendUsageLimitReached, AI_CREDIT_COSTS } from '@/core/usage';
 import { runBackgroundJob } from '@/core/logging';
 import { guardUntrusted } from '@devpilot/ai-prompts';
+import { resolveAIRequestDefaults } from '@/features/settings/ai-prefs';
 import {
   githubOwnerSchema,
   githubRepoSchema,
@@ -252,7 +253,11 @@ export async function repositoryChatRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const auth = (request as { auth: { sub: string } }).auth;
-      const parsed = chatSchema.safeParse(request.body);
+      const body = await resolveAIRequestDefaults(
+        auth.sub,
+        request.body as Record<string, unknown>,
+      );
+      const parsed = chatSchema.safeParse(body);
       if (!parsed.success) {
         return reply
           .status(400)
