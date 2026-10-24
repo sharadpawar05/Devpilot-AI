@@ -53,7 +53,7 @@ export async function repoOverviewRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return reply.status(400).send({
           success: false,
-          error: { message: parsed.error.errors[0].message },
+          error: { message: parsed.error.issues[0].message },
         });
       }
 
@@ -93,7 +93,7 @@ export async function repoOverviewRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return reply.status(400).send({
           success: false,
-          error: { message: parsed.error.errors[0].message },
+          error: { message: parsed.error.issues[0].message },
         });
       }
 
@@ -169,7 +169,7 @@ export async function repoOverviewRoutes(app: FastifyInstance) {
           success: false,
           error: {
             code: 'VALIDATION_ERROR',
-            message: parsed.error.errors[0]?.message ?? 'Invalid request',
+            message: parsed.error.issues[0]?.message ?? 'Invalid request',
           },
         });
       }
@@ -229,7 +229,7 @@ export async function repoOverviewRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return reply.status(400).send({
           success: false,
-          error: { message: parsed.error.errors[0].message },
+          error: { message: parsed.error.issues[0].message },
         });
       }
 
@@ -349,7 +349,7 @@ Keep each section concise. Do not add any other sections.`;
       if (!parsed.success) {
         return reply.status(400).send({
           success: false,
-          error: { message: parsed.error.errors[0].message },
+          error: { message: parsed.error.issues[0].message },
         });
       }
 
@@ -396,7 +396,7 @@ Keep each section concise. Do not add any other sections.`;
       if (!parsed.success) {
         return reply.status(400).send({
           success: false,
-          error: { message: parsed.error.errors[0].message },
+          error: { message: parsed.error.issues[0].message },
         });
       }
 
@@ -459,7 +459,7 @@ Keep each section concise. Do not add any other sections.`;
       if (!parsed.success) {
         return reply.status(400).send({
           success: false,
-          error: { message: parsed.error.errors[0].message },
+          error: { message: parsed.error.issues[0].message },
         });
       }
 

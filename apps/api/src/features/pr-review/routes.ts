@@ -154,7 +154,7 @@ export async function prReviewRoutes(app: FastifyInstance) {
           success: false,
           error: {
             code: 'VALIDATION_ERROR',
-            message: parsed.error.errors.map((e) => e.message).join(', '),
+            message: parsed.error.issues.map((e) => e.message).join(', '),
           },
         });
       }
@@ -349,7 +349,7 @@ export async function prReviewRoutes(app: FastifyInstance) {
           success: false,
           error: {
             code: 'VALIDATION_ERROR',
-            message: parsed.error.errors.map((e) => e.message).join(', '),
+            message: parsed.error.issues.map((e) => e.message).join(', '),
           },
         });
       }

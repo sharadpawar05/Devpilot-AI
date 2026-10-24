@@ -109,7 +109,7 @@ export async function repositoryChatRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return reply
           .status(400)
-          .send({ success: false, error: { message: parsed.error.errors[0].message } });
+          .send({ success: false, error: { message: parsed.error.issues[0].message } });
       }
 
       const { owner, repo, branch } = parsed.data;
@@ -214,7 +214,7 @@ export async function repositoryChatRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return reply.status(400).send({
           success: false,
-          error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message },
+          error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message },
         });
       }
       const { owner, repo, branch } = parsed.data;
@@ -256,7 +256,7 @@ export async function repositoryChatRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return reply
           .status(400)
-          .send({ success: false, error: { message: parsed.error.errors[0].message } });
+          .send({ success: false, error: { message: parsed.error.issues[0].message } });
       }
 
       const { owner, repo, branch, question, conversationHistory, provider, model, fileFilter } =
@@ -452,7 +452,7 @@ Question: ${guardUntrusted(question)}`;
       if (!parsed.success) {
         return reply.status(400).send({
           success: false,
-          error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message },
+          error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0]?.message },
         });
       }
       const { owner, repo, branch } = parsed.data;

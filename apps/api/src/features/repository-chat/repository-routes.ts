@@ -34,7 +34,7 @@ const indexBodySchema = z.object({
 function validationError(reply: FastifyReply, error: z.ZodError) {
   return reply.status(400).send({
     success: false,
-    error: { code: 'VALIDATION_ERROR', message: error.errors[0]?.message ?? 'Invalid request' },
+    error: { code: 'VALIDATION_ERROR', message: error.issues[0]?.message ?? 'Invalid request' },
   });
 }
 
@@ -241,7 +241,7 @@ export default async function repositoryRoutes(app: FastifyInstance) {
           success: false,
           error: {
             code: 'VALIDATION_ERROR',
-            message: parsed.error.errors[0]?.message ?? 'Invalid request',
+            message: parsed.error.issues[0]?.message ?? 'Invalid request',
           },
         });
       }

@@ -45,7 +45,7 @@ export async function releaseNotesRoutes(app: FastifyInstance) {
           success: false,
           error: {
             code: 'VALIDATION_ERROR',
-            message: parsed.error.errors.map((e) => e.message).join(', '),
+            message: parsed.error.issues.map((e) => e.message).join(', '),
           },
         });
       }
@@ -115,7 +115,7 @@ export async function releaseNotesRoutes(app: FastifyInstance) {
           success: false,
           error: {
             code: 'VALIDATION_ERROR',
-            message: parsed.error.errors[0]?.message ?? 'Invalid request',
+            message: parsed.error.issues[0]?.message ?? 'Invalid request',
           },
         });
       }

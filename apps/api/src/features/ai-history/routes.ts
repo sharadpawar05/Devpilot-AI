@@ -178,7 +178,7 @@ export async function aiHistoryRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return reply.status(400).send({
           success: false,
-          error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0].message },
+          error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0].message },
         });
       }
 
@@ -523,7 +523,7 @@ export async function aiHistoryRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return reply.status(400).send({
           success: false,
-          error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0].message },
+          error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0].message },
         });
       }
 
@@ -591,7 +591,7 @@ export async function aiHistoryRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return reply.status(400).send({
           success: false,
-          error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0].message },
+          error: { code: 'VALIDATION_ERROR', message: parsed.error.issues[0].message },
         });
       }
 
