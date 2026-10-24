@@ -128,7 +128,8 @@ describe('notifications routes', () => {
 
   it("PATCH /notifications/:id/read returns 404 for another user's notification (cross-user isolation)", async () => {
     db.user.findUnique.mockResolvedValue({ id: 'user-2' });
-    db.notification.findFirst.mockResolvedValue(null); // belongs to user-1, not user-2
+    // Ownership lives in the WHERE clause — no row matches for user-2.
+    db.notification.updateMany.mockResolvedValue({ count: 0 });
 
     const res = await app.inject({
       method: 'PATCH',
@@ -137,13 +138,16 @@ describe('notifications routes', () => {
     });
 
     expect(res.statusCode).toBe(404);
-    expect(db.notification.update).not.toHaveBeenCalled();
+    expect(db.notification.updateMany).toHaveBeenCalledWith({
+      where: { id: notif.id, userId: 'user-2' },
+      data: { read: true },
+    });
   });
 
   it('PATCH /notifications/:id/read marks own notification read', async () => {
     db.user.findUnique.mockResolvedValue({ id: 'user-1' });
-    db.notification.findFirst.mockResolvedValue({ id: notif.id });
-    db.notification.update.mockResolvedValue({ ...notif, read: true });
+    db.notification.updateMany.mockResolvedValue({ count: 1 });
+    db.notification.findFirst.mockResolvedValue({ ...notif, read: true });
 
     const res = await app.inject({
       method: 'PATCH',
@@ -152,10 +156,12 @@ describe('notifications routes', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(db.notification.update).toHaveBeenCalledWith({
-      where: { id: notif.id },
+    expect(db.notification.updateMany).toHaveBeenCalledWith({
+      where: { id: notif.id, userId: 'user-1' },
       data: { read: true },
     });
+    const body = res.json() as { notification: { id: string; read: boolean } };
+    expect(body.notification.read).toBe(true);
   });
 
   it('PATCH /notifications/:id/read rejects a non-uuid id', async () => {

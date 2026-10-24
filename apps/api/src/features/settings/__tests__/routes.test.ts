@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
 import cookie from '@fastify/cookie';
 
@@ -135,6 +135,10 @@ describe('settings routes', () => {
     app = await buildApp();
   });
 
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it('rejects unauthenticated requests with 401', async () => {
     const res = await app.inject({ method: 'GET', url: '/settings' });
     expect(res.statusCode).toBe(401);
@@ -142,8 +146,7 @@ describe('settings routes', () => {
 
   it('GET /settings upserts-on-read and returns defaults for a fresh user', async () => {
     db.user.findUnique.mockResolvedValue(localUser);
-    db.userSettings.findUnique.mockResolvedValue(null);
-    db.userSettings.create.mockResolvedValue(defaultSettingsRow);
+    db.userSettings.upsert.mockResolvedValue(defaultSettingsRow);
 
     const res = await app.inject({
       method: 'GET',
@@ -160,7 +163,11 @@ describe('settings routes', () => {
     expect(body.success).toBe(true);
     expect(body.profile.timezone).toBe('America/New_York');
     expect(body.ai.defaultProvider).toBe('gemini');
-    expect(db.userSettings.create).toHaveBeenCalledWith({ data: { userId: 'user-1' } });
+    expect(db.userSettings.upsert).toHaveBeenCalledWith({
+      where: { userId: 'user-1' },
+      update: {},
+      create: { userId: 'user-1' },
+    });
   });
 
   it('PATCH /settings/profile persists timezone for the authenticated user only', async () => {
@@ -359,6 +366,7 @@ describe('settings routes', () => {
 
   it('DELETE /settings/account rejects when the same session confirms (no re-auth)', async () => {
     // Start challenge with sess-A, then confirm with the SAME sess-A.
+    db.user.findUnique.mockResolvedValue(localUser);
     const challengeRes = await app.inject({
       method: 'POST',
       url: '/settings/account/delete-challenge',
@@ -382,6 +390,11 @@ describe('settings routes', () => {
 
   it('DELETE /settings/account succeeds after re-auth (different session) and deletes the user', async () => {
     db.user.findUnique.mockResolvedValue(localUser);
+    // Auth-user deletion is a real outbound call — stub it.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, status: 200 })) as unknown as typeof fetch,
+    );
 
     const challengeRes = await app.inject({
       method: 'POST',
@@ -402,6 +415,7 @@ describe('settings routes', () => {
   });
 
   it('DELETE /settings/account rejects a challenge belonging to another user', async () => {
+    db.user.findUnique.mockResolvedValue(localUser);
     const challengeRes = await app.inject({
       method: 'POST',
       url: '/settings/account/delete-challenge',
@@ -420,5 +434,217 @@ describe('settings routes', () => {
     const body = res.json() as { error: { code: string } };
     expect(body.error.code).toBe('CHALLENGE_MISMATCH');
     expect(db.user.delete).not.toHaveBeenCalled();
+  });
+
+  it('PATCH /settings/github persists default repository and branch', async () => {
+    db.user.findUnique.mockResolvedValue(localUser);
+    db.userSettings.upsert.mockResolvedValue({
+      ...defaultSettingsRow,
+      defaultRepository: 'octo/api',
+      defaultBranch: 'dev',
+    });
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/settings/github',
+      headers: { authorization: 'Bearer supa-1' },
+      payload: { defaultRepository: 'octo/api', defaultBranch: 'dev' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { github: { defaultRepository: string; defaultBranch: string } };
+    expect(body.github).toEqual({ defaultRepository: 'octo/api', defaultBranch: 'dev' });
+    expect(db.userSettings.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId: 'user-1' },
+        update: { defaultRepository: 'octo/api', defaultBranch: 'dev' },
+      }),
+    );
+  });
+
+  it('PATCH /settings/notifications persists all preference flags', async () => {
+    db.user.findUnique.mockResolvedValue(localUser);
+    db.userSettings.upsert.mockResolvedValue({
+      ...defaultSettingsRow,
+      notifyReviewComplete: false,
+      notifyWeeklySummary: true,
+    });
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/settings/notifications',
+      headers: { authorization: 'Bearer supa-1' },
+      payload: {
+        notifyReviewComplete: false,
+        notifyPrAnalysis: true,
+        notifyRepositorySync: true,
+        notifyGithubAlerts: false,
+        notifyWeeklySummary: true,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { notifications: Record<string, boolean> };
+    expect(body.notifications.notifyReviewComplete).toBe(false);
+    expect(body.notifications.notifyWeeklySummary).toBe(true);
+    expect(db.userSettings.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: {
+          notifyReviewComplete: false,
+          notifyPrAnalysis: true,
+          notifyRepositorySync: true,
+          notifyGithubAlerts: false,
+          notifyWeeklySummary: true,
+        },
+      }),
+    );
+  });
+
+  it('GET /settings/account-sessions maps rows and flags the current session', async () => {
+    const now = new Date('2026-01-02T00:00:00Z');
+    const earlier = new Date('2026-01-01T00:00:00Z');
+    db.$queryRaw.mockResolvedValue([
+      {
+        id: 'sess-cur',
+        created_at: earlier,
+        updated_at: now,
+        user_agent: 'Mozilla/5.0 Chrome/126.0',
+        ip: '203.0.113.9',
+      },
+      {
+        id: 'sess-other',
+        created_at: earlier,
+        updated_at: earlier,
+        user_agent: null,
+        ip: null,
+      },
+    ]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/settings/account-sessions',
+      headers: { authorization: 'Bearer supa-1|sess-cur' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      supported: boolean;
+      currentSessionId: string;
+      sessions: Array<{
+        id: string;
+        current: boolean;
+        createdAt: string;
+        userAgent: string | null;
+      }>;
+    };
+    expect(body.supported).toBe(true);
+    expect(body.currentSessionId).toBe('sess-cur');
+    expect(body.sessions).toHaveLength(2);
+    expect(body.sessions[0]).toMatchObject({
+      id: 'sess-cur',
+      current: true,
+      userAgent: 'Mozilla/5.0 Chrome/126.0',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-02T00:00:00.000Z',
+    });
+    expect(body.sessions[1].current).toBe(false);
+  });
+
+  it('POST /settings/avatar stores a valid image and returns the updated profile', async () => {
+    db.user.findUnique.mockResolvedValue(localUser);
+    db.userSettings.upsert.mockResolvedValue(defaultSettingsRow);
+    db.user.update.mockResolvedValue({
+      ...localUser,
+      avatarUrl: 'https://test.supabase.co/storage/v1/object/public/avatars/user-1/avatar.png',
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({}),
+      })) as unknown as typeof fetch,
+    );
+
+    const dataUrl = `data:image/png;base64,${Buffer.from('fake-png-bytes').toString('base64')}`;
+    const res = await app.inject({
+      method: 'POST',
+      url: '/settings/avatar',
+      headers: { authorization: 'Bearer supa-1' },
+      payload: { dataUrl },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { profile: { avatarUrl: string | null } };
+    expect(body.profile.avatarUrl).toContain('/avatars/user-1/avatar.png');
+    expect(db.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'user-1' },
+        data: { avatarUrl: expect.stringContaining('/avatars/user-1/avatar.png') },
+      }),
+    );
+  });
+
+  it('POST /settings/avatar rejects images over the 2MB decoded limit', async () => {
+    db.user.findUnique.mockResolvedValue(localUser);
+
+    const oversized = Buffer.alloc(2 * 1024 * 1024 + 1).toString('base64');
+    const res = await app.inject({
+      method: 'POST',
+      url: '/settings/avatar',
+      headers: { authorization: 'Bearer supa-1' },
+      payload: { dataUrl: `data:image/png;base64,${oversized}` },
+    });
+
+    expect(res.statusCode).toBe(400);
+    const body = res.json() as { error: { message: string } };
+    expect(body.error.message).toContain('2MB');
+    expect(db.user.update).not.toHaveBeenCalled();
+  });
+
+  it('POST /settings/avatar rejects disallowed image types', async () => {
+    db.user.findUnique.mockResolvedValue(localUser);
+
+    const dataUrl = `data:image/svg+xml;base64,${Buffer.from('<svg/>').toString('base64')}`;
+    const res = await app.inject({
+      method: 'POST',
+      url: '/settings/avatar',
+      headers: { authorization: 'Bearer supa-1' },
+      payload: { dataUrl },
+    });
+
+    expect(res.statusCode).toBe(400);
+    const body = res.json() as { error: { code: string } };
+    expect(body.error.code).toBe('VALIDATION_ERROR');
+    expect(db.user.update).not.toHaveBeenCalled();
+  });
+
+  it('DELETE /settings/avatar removes the stored object and clears the field', async () => {
+    const avatarUrl = 'https://test.supabase.co/storage/v1/object/public/avatars/user-1/avatar.png';
+    db.user.findUnique.mockResolvedValue({ ...localUser, avatarUrl });
+    db.user.update.mockResolvedValue({ ...localUser, avatarUrl: null });
+    db.userSettings.upsert.mockResolvedValue(defaultSettingsRow);
+    const fetchMock = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({}) }));
+    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/settings/avatar',
+      headers: { authorization: 'Bearer supa-1' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { profile: { avatarUrl: string | null } };
+    expect(body.profile.avatarUrl).toBeNull();
+    expect(db.user.update).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: { avatarUrl: null },
+      select: { id: true, email: true, fullName: true, avatarUrl: true },
+    });
+    expect(
+      fetchMock.mock.calls.some((c) =>
+        String(c[0]).includes('/storage/v1/object/avatars/user-1/avatar.png'),
+      ),
+    ).toBe(true);
   });
 });

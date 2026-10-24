@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from '@/auth';
 import { AuthUnavailableError } from '@/lib/supabase-health';
 
@@ -30,7 +31,11 @@ vi.mock('@/lib/supabase', () => ({
   },
 }));
 
-const wrapper = ({ children }: { children: ReactNode }) => <AuthProvider>{children}</AuthProvider>;
+const wrapper = ({ children }: { children: ReactNode }) => (
+  <QueryClientProvider client={new QueryClient()}>
+    <AuthProvider>{children}</AuthProvider>
+  </QueryClientProvider>
+);
 
 describe('AuthProvider signInWithOAuth', () => {
   beforeEach(() => {

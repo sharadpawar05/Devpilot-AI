@@ -18,25 +18,6 @@ async function localUserId(sub: string): Promise<string | null> {
   return user?.id ?? null;
 }
 
-/**
- * Persists an in-app notification for a user. Intended to be called by AI
- * feature routes when a workflow completes (subject to the user's saved
- * notification preferences). Fails soft: notification delivery must never
- * break the triggering workflow.
- */
-export async function createNotification(
-  userId: string,
-  type: NotificationType,
-  title: string,
-  description: string,
-): Promise<void> {
-  try {
-    await db.notification.create({ data: { userId, type, title, description } });
-  } catch {
-    // best-effort
-  }
-}
-
 type PrefKey =
   | 'notifyReviewComplete'
   | 'notifyPrAnalysis'
@@ -171,20 +152,27 @@ export async function notificationsRoutes(app: FastifyInstance) {
         error: { code: 'NOT_FOUND', message: 'Notification not found' },
       });
     }
-    const existing = await db.notification.findFirst({
+    // updateMany keeps ownership in the WHERE clause so a delete racing
+    // between check and write can't surface as an unhandled P2025 → 500.
+    const result = await db.notification.updateMany({
       where: { id: params.data.id, userId },
-      select: { id: true },
+      data: { read: true },
     });
-    if (!existing) {
+    if (result.count === 0) {
       return reply.status(404).send({
         success: false,
         error: { code: 'NOT_FOUND', message: 'Notification not found' },
       });
     }
-    const updated = await db.notification.update({
-      where: { id: params.data.id },
-      data: { read: true },
+    const updated = await db.notification.findFirst({
+      where: { id: params.data.id, userId },
     });
+    if (!updated) {
+      return reply.status(404).send({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Notification not found' },
+      });
+    }
     return reply.send({ success: true, notification: toNotification(updated) });
   });
 

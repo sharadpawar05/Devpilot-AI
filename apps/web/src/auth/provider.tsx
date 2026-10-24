@@ -8,8 +8,10 @@ import {
   type ReactNode,
 } from 'react';
 import type { Session, AuthUser, AuthProvider as OAuthProvider } from '@devpilot/types';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { AuthUnavailableError, isAuthServiceReachable } from '@/lib/supabase-health';
+import { clearAppearance } from '@/lib/appearance';
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -92,6 +94,7 @@ function mapSession(
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     let mounted = true;
@@ -167,7 +170,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
     setSession(null);
-  }, []);
+    // Drop every cached query and document appearance so the next account
+    // never starts from the previous user's settings/notifications/theme.
+    queryClient.clear();
+    clearAppearance();
+  }, [queryClient]);
 
   const value: AuthContextType = useMemo(
     () => ({

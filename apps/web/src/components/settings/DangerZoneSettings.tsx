@@ -45,10 +45,11 @@ export function DangerZoneSettings() {
 
   const [confirmAction, setConfirmAction] = useState<string | null>(null);
   const [pendingReauth, setPendingReauth] = useState(readPendingFlag);
+  const [transitioning, setTransitioning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [clearing, setClearing] = useState(false);
 
-  const busy = startChallenge.isPending || deleteAccount.isPending || clearing;
+  const busy = startChallenge.isPending || deleteAccount.isPending || clearing || transitioning;
 
   const handleClearHistoryConfirm = async () => {
     setError(null);
@@ -93,8 +94,12 @@ export function DangerZoneSettings() {
         await startChallenge.mutateAsync();
         localStorage.setItem(PENDING_KEY, JSON.stringify({ ts: Date.now() }));
         setPendingReauth(true);
+        // Stay busy through the redirect hand-off: isPending flips false as
+        // soon as the challenge resolves, which would otherwise re-enable
+        // Confirm while the OAuth navigation is still in flight.
+        setTransitioning(true);
         await signInWithOAuth(user?.authProvider ?? 'google', {
-          redirectTo: `${window.location.origin}/settings?tab=danger-zone`,
+          redirectTo: `${window.location.origin}/settings?tab=danger`,
           forceLogin: true,
         });
       } catch (err) {
@@ -102,6 +107,7 @@ export function DangerZoneSettings() {
         // can't be treated as a completed re-auth.
         localStorage.removeItem(PENDING_KEY);
         setPendingReauth(false);
+        setTransitioning(false);
         setConfirmAction(null);
         setError(err instanceof Error ? err.message : 'Something went wrong');
       }

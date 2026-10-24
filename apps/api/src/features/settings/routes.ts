@@ -29,10 +29,26 @@ async function findUser(sub: string): Promise<LocalUser | null> {
   });
 }
 
-async function getOrCreateSettings(userId: string) {
-  const existing = await db.userSettings.findUnique({ where: { userId } });
+// Mirrors the ensure helpers in ai-history/dashboard: the settings read/write
+// paths self-heal a missing local row instead of hard-404ing on first access.
+async function ensureUser(sub: string, email?: string): Promise<LocalUser> {
+  const existing = await findUser(sub);
   if (existing) return existing;
-  return db.userSettings.create({ data: { userId } });
+  await db.user.create({
+    data: {
+      supabaseUserId: sub,
+      email: email || `${sub}@placeholder.local`,
+      fullName: 'User',
+    },
+  });
+  const created = await findUser(sub);
+  if (!created) throw new Error('Failed to provision user');
+  return created;
+}
+
+async function getOrCreateSettings(userId: string) {
+  // Upsert (not find-then-create): concurrent first reads raced into P2002.
+  return db.userSettings.upsert({ where: { userId }, update: {}, create: { userId } });
 }
 
 function toSettingsResponse(user: LocalUser, s: Record<string, unknown>) {
@@ -146,13 +162,7 @@ export async function settingsRoutes(app: FastifyInstance) {
   // GET /settings — merged profile + all persisted sections (upsert-on-read).
   app.get('/settings', { preHandler: [authenticate] }, async (request, reply) => {
     const auth = (request as FastifyRequest & { auth: AuthJWTPayload }).auth;
-    const user = await findUser(auth.sub);
-    if (!user) {
-      return reply.status(404).send({
-        success: false,
-        error: { code: 'USER_NOT_FOUND', message: 'User not found' },
-      });
-    }
+    const user = await ensureUser(auth.sub, auth.email);
     const settings = await getOrCreateSettings(user.id);
     return reply.send({ success: true, ...toSettingsResponse(user, settings) });
   });
@@ -177,13 +187,7 @@ export async function settingsRoutes(app: FastifyInstance) {
           },
         });
       }
-      const user = await findUser(auth.sub);
-      if (!user) {
-        return reply.status(404).send({
-          success: false,
-          error: { code: 'USER_NOT_FOUND', message: 'User not found' },
-        });
-      }
+      const user = await ensureUser(auth.sub, auth.email);
       // Name (User.fullName) and timezone (UserSettings.timezone) live in two
       // tables; update them atomically so a partial write never leaves the two
       // out of sync.
@@ -224,13 +228,7 @@ export async function settingsRoutes(app: FastifyInstance) {
           },
         });
       }
-      const user = await findUser(auth.sub);
-      if (!user) {
-        return reply.status(404).send({
-          success: false,
-          error: { code: 'USER_NOT_FOUND', message: 'User not found' },
-        });
-      }
+      const user = await ensureUser(auth.sub, auth.email);
       const settings = await db.userSettings.upsert({
         where: { userId: user.id },
         update: parsed.data,
@@ -260,13 +258,7 @@ export async function settingsRoutes(app: FastifyInstance) {
           },
         });
       }
-      const user = await findUser(auth.sub);
-      if (!user) {
-        return reply.status(404).send({
-          success: false,
-          error: { code: 'USER_NOT_FOUND', message: 'User not found' },
-        });
-      }
+      const user = await ensureUser(auth.sub, auth.email);
       const settings = await db.userSettings.upsert({
         where: { userId: user.id },
         update: parsed.data,
@@ -296,13 +288,7 @@ export async function settingsRoutes(app: FastifyInstance) {
           },
         });
       }
-      const user = await findUser(auth.sub);
-      if (!user) {
-        return reply.status(404).send({
-          success: false,
-          error: { code: 'USER_NOT_FOUND', message: 'User not found' },
-        });
-      }
+      const user = await ensureUser(auth.sub, auth.email);
       const settings = await db.userSettings.upsert({
         where: { userId: user.id },
         update: parsed.data,
@@ -332,13 +318,7 @@ export async function settingsRoutes(app: FastifyInstance) {
           },
         });
       }
-      const user = await findUser(auth.sub);
-      if (!user) {
-        return reply.status(404).send({
-          success: false,
-          error: { code: 'USER_NOT_FOUND', message: 'User not found' },
-        });
-      }
+      const user = await ensureUser(auth.sub, auth.email);
       const settings = await db.userSettings.upsert({
         where: { userId: user.id },
         update: parsed.data,
@@ -354,7 +334,8 @@ export async function settingsRoutes(app: FastifyInstance) {
     {
       preHandler: [authenticate],
       config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
-      bodyLimit: MAX_AVATAR_BYTES + 1024,
+      // The body is JSON wrapping a base64 data URL (~4/3 of the raw bytes).
+      bodyLimit: Math.ceil((MAX_AVATAR_BYTES * 4) / 3) + 1024,
     },
     async (request, reply) => {
       const auth = (request as FastifyRequest & { auth: AuthJWTPayload }).auth;
@@ -369,13 +350,7 @@ export async function settingsRoutes(app: FastifyInstance) {
           },
         });
       }
-      const user = await findUser(auth.sub);
-      if (!user) {
-        return reply.status(404).send({
-          success: false,
-          error: { code: 'USER_NOT_FOUND', message: 'User not found' },
-        });
-      }
+      const user = await ensureUser(auth.sub, auth.email);
 
       let decoded: { mime: string; buffer: Buffer; ext: string };
       try {
@@ -425,11 +400,21 @@ export async function settingsRoutes(app: FastifyInstance) {
           });
         }
         const publicUrl = `${env.SUPABASE_URL}/storage/v1/object/public/avatars/${objectPath}`;
+        const previousUrl = user.avatarUrl;
         const updated = await db.user.update({
           where: { id: user.id },
           data: { avatarUrl: publicUrl },
           select: { id: true, email: true, fullName: true, avatarUrl: true },
         });
+        // Best-effort: drop the previous object when its path differs (the
+        // extension follows the uploaded image type) so switching formats
+        // doesn't leak storage objects.
+        if (previousUrl?.includes('/object/public/avatars/')) {
+          const previousPath = previousUrl.split('/object/public/avatars/')[1];
+          if (previousPath && previousPath !== objectPath) {
+            await deleteAvatarObject(previousPath).catch(() => undefined);
+          }
+        }
         const settings = await getOrCreateSettings(user.id);
         return reply.send({ success: true, ...toSettingsResponse(updated, settings) });
       } catch (err) {
@@ -564,14 +549,16 @@ export async function settingsRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const auth = (request as FastifyRequest & { auth: AuthJWTPayload }).auth;
-      const user = await findUser(auth.sub);
-      if (!user) {
-        return reply.status(404).send({
+      await ensureUser(auth.sub, auth.email);
+      const sid = await currentSessionId(auth);
+      if (!sid) {
+        // Without a session id the challenge could never prove re-auth (a
+        // null sid would differ from any later sid) — fail closed.
+        return reply.status(400).send({
           success: false,
-          error: { code: 'USER_NOT_FOUND', message: 'User not found' },
+          error: { code: 'MISSING_SESSION', message: 'Current session could not be identified' },
         });
       }
-      const sid = await currentSessionId(auth);
       const payload = JSON.stringify({ uid: auth.sub, sid, ts: Date.now() });
       reply.setCookie('account_delete_challenge', payload, {
         path: '/',
@@ -659,21 +646,35 @@ export async function settingsRoutes(app: FastifyInstance) {
           // best-effort
         }
       }
-      await db.user.delete({ where: { id: user.id } });
-
-      // Best-effort Supabase auth user deletion (invalidates sessions/tokens).
+      // Delete the Supabase auth user BEFORE the local row (404 = already
+      // gone). If it fails while storage is configured, abort so the account
+      // can't resurrect as an empty shell after sign-in.
       const env = getEnv();
       if (env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY) {
         try {
-          await fetch(`${env.SUPABASE_URL}/auth/v1/admin/users/${auth.sub}`, {
+          const res = await fetch(`${env.SUPABASE_URL}/auth/v1/admin/users/${auth.sub}`, {
             method: 'DELETE',
             headers: { Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}` },
             signal: AbortSignal.timeout(10_000),
           });
+          if (!res.ok && res.status !== 404) {
+            app.log.warn({ status: res.status }, 'Supabase auth user deletion failed');
+            return reply.status(502).send({
+              success: false,
+              error: { code: 'AUTH_DELETE_FAILED', message: 'Could not delete auth account' },
+            });
+          }
         } catch (err) {
-          app.log.warn({ err }, 'Supabase user deletion failed (local user already deleted)');
+          app.log.warn({ err }, 'Supabase auth user deletion failed');
+          return reply.status(502).send({
+            success: false,
+            error: { code: 'AUTH_DELETE_FAILED', message: 'Could not delete auth account' },
+          });
         }
+      } else {
+        app.log.warn('Supabase admin credentials not configured; deleting local user only');
       }
+      await db.user.delete({ where: { id: user.id } });
 
       reply.clearCookie('account_delete_challenge', { path: '/' });
       return reply.send({ success: true });
