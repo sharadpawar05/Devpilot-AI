@@ -29,6 +29,10 @@ const timezoneSchema = z
 
 export const profilePatchSchema = z
   .object({
+    // Full name is user-editable (updates User.fullName). Email is NOT
+    // accepted: it is owned by the OAuth provider (Google/GitHub) and is
+    // surfaced read-only in the UI.
+    name: z.string().trim().min(1, 'Name is required').max(100).optional(),
     timezone: timezoneSchema,
   })
   .strict();

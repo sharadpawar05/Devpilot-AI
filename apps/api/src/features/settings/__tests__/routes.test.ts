@@ -42,8 +42,17 @@ const db = {
     create: vi.fn(),
     upsert: vi.fn(),
   },
+  notification: {
+    findMany: vi.fn(),
+    findFirst: vi.fn(),
+    count: vi.fn(),
+    update: vi.fn(),
+    updateMany: vi.fn(),
+    create: vi.fn(),
+  },
   $queryRaw: vi.fn(),
   $executeRaw: vi.fn(),
+  $transaction: vi.fn(),
 };
 
 vi.mock('@/core/db', () => ({
@@ -58,8 +67,17 @@ vi.mock('@/core/db', () => ({
       create: (...args: unknown[]) => db.userSettings.create(...args),
       upsert: (...args: unknown[]) => db.userSettings.upsert(...args),
     },
+    notification: {
+      findMany: (...args: unknown[]) => db.notification.findMany(...args),
+      findFirst: (...args: unknown[]) => db.notification.findFirst(...args),
+      count: (...args: unknown[]) => db.notification.count(...args),
+      update: (...args: unknown[]) => db.notification.update(...args),
+      updateMany: (...args: unknown[]) => db.notification.updateMany(...args),
+      create: (...args: unknown[]) => db.notification.create(...args),
+    },
     $queryRaw: (...args: unknown[]) => db.$queryRaw(...args),
     $executeRaw: (...args: unknown[]) => db.$executeRaw(...args),
+    $transaction: (...args: unknown[]) => db.$transaction(...args),
   },
 }));
 
@@ -147,7 +165,8 @@ describe('settings routes', () => {
 
   it('PATCH /settings/profile persists timezone for the authenticated user only', async () => {
     db.user.findUnique.mockResolvedValue(localUser);
-    db.userSettings.upsert.mockResolvedValue({ ...defaultSettingsRow, timezone: 'Asia/Kolkata' });
+    const savedSettings = { ...defaultSettingsRow, timezone: 'Asia/Kolkata' };
+    db.$transaction.mockResolvedValue([localUser, savedSettings]);
 
     const res = await app.inject({
       method: 'PATCH',
@@ -157,11 +176,49 @@ describe('settings routes', () => {
     });
 
     expect(res.statusCode).toBe(200);
+    // Name omitted → User.update gets empty data; only timezone is written.
+    expect(db.user.update).toHaveBeenCalledWith({ where: { id: 'user-1' }, data: {} });
     expect(db.userSettings.upsert).toHaveBeenCalledWith({
       where: { userId: 'user-1' },
       update: { timezone: 'Asia/Kolkata' },
       create: { userId: 'user-1', timezone: 'Asia/Kolkata' },
     });
+    expect(db.$transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('PATCH /settings/profile updates the editable full name', async () => {
+    db.user.findUnique.mockResolvedValue(localUser);
+    const updatedUser = { ...localUser, fullName: 'Alice Smith' };
+    db.$transaction.mockResolvedValue([updatedUser, defaultSettingsRow]);
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/settings/profile',
+      headers: { authorization: 'Bearer supa-1' },
+      payload: { name: 'Alice Smith', timezone: 'UTC' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(db.user.update).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: { fullName: 'Alice Smith' },
+    });
+    const body = res.json() as { profile: { name: string } };
+    expect(body.profile.name).toBe('Alice Smith');
+  });
+
+  it('PATCH /settings/profile rejects an empty name', async () => {
+    db.user.findUnique.mockResolvedValue(localUser);
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/settings/profile',
+      headers: { authorization: 'Bearer supa-1' },
+      payload: { name: '   ', timezone: 'UTC' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(db.$transaction).not.toHaveBeenCalled();
   });
 
   it('PATCH /settings/profile accepts a legacy browser timezone alias', async () => {

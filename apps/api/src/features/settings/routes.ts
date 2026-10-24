@@ -184,12 +184,23 @@ export async function settingsRoutes(app: FastifyInstance) {
           error: { code: 'USER_NOT_FOUND', message: 'User not found' },
         });
       }
-      const settings = await db.userSettings.upsert({
-        where: { userId: user.id },
-        update: { timezone: parsed.data.timezone },
-        create: { userId: user.id, timezone: parsed.data.timezone },
-      });
-      return reply.send({ success: true, ...toSettingsResponse(user, settings) });
+      // Name (User.fullName) and timezone (UserSettings.timezone) live in two
+      // tables; update them atomically so a partial write never leaves the two
+      // out of sync.
+      const [, settings] = await db.$transaction([
+        db.user.update({
+          where: { id: user.id },
+          data: parsed.data.name !== undefined ? { fullName: parsed.data.name } : {},
+        }),
+        db.userSettings.upsert({
+          where: { userId: user.id },
+          update: { timezone: parsed.data.timezone },
+          create: { userId: user.id, timezone: parsed.data.timezone },
+        }),
+      ]);
+      const updatedUser =
+        parsed.data.name !== undefined ? { ...user, fullName: parsed.data.name } : user;
+      return reply.send({ success: true, ...toSettingsResponse(updatedUser, settings) });
     },
   );
 

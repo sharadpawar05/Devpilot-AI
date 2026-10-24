@@ -48,7 +48,7 @@ export interface SettingsData {
   };
 }
 
-export type ProfilePatch = { timezone: string };
+export type ProfilePatch = { name?: string; timezone: string };
 export type AIPatch = SettingsData['ai'];
 export type GitHubPatch = SettingsData['github'];
 export type AppearancePatch = SettingsData['appearance'];
