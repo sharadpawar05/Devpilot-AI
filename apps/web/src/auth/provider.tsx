@@ -16,7 +16,10 @@ interface AuthContextType {
   session: Session | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  signInWithOAuth: (provider: OAuthProvider) => Promise<void>;
+  signInWithOAuth: (
+    provider: OAuthProvider,
+    options?: { redirectTo?: string; forceLogin?: boolean },
+  ) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -123,28 +126,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const signInWithOAuth = useCallback(async (provider: OAuthProvider) => {
-    const reachable = await isAuthServiceReachable();
-    if (!reachable) {
-      throw new AuthUnavailableError();
-    }
+  const signInWithOAuth = useCallback(
+    async (provider: OAuthProvider, options?: { redirectTo?: string; forceLogin?: boolean }) => {
+      const reachable = await isAuthServiceReachable();
+      if (!reachable) {
+        throw new AuthUnavailableError();
+      }
 
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: {
-        redirectTo: `${window.location.origin}/dashboard`,
-      },
-    });
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: options?.redirectTo ?? `${window.location.origin}/dashboard`,
+          // Ask the provider to re-prompt credentials (used for re-auth flows
+          // such as account deletion confirmation).
+          ...(options?.forceLogin ? { queryParams: { prompt: 'login' } } : {}),
+        },
+      });
 
-    if (error) {
-      throw error;
-    }
-  }, []);
+      if (error) {
+        throw error;
+      }
+    },
+    [],
+  );
 
   const signOut = useCallback(async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      throw error;
+    // Local sign-out must always succeed: a server-side logout can fail when
+    // the auth user was already deleted (e.g. account deletion). Fall back to
+    // clearing the local session so the app can leave authenticated routes.
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        await supabase.auth.signOut({ scope: 'local' });
+      }
+    } catch {
+      try {
+        await supabase.auth.signOut({ scope: 'local' });
+      } catch {
+        // ignore — cleared in state below regardless
+      }
     }
     setSession(null);
   }, []);

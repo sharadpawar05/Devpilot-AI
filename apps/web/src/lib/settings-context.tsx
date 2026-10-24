@@ -1,5 +1,3 @@
-import { createContext, useContext, useState, useCallback, useEffect } from 'react';
-
 const STORAGE_KEY = 'devpilot_settings';
 
 export type ThemePreference = 'light' | 'dark' | 'system';
@@ -86,18 +84,6 @@ const defaultSettings: SettingsState = {
   },
 };
 
-interface SettingsContextType {
-  settings: SettingsState;
-  updateProfile: (updates: Partial<SettingsState['profile']>) => void;
-  updateAI: (updates: Partial<SettingsState['ai']>) => void;
-  updateGitHub: (updates: Partial<SettingsState['github']>) => void;
-  updateAppearance: (updates: Partial<SettingsState['appearance']>) => void;
-  updateNotifications: (updates: Partial<SettingsState['notifications']>) => void;
-  resetSettings: () => void;
-}
-
-const SettingsContext = createContext<SettingsContextType | null>(null);
-
 function loadSettings(): SettingsState {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -119,72 +105,12 @@ function loadSettings(): SettingsState {
   return defaultSettings;
 }
 
-function saveSettings(settings: SettingsState) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-  } catch {
-    // ignore
-  }
-}
-
-export function SettingsProvider({ children }: { children: React.ReactNode }) {
-  const [settings, setSettings] = useState<SettingsState>(loadSettings);
-
-  useEffect(() => {
-    saveSettings(settings);
-  }, [settings]);
-
-  const updateProfile = useCallback((updates: Partial<SettingsState['profile']>) => {
-    setSettings((prev) => ({ ...prev, profile: { ...prev.profile, ...updates } }));
-  }, []);
-
-  const updateAI = useCallback((updates: Partial<SettingsState['ai']>) => {
-    setSettings((prev) => ({ ...prev, ai: { ...prev.ai, ...updates } }));
-  }, []);
-
-  const updateGitHub = useCallback((updates: Partial<SettingsState['github']>) => {
-    setSettings((prev) => ({ ...prev, github: { ...prev.github, ...updates } }));
-  }, []);
-
-  const updateAppearance = useCallback((updates: Partial<SettingsState['appearance']>) => {
-    setSettings((prev) => ({ ...prev, appearance: { ...prev.appearance, ...updates } }));
-  }, []);
-
-  const updateNotifications = useCallback((updates: Partial<SettingsState['notifications']>) => {
-    setSettings((prev) => ({ ...prev, notifications: { ...prev.notifications, ...updates } }));
-  }, []);
-
-  const resetSettings = useCallback(() => {
-    setSettings(defaultSettings);
-  }, []);
-
-  return (
-    <SettingsContext.Provider
-      value={{
-        settings,
-        updateProfile,
-        updateAI,
-        updateGitHub,
-        updateAppearance,
-        updateNotifications,
-        resetSettings,
-      }}
-    >
-      {children}
-    </SettingsContext.Provider>
-  );
-}
-
-export function useSettings() {
-  const context = useContext(SettingsContext);
-  if (!context) {
-    throw new Error('useSettings must be used within a SettingsProvider');
-  }
-  return context;
-}
-
+/**
+ * Local settings snapshot for consumers outside the settings page (chat
+ * input, analytics, repository chat). The settings page itself reads and
+ * writes the server-backed layer in hooks/use-settings.ts; this remains only
+ * as a read fallback for UI defaults that are injected server-side anyway.
+ */
 export function useSettingsState(): SettingsState {
-  const context = useContext(SettingsContext);
-  if (context) return context.settings;
   return loadSettings();
 }
