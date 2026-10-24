@@ -194,4 +194,38 @@ describe('getMeteredHealth (health scan cache behavior)', () => {
     expect(refundQuota).toHaveBeenCalledWith('user-a', 'HEALTH_SCAN');
     expect(saveHealthCache).not.toHaveBeenCalled();
   });
+
+  it('charges only once for concurrent identical scans (single-flight)', async () => {
+    // Two overlapping requests for the same repo+commit must share one
+    // consume + scan, not double-charge.
+    let releaseScan: (value: typeof freshHealth) => void;
+    getHealth.mockImplementation(() => new Promise((resolve) => (releaseScan = resolve)));
+
+    const first = getMeteredHealth('user-a', 'acme', 'demo');
+    const second = getMeteredHealth('user-a', 'acme', 'demo');
+
+    // Let both requests reach the scan, then complete it.
+    await new Promise((r) => setTimeout(r, 0));
+    releaseScan!(freshHealth);
+
+    const [a, b] = await Promise.all([first, second]);
+
+    expect(consumeQuota).toHaveBeenCalledTimes(1);
+    expect(getHealth).toHaveBeenCalledTimes(1);
+    expect(a.health).toBe(freshHealth);
+    expect(b.health).toBe(freshHealth);
+  });
+
+  it('does not let a failed scan block a subsequent scan (single-flight clears)', async () => {
+    getHealth.mockRejectedValueOnce(new Error('provider down'));
+
+    await expect(getMeteredHealth('user-a', 'acme', 'demo')).rejects.toThrow('provider down');
+
+    // Next call must run a fresh scan, not reuse the rejected promise.
+    getHealth.mockResolvedValue(freshHealth);
+    const result = await getMeteredHealth('user-a', 'acme', 'demo');
+
+    expect(result.cached).toBe(false);
+    expect(getHealth).toHaveBeenCalledTimes(2);
+  });
 });
