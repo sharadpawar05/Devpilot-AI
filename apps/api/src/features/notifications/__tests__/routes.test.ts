@@ -43,7 +43,7 @@ vi.mock('@/core/db', () => ({
   },
 }));
 
-import { notificationsRoutes } from '@/features/notifications/routes';
+import { notificationsRoutes, notifyIfEnabled } from '@/features/notifications/routes';
 
 const notif = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -183,5 +183,77 @@ describe('notifications routes', () => {
       where: { userId: 'user-1', read: false },
       data: { read: true },
     });
+  });
+});
+
+describe('notifyIfEnabled', () => {
+  const enabledSettings = {
+    notifyReviewComplete: true,
+    notifyPrAnalysis: true,
+    notifyRepositorySync: false,
+    notifyGithubAlerts: true,
+    notifyWeeklySummary: false,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    db.notification.create.mockResolvedValue({});
+  });
+
+  it('creates a notification when the matching preference is enabled', async () => {
+    db.user.findUnique.mockResolvedValue({ id: 'user-1', settings: enabledSettings });
+
+    await notifyIfEnabled('supa-1', 'review_complete', 'Code review completed', 'Ready.');
+
+    expect(db.user.findUnique).toHaveBeenCalledWith({
+      where: { supabaseUserId: 'supa-1' },
+      select: expect.objectContaining({ id: true }),
+    });
+    expect(db.notification.create).toHaveBeenCalledWith({
+      data: {
+        userId: 'user-1',
+        type: 'review_complete',
+        title: 'Code review completed',
+        description: 'Ready.',
+      },
+    });
+  });
+
+  it('skips creation when the matching preference is disabled', async () => {
+    db.user.findUnique.mockResolvedValue({
+      id: 'user-1',
+      settings: { ...enabledSettings, notifyReviewComplete: false },
+    });
+
+    await notifyIfEnabled('supa-1', 'review_complete', 'Code review completed', 'Ready.');
+
+    expect(db.notification.create).not.toHaveBeenCalled();
+  });
+
+  it('falls back to column defaults when the user has no settings row', async () => {
+    db.user.findUnique.mockResolvedValue({ id: 'user-1', settings: null });
+
+    // review_complete defaults to enabled…
+    await notifyIfEnabled('supa-1', 'review_complete', 'T', 'D');
+    expect(db.notification.create).toHaveBeenCalledTimes(1);
+
+    // …repo_sync defaults to disabled.
+    await notifyIfEnabled('supa-1', 'repo_sync', 'T', 'D');
+    expect(db.notification.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('does nothing when the user does not exist', async () => {
+    db.user.findUnique.mockResolvedValue(null);
+
+    await notifyIfEnabled('supa-unknown', 'review_complete', 'T', 'D');
+
+    expect(db.notification.create).not.toHaveBeenCalled();
+  });
+
+  it('fails soft when the database errors', async () => {
+    db.user.findUnique.mockRejectedValue(new Error('connection lost'));
+
+    await expect(notifyIfEnabled('supa-1', 'review_complete', 'T', 'D')).resolves.toBeUndefined();
+    expect(db.notification.create).not.toHaveBeenCalled();
   });
 });

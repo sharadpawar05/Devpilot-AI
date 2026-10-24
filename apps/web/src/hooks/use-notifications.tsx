@@ -1,14 +1,7 @@
-import {
-  createContext,
-  useContext,
-  useState,
-  useCallback,
-  useMemo,
-  useEffect,
-  type ReactNode,
-} from 'react';
-
-const STORAGE_KEY = 'devpilot_notifications';
+import { createContext, useContext, type ReactNode } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/auth';
+import { useApiFetch, unwrap } from '@/lib/api-fetch';
 
 export interface Notification {
   id: string;
@@ -18,116 +11,116 @@ export interface Notification {
   read: boolean;
 }
 
-const MOCK_NOTIFICATIONS: Notification[] = [
-  {
-    id: '1',
-    title: 'Code review completed',
-    description: 'PR #142 "Fix authentication flow" has been reviewed and approved.',
-    timestamp: new Date(Date.now() - 1000 * 60 * 5),
-    read: false,
-  },
-  {
-    id: '2',
-    title: 'AI analysis ready',
-    description: 'Repository analysis for "devpilot-ai" is complete. 3 issues found.',
-    timestamp: new Date(Date.now() - 1000 * 60 * 30),
-    read: false,
-  },
-  {
-    id: '3',
-    title: 'Pull request merged',
-    description: 'PR #139 "Update dependencies" has been merged into main.',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2),
-    read: true,
-  },
-  {
-    id: '4',
-    title: 'Weekly summary available',
-    description: 'Your weekly engineering status report is ready to view.',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24),
-    read: true,
-  },
-];
-
-function loadNotifications(): Notification[] {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored) as Array<
-        Omit<Notification, 'timestamp'> & { timestamp: string }
-      >;
-      return parsed.map((n) => ({ ...n, timestamp: new Date(n.timestamp) }));
-    }
-  } catch {
-    // Fall back to mock data
-  }
-  return MOCK_NOTIFICATIONS;
+interface NotificationsListResponse {
+  success: boolean;
+  notifications: Array<{
+    id: string;
+    title: string;
+    description: string;
+    type: string;
+    read: boolean;
+    timestamp: string;
+  }>;
 }
 
-function saveNotifications(notifications: Notification[]): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(notifications));
-  } catch {
-    // Silently fail if localStorage is unavailable
-  }
+interface UnreadCountResponse {
+  success: boolean;
+  count: number;
 }
+
+const LIST_KEY = ['notifications'] as const;
+const COUNT_KEY = ['notifications', 'unread-count'] as const;
 
 interface NotificationContextValue {
   notifications: Notification[];
   unreadCount: number;
+  isLoading: boolean;
   markAsRead: (id: string) => void;
   markAllAsRead: () => void;
-  addNotification: (notification: Omit<Notification, 'id' | 'timestamp' | 'read'>) => void;
-  removeNotification: (id: string) => void;
 }
 
 const NotificationContext = createContext<NotificationContextValue | null>(null);
 
+/**
+ * In-app notifications backed by the API (GET /notifications, unread-count,
+ * PATCH read, POST read-all). Optimistic read updates reconcile with the
+ * server on settle.
+ */
 export function NotificationProvider({ children }: { children: ReactNode }) {
-  const [notifications, setNotifications] = useState<Notification[]>(loadNotifications);
+  const apiFetch = useApiFetch();
+  const { session } = useAuth();
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    saveNotifications(notifications);
-  }, [notifications]);
-
-  const unreadCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
-
-  const markAsRead = useCallback((id: string) => {
-    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
-  }, []);
-
-  const markAllAsRead = useCallback(() => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-  }, []);
-
-  const addNotification = useCallback(
-    (notification: Omit<Notification, 'id' | 'timestamp' | 'read'>) => {
-      const newNotification: Notification = {
-        ...notification,
-        id: crypto.randomUUID(),
-        timestamp: new Date(),
-        read: false,
-      };
-      setNotifications((prev) => [newNotification, ...prev]);
+  const listQuery = useQuery({
+    queryKey: LIST_KEY,
+    queryFn: async (): Promise<Notification[]> => {
+      const body = await apiFetch('/notifications').then(unwrap<NotificationsListResponse>);
+      return body.notifications.map((n) => ({
+        id: n.id,
+        title: n.title,
+        description: n.description,
+        read: n.read,
+        timestamp: new Date(n.timestamp),
+      }));
     },
-    [],
-  );
+    enabled: !!session,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
 
-  const removeNotification = useCallback((id: string) => {
-    setNotifications((prev) => prev.filter((n) => n.id !== id));
-  }, []);
+  const countQuery = useQuery({
+    queryKey: COUNT_KEY,
+    queryFn: async (): Promise<number> => {
+      const body = await apiFetch('/notifications/unread-count').then(unwrap<UnreadCountResponse>);
+      return body.count;
+    },
+    enabled: !!session,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
 
-  const value = useMemo(
-    () => ({
-      notifications,
-      unreadCount,
-      markAsRead,
-      markAllAsRead,
-      addNotification,
-      removeNotification,
-    }),
-    [notifications, unreadCount, markAsRead, markAllAsRead, addNotification, removeNotification],
-  );
+  const markReadMutation = useMutation({
+    mutationFn: (id: string) =>
+      apiFetch(`/notifications/${encodeURIComponent(id)}/read`, { method: 'PATCH' }).then(
+        unwrap<{ success: boolean }>,
+      ),
+  });
+
+  const markAllMutation = useMutation({
+    mutationFn: () =>
+      apiFetch('/notifications/read-all', { method: 'POST' }).then(unwrap<{ success: boolean }>),
+  });
+
+  const reconcile = () => queryClient.invalidateQueries({ queryKey: LIST_KEY });
+
+  const markAsRead = (id: string) => {
+    // Optimistic: flip the item and decrement the badge immediately, then
+    // reconcile both queries with the server on settle.
+    const target = queryClient.getQueryData<Notification[]>(LIST_KEY)?.find((n) => n.id === id);
+    if (target && !target.read) {
+      queryClient.setQueryData<number>(COUNT_KEY, (count) => Math.max(0, (count ?? 1) - 1));
+    }
+    queryClient.setQueryData<Notification[]>(LIST_KEY, (old) =>
+      old?.map((n) => (n.id === id ? { ...n, read: true } : n)),
+    );
+    markReadMutation.mutate(id, { onSettled: reconcile });
+  };
+
+  const markAllAsRead = () => {
+    queryClient.setQueryData<Notification[]>(LIST_KEY, (old) =>
+      old?.map((n) => ({ ...n, read: true })),
+    );
+    queryClient.setQueryData<number>(COUNT_KEY, 0);
+    markAllMutation.mutate(undefined, { onSettled: reconcile });
+  };
+
+  const value: NotificationContextValue = {
+    notifications: listQuery.data ?? [],
+    unreadCount: countQuery.data ?? 0,
+    isLoading: listQuery.isLoading,
+    markAsRead,
+    markAllAsRead,
+  };
 
   return <NotificationContext.Provider value={value}>{children}</NotificationContext.Provider>;
 }

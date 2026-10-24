@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/auth';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
+import { useApiFetch, unwrap } from '@/lib/api-fetch';
 
 export type ThemePreference = 'light' | 'dark' | 'system';
 export type FontSize = 'small' | 'default' | 'large';
@@ -61,32 +60,6 @@ export interface AccountSession {
   userAgent: string | null;
   ip: string | null;
   current: boolean;
-}
-
-function useApiFetch() {
-  const { session } = useAuth();
-  const token = session?.accessToken;
-  return async (path: string, init?: RequestInit): Promise<Response> => {
-    const res = await fetch(`${API_BASE_URL}${path}`, {
-      credentials: 'include',
-      ...init,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...init?.headers,
-      },
-    });
-    return res;
-  };
-}
-
-function unwrap<T>(res: Response): Promise<T> {
-  return res.json().then((body: { success?: boolean; error?: { message?: string } } & T) => {
-    if (!res.ok || body.success === false) {
-      throw new Error(body.error?.message ?? `Request failed (${res.status})`);
-    }
-    return body;
-  });
 }
 
 export function useSettingsQuery() {

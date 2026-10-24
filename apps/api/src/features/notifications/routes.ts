@@ -37,6 +37,66 @@ export async function createNotification(
   }
 }
 
+type PrefKey =
+  | 'notifyReviewComplete'
+  | 'notifyPrAnalysis'
+  | 'notifyRepositorySync'
+  | 'notifyGithubAlerts'
+  | 'notifyWeeklySummary';
+
+const PREF_BY_TYPE: Record<NotificationType, PrefKey> = {
+  review_complete: 'notifyReviewComplete',
+  pr_analysis: 'notifyPrAnalysis',
+  repo_sync: 'notifyRepositorySync',
+  github_alert: 'notifyGithubAlerts',
+  weekly_summary: 'notifyWeeklySummary',
+};
+
+// Mirrors the UserSettings column defaults for users without a settings row.
+const DEFAULT_PREFS: Record<NotificationType, boolean> = {
+  review_complete: true,
+  pr_analysis: true,
+  repo_sync: false,
+  github_alert: true,
+  weekly_summary: false,
+};
+
+/**
+ * Creates a notification for a user only if their saved preferences allow it.
+ * Resolves the local User.id from the Supabase sub; fails soft like
+ * createNotification (never breaks the triggering workflow).
+ */
+export async function notifyIfEnabled(
+  supabaseSub: string,
+  type: NotificationType,
+  title: string,
+  description: string,
+): Promise<void> {
+  try {
+    const user = await db.user.findUnique({
+      where: { supabaseUserId: supabaseSub },
+      select: {
+        id: true,
+        settings: {
+          select: {
+            notifyReviewComplete: true,
+            notifyPrAnalysis: true,
+            notifyRepositorySync: true,
+            notifyGithubAlerts: true,
+            notifyWeeklySummary: true,
+          },
+        },
+      },
+    });
+    if (!user) return;
+    const enabled = user.settings?.[PREF_BY_TYPE[type]] ?? DEFAULT_PREFS[type];
+    if (!enabled) return;
+    await db.notification.create({ data: { userId: user.id, type, title, description } });
+  } catch {
+    // best-effort
+  }
+}
+
 function toNotification(n: {
   id: string;
   title: string;

@@ -6,6 +6,7 @@ import { authenticate } from '@/core/auth/middleware';
 import { usageService, sendUsageLimitReached, AI_CREDIT_COSTS } from '@/core/usage';
 import { PromptRegistry, loadMarkdownPrompts } from '@devpilot/ai-prompts';
 import { resolveAIRequestDefaults } from '@/features/settings/ai-prefs';
+import { notifyIfEnabled } from '@/features/notifications/routes';
 
 const registry = new PromptRegistry();
 registry.registerAll(loadMarkdownPrompts());
@@ -200,6 +201,15 @@ export async function codeReviewRoutes(app: FastifyInstance) {
           creditsConsumed: creditCost,
           estimatedCostUsd: result.cost?.totalCost ?? 0,
         });
+
+        // In-app notification, honoring the user's notification preferences
+        // (fails soft — never breaks the review response).
+        await notifyIfEnabled(
+          auth.sub,
+          'review_complete',
+          'Code review completed',
+          `Your ${reviewType} review (${reviewDepth} depth) of ${language} code is ready.`,
+        );
 
         return reply.send({
           success: true,
