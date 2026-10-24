@@ -148,13 +148,13 @@ describe('POST /ai/fix', () => {
     expect(consumeSpy).not.toHaveBeenCalled();
   });
 
-  it('returns 403 when the credit quota is exhausted without calling the provider', async () => {
+  it('returns 402 when the credit quota is exhausted without calling the provider', async () => {
     consumeSpy.mockResolvedValue(limitReached());
     const reply = makeReply();
 
     await handler(requestBody(), reply);
 
-    expect(reply.statusCode).toBe(403);
+    expect(reply.statusCode).toBe(402);
     expect(reply.payload?.error).toMatchObject({ code: 'USAGE_LIMIT_REACHED' });
     expect(generateMock).not.toHaveBeenCalled();
   });

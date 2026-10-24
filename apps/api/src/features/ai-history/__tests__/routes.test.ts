@@ -120,7 +120,7 @@ describe('POST /ai-history/sessions repository quota gate', () => {
     await handler({ auth: { sub: 'supa-user' }, body: validBody }, reply);
 
     expect(ensureSpy).toHaveBeenCalledWith('supa-user', 'octo', 'api');
-    expect(reply.statusCode).toBe(403);
+    expect(reply.statusCode).toBe(402);
     expect(reply.payload?.error).toMatchObject({
       code: 'USAGE_LIMIT_REACHED',
       feature: 'REPOSITORIES',

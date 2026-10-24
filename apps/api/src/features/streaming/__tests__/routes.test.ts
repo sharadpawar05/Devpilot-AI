@@ -140,7 +140,7 @@ describe('POST /stream repository quota gate', () => {
     );
 
     expect(ensureSpy).toHaveBeenCalledWith('supa-user', 'octo', 'api');
-    expect(reply.statusCode).toBe(403);
+    expect(reply.statusCode).toBe(402);
     expect(reply.payload?.error).toMatchObject({
       code: 'USAGE_LIMIT_REACHED',
       feature: 'REPOSITORIES',
@@ -193,7 +193,7 @@ describe('POST /stream repository quota gate', () => {
     );
 
     expect(ensureSpy).toHaveBeenCalledWith('supa-user', 'octo', 'api');
-    expect(reply.statusCode).toBe(403);
+    expect(reply.statusCode).toBe(402);
     expect(consumeCreditsSpy).not.toHaveBeenCalled();
   });
 
