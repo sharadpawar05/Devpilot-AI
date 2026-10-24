@@ -53,7 +53,16 @@ describe('useStreamSession duplicate metadata guard', () => {
         title: 'Prompt',
         provider: 'gemini',
         model: 'gemini-3.6-flash',
-        messages: [{ role: 'user', content: 'hi' }],
+        messages: [
+          {
+            id: 'm1',
+            role: 'user',
+            content: 'hi',
+            latency: 0,
+            tokens: 0,
+            timestamp: new Date().toISOString(),
+          },
+        ],
       });
     });
 

@@ -549,6 +549,10 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
     setSelectedRepoName(fullName);
     setSelectedBranch(null);
     setSelectedPRNumber(null);
+    // Clear stale PRs so the Open PRs stat shows "–" (not the prior repo's count)
+    // until the new repo's pulls load.
+    setPulls([]);
+    setError(null);
     storeValue(STORAGE_KEYS.REPO, fullName);
     storeValue(STORAGE_KEYS.BRANCH, null);
     storeValue(STORAGE_KEYS.PR, null);

@@ -53,6 +53,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
             avatar: null,
             connectedAt: null,
           },
+          stats: { lastActivityAt: null },
           activity: [],
         });
       }
@@ -84,6 +85,10 @@ export async function dashboardRoutes(app: FastifyInstance) {
           username: user.githubUsername ?? null,
           avatar: user.githubAvatar ?? null,
           connectedAt: user.githubConnectedAt?.toISOString() ?? null,
+        },
+        stats: {
+          // recentActivity is ordered by createdAt desc, so the first row is MAX(createdAt).
+          lastActivityAt: recentActivity[0]?.createdAt?.toISOString() ?? null,
         },
         activity: recentActivity.map(
           (s: {
