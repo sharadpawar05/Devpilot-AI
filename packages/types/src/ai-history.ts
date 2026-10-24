@@ -46,6 +46,8 @@ export interface AIHistorySession {
   pinned: boolean;
   archived: boolean;
   favorite: boolean;
+  /** Client-supplied idempotency key; duplicates resolve to one row. */
+  clientRequestId?: string;
 }
 
 export interface AIHistorySessionMetadata {

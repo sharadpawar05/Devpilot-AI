@@ -62,6 +62,7 @@ export function useCodeReview() {
       response: string;
       latencyMs: number;
       tokens: number;
+      clientRequestId: string;
     }) => {
       if (!token) return;
       const userMessage = `Review ${params.language} code (${params.reviewType}, ${params.reviewDepth}):\n\n${params.code}`;
@@ -71,6 +72,7 @@ export function useCodeReview() {
         title: generateCodeReviewTitle(params.language, params.reviewType),
         provider: (params.provider || 'gemini') as AIProviderName,
         model: (params.model || 'gemini-3.6-flash') as AIModel,
+        clientRequestId: params.clientRequestId,
         messages: [
           {
             id: generateId(),
@@ -96,6 +98,8 @@ export function useCodeReview() {
 
   const mutateAsync = useCallback(
     async (request: CodeReviewRequest) => {
+      // One review action = one history row, even across stream retries.
+      const clientRequestId = generateId();
       if (request.stream) {
         return new Promise<CodeReviewResponse>((resolve, reject) => {
           stream.startStream({
@@ -135,6 +139,7 @@ export function useCodeReview() {
                   response: content,
                   latencyMs: response.latencyMs,
                   tokens: response.usage.total,
+                  clientRequestId,
                 });
               } catch {
                 // History save failed but response is still valid
@@ -187,6 +192,7 @@ export function useCodeReview() {
         response: response.response,
         latencyMs: response.latencyMs,
         tokens: response.usage.total,
+        clientRequestId,
       });
 
       return response;

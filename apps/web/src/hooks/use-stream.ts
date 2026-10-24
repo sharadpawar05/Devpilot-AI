@@ -56,6 +56,7 @@ export function useStreamSession() {
   const batchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const optionsRef = useRef<StreamOptions | null>(null);
   const totalContentRef = useRef('');
+  const completedRef = useRef(false);
 
   const flushBatch = useCallback(() => {
     if (contentBufferRef.current) {
@@ -73,6 +74,7 @@ export function useStreamSession() {
 
       contentBufferRef.current = '';
       totalContentRef.current = '';
+      completedRef.current = false;
       if (batchTimerRef.current) {
         clearTimeout(batchTimerRef.current);
         batchTimerRef.current = null;
@@ -165,6 +167,11 @@ export function useStreamSession() {
                     }
                   } else if (chunk.type === 'metadata') {
                     if (receivedError) continue;
+                    // The server may emit more than one metadata chunk
+                    // (provider + engine). Process exactly one per stream so
+                    // onComplete fires once and history is written once.
+                    if (completedRef.current) continue;
+                    completedRef.current = true;
                     const remainingBuffer = contentBufferRef.current;
                     contentBufferRef.current = '';
                     if (batchTimerRef.current) {

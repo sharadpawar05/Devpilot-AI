@@ -228,6 +228,9 @@ export function PlaygroundPage() {
       addRecentPrompt(trimmed);
       setResult(null);
 
+      // One prompt submission = one history action; the key dedupes retries.
+      const clientRequestId = crypto.randomUUID();
+
       stream.startStream({
         workflowType: 'PLAYGROUND',
         provider,
@@ -277,6 +280,7 @@ export function PlaygroundPage() {
                 model: metadata?.model || model,
                 latencyMs: metadata?.latencyMs || 0,
                 tokens: metadata?.tokens?.total || 0,
+                clientRequestId,
               });
               if (created) setCurrentSession(created);
             } catch {
@@ -321,6 +325,7 @@ export function PlaygroundPage() {
     model: string;
     latencyMs: number;
     tokens: number;
+    clientRequestId?: string;
   }): Promise<AIHistorySession | null> {
     if (!authSession?.accessToken) return null;
     try {
@@ -329,6 +334,7 @@ export function PlaygroundPage() {
         title: params.prompt.length > 60 ? params.prompt.slice(0, 57) + '...' : params.prompt,
         provider: params.provider as AIHistorySession['provider'],
         model: params.model as AIHistorySession['model'],
+        clientRequestId: params.clientRequestId,
         messages: [
           {
             id: crypto.randomUUID(),

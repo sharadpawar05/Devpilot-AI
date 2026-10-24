@@ -14,7 +14,7 @@ import {
   Clock,
   History,
 } from 'lucide-react';
-import type { WorkflowType } from '@devpilot/types';
+import type { AIHistorySessionMetadata, WorkflowType } from '@devpilot/types';
 import { WORKFLOW_TYPE_LABELS } from '@devpilot/types';
 import { useRecentHistory } from '@/hooks/use-history';
 
@@ -132,14 +132,74 @@ function timeAgo(dateStr: string): string {
   return `${diffDay}d ago`;
 }
 
+interface MergedActivity {
+  id: string;
+  /** workflowType (snake or kebab) used for icon/color lookup. */
+  action: string;
+  title: string;
+  provider?: string;
+  latencyMs?: number;
+  createdAt: string;
+  /** Session id to open in the history page, when known. */
+  sessionId: string | null;
+}
+
+/**
+ * The dashboard `activities` (GET /dashboard) and `useRecentHistory`
+ * (GET /ai-history/sessions) both read the same ai_history_sessions table.
+ * Merge them into a single list deduped by session id so one action never
+ * appears twice (e.g. once with a provider chip, once with a workflow label).
+ */
+function mergeFeeds(
+  activities: ActivityItem[],
+  sessions: AIHistorySessionMetadata[],
+): MergedActivity[] {
+  const byId = new Map<string, MergedActivity>();
+
+  for (const activity of activities) {
+    byId.set(activity.id, {
+      id: activity.id,
+      action: activity.action,
+      title: activity.label || formatWorkflowName(activity.action),
+      provider: activity.provider,
+      latencyMs: activity.latencyMs,
+      createdAt: activity.createdAt ?? new Date(0).toISOString(),
+      sessionId: activity.id,
+    });
+  }
+
+  for (const session of sessions) {
+    const existing = byId.get(session.id);
+    if (existing) {
+      // Same row from both feeds — keep one entry, enrich from the session.
+      existing.action = session.workflowType;
+      existing.title = session.title || existing.title;
+      existing.provider = session.provider ?? existing.provider;
+      existing.createdAt = session.createdAt ?? existing.createdAt;
+    } else {
+      byId.set(session.id, {
+        id: session.id,
+        action: session.workflowType,
+        title: session.title,
+        provider: session.provider,
+        createdAt: session.createdAt ?? session.updatedAt,
+        sessionId: session.id,
+      });
+    }
+  }
+
+  return [...byId.values()]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 6);
+}
+
 export const RecentActivity = memo(function RecentActivity({ activities }: RecentActivityProps) {
   const navigate = useNavigate();
   const { sessions, isLoading: sessionsLoading } = useRecentHistory(5);
 
-  const hasActivities = activities.length > 0;
-  const hasSessions = sessions.length > 0;
+  const items = mergeFeeds(activities, sessions);
 
-  if (!hasActivities && !hasSessions && !sessionsLoading) {
+  if (items.length === 0 && !sessionsLoading) {
     return (
       <div className="rounded-2xl border border-input bg-card p-6 shadow-sm">
         <div className="mb-4 flex items-center justify-between">
@@ -180,70 +240,60 @@ export const RecentActivity = memo(function RecentActivity({ activities }: Recen
       <div className="relative space-y-3">
         <div className="absolute left-[11px] top-2 h-[calc(100%-16px)] w-px bg-border" />
 
-        {activities.slice(0, 5).map((activity) => {
-          const Icon = workflowIcons[activity.action] || FileCode;
-          const color = workflowColors[activity.action] || 'bg-gray-500';
-          const displayName = activity.label || formatWorkflowName(activity.action);
+        {items.map((item) => {
+          const Icon =
+            historyIcons[item.action as WorkflowType] || workflowIcons[item.action] || FileCode;
+          const color = workflowColors[item.action] || 'bg-gray-500';
+          const label =
+            historyLabels[item.action] ||
+            WORKFLOW_TYPE_LABELS[item.action as WorkflowType] ||
+            (item.action.includes('-') || item.action.includes('_')
+              ? formatWorkflowName(item.action)
+              : item.title);
+          const isTitleDifferent = item.title && item.title !== label;
+
           return (
-            <div key={activity.id} className="relative flex items-start gap-3">
+            <div key={item.id} className="relative flex items-start gap-3">
               <div
                 className={`relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${color}`}
               >
                 <Icon className="h-3 w-3 text-white" />
               </div>
               <div className="min-w-0 flex-1 pt-0.5">
-                <p className="text-sm font-medium">{displayName}</p>
+                {item.sessionId ? (
+                  <button
+                    onClick={() => navigate(`/history?session=${item.sessionId}`)}
+                    className="text-left text-sm font-medium hover:text-primary transition-colors truncate"
+                  >
+                    {isTitleDifferent ? item.title : label}
+                  </button>
+                ) : (
+                  <p className="text-sm font-medium truncate">
+                    {isTitleDifferent ? item.title : label}
+                  </p>
+                )}
                 <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
-                  {activity.provider && (
+                  {isTitleDifferent && <span>{label}</span>}
+                  {item.provider && (
                     <span className="flex items-center gap-1">
                       <Zap className="h-3 w-3" />
-                      {activity.provider}
+                      {item.provider}
                     </span>
                   )}
-                  {activity.latencyMs != null && activity.latencyMs > 0 && (
+                  {item.latencyMs != null && item.latencyMs > 0 && (
                     <span className="flex items-center gap-1">
                       <Clock className="h-3 w-3" />
-                      {(activity.latencyMs / 1000).toFixed(1)}s
+                      {(item.latencyMs / 1000).toFixed(1)}s
                     </span>
                   )}
-                  {activity.createdAt && <span>{timeAgo(activity.createdAt)}</span>}
+                  <span>{timeAgo(item.createdAt)}</span>
                 </div>
               </div>
             </div>
           );
         })}
 
-        {sessions.slice(0, 3).map((session) => {
-          const Icon = historyIcons[session.workflowType] || MessageSquare;
-          const color = workflowColors[session.workflowType] || 'bg-gray-500';
-          return (
-            <div key={session.id} className="relative flex items-start gap-3">
-              <div
-                className={`relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${color}`}
-              >
-                <Icon className="h-3 w-3 text-white" />
-              </div>
-              <div className="min-w-0 flex-1 pt-0.5">
-                <button
-                  onClick={() => navigate(`/history?session=${session.id}`)}
-                  className="text-left text-sm font-medium hover:text-primary transition-colors"
-                >
-                  {session.title}
-                </button>
-                <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
-                  <span>
-                    {historyLabels[session.workflowType] ||
-                      WORKFLOW_TYPE_LABELS[session.workflowType] ||
-                      session.workflowType}
-                  </span>
-                  <span>{timeAgo(session.updatedAt)}</span>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-
-        {sessionsLoading && (
+        {sessionsLoading && items.length === 0 && (
           <div className="flex items-center justify-center py-4">
             <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
           </div>

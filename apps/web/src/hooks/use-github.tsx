@@ -429,6 +429,9 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
       if (!token) return null;
       setLoading(true);
       setError(null);
+      // Stable per-invocation key: a retried/double-fired request for this
+      // review resolves to one history row.
+      const clientRequestId = generateId();
       try {
         const res = await apiFetch(`${API_BASE_URL}/github/review`, {
           method: 'POST',
@@ -444,6 +447,7 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
               title: `PR #${params.pull_number} Review`,
               provider: response.provider as never,
               model: response.model as never,
+              clientRequestId,
               messages: [
                 {
                   id: generateId(),
@@ -489,6 +493,7 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
       if (!token) return null;
       setLoading(true);
       setError(null);
+      const clientRequestId = generateId();
       try {
         const res = await apiFetch(`${API_BASE_URL}/github/analyze`, {
           method: 'POST',
@@ -499,11 +504,12 @@ export function GitHubProvider({ children }: { children: ReactNode }) {
           const response = data as GitHubAnalyzeResponse;
           if (token) {
             await aiHistoryApi.createSession(token, {
-              workflowType: 'pr-review',
+              workflowType: 'pr-analysis',
               repository: `${params.owner}/${params.repo}`,
               title: `PR #${params.pull_number} Analysis`,
               provider: response.provider as never,
               model: response.model as never,
+              clientRequestId,
               messages: [
                 {
                   id: generateId(),

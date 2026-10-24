@@ -107,6 +107,7 @@ export class AIWorkflowEngine {
     );
 
     let accumulatedContent = '';
+    let sawProviderMetadata = false;
     const startTime = Date.now();
 
     for await (const chunk of aiService.generateStream(userPrompt, systemPrompt, {
@@ -122,6 +123,11 @@ export class AIWorkflowEngine {
       }
       if (chunk.type === 'token' && chunk.content) {
         accumulatedContent += chunk.content;
+      }
+      // At most one metadata chunk may reach the client: if the provider
+      // already emitted one, do not emit a second below.
+      if (chunk.type === 'metadata') {
+        sawProviderMetadata = true;
       }
       yield chunk;
     }
@@ -143,6 +149,10 @@ export class AIWorkflowEngine {
 
     historyService.log(response, request.metadata);
     usageMetrics.record(response);
+
+    if (sawProviderMetadata) {
+      return;
+    }
 
     yield {
       type: 'metadata',
