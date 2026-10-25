@@ -47,6 +47,16 @@ async function findUser(sub: string): Promise<LocalUser | null> {
   });
 }
 
+// `users.email` is unique, but one person can own more than one local row —
+// their Supabase sub changed (re-linked provider, re-seeded project) and the
+// older row still holds their address. Adopting it here would throw P2002 and
+// turn a settings read into a 500, so claim it only when nobody else has it.
+async function claimableEmail(email: string, exceptUserId?: string): Promise<string | null> {
+  const owner = await db.user.findUnique({ where: { email }, select: { id: true } });
+  if (owner && owner.id !== exceptUserId) return null;
+  return email;
+}
+
 // Repairs a row that was provisioned without the token's profile (the GitHub
 // OAuth path creates users through resolveLocalUserId, which has no identity
 // to hand). Only the placeholder/default values are overwritten, so a name the
@@ -54,7 +64,8 @@ async function findUser(sub: string): Promise<LocalUser | null> {
 async function healUser(user: LocalUser, identity: LocalIdentity): Promise<LocalUser> {
   const data: { email?: string; fullName?: string } = {};
   if (identity.email && user.email.endsWith(PLACEHOLDER_EMAIL_SUFFIX)) {
-    data.email = identity.email;
+    const free = await claimableEmail(identity.email, user.id);
+    if (free) data.email = free;
   }
   if (identity.name && user.fullName === DEFAULT_FULL_NAME) {
     data.fullName = identity.name;
@@ -73,10 +84,11 @@ async function ensureUser(auth: AuthJWTPayload): Promise<LocalUser> {
   const identity = identityFromAuth(auth);
   const existing = await findUser(auth.sub);
   if (existing) return healUser(existing, identity);
+  const email = identity.email ? await claimableEmail(identity.email) : null;
   await db.user.create({
     data: {
       supabaseUserId: auth.sub,
-      email: identity.email || `${auth.sub}${PLACEHOLDER_EMAIL_SUFFIX}`,
+      email: email ?? `${auth.sub}${PLACEHOLDER_EMAIL_SUFFIX}`,
       fullName: identity.name || DEFAULT_FULL_NAME,
     },
   });

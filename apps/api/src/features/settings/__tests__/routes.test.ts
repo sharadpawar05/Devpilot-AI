@@ -183,7 +183,12 @@ describe('settings routes', () => {
       avatarUrl: null,
     };
     const healed = { ...placeholder, email: 'real@example.com', fullName: 'Sharad Pawar' };
-    db.user.findUnique.mockResolvedValueOnce(placeholder).mockResolvedValue(healed);
+    // findUser(sub) first, then the ownership probe for the new address.
+    db.user.findUnique.mockImplementation((args: { where: Record<string, unknown> }) =>
+      Promise.resolve(
+        'supabaseUserId' in args.where ? placeholder : ({ id: 'user-9' } as { id: string } | null),
+      ),
+    );
     db.user.update.mockResolvedValue(healed);
     db.userSettings.upsert.mockResolvedValue(defaultSettingsRow);
 
@@ -207,6 +212,49 @@ describe('settings routes', () => {
     });
     const body = res.json() as { profile: { email: string; name: string } };
     expect(body.profile.email).toBe('real@example.com');
+    expect(body.profile.name).toBe('Sharad Pawar');
+  });
+
+  it('keeps the placeholder email when an older row already owns the address', async () => {
+    const placeholder = {
+      id: 'user-9',
+      email: 'user-9@placeholder.local',
+      fullName: 'User',
+      avatarUrl: null,
+    };
+    const healed = { ...placeholder, fullName: 'Sharad Pawar' };
+    // The same person has a second row from before their Supabase sub changed;
+    // writing the address would trip the unique index and 500 the read.
+    db.user.findUnique.mockImplementation((args: { where: Record<string, unknown> }) =>
+      Promise.resolve(
+        'supabaseUserId' in args.where
+          ? placeholder
+          : ({ id: 'user-2-legacy' } as { id: string } | null),
+      ),
+    );
+    db.user.update.mockResolvedValue(healed);
+    db.userSettings.upsert.mockResolvedValue(defaultSettingsRow);
+
+    const token = [
+      'user-9',
+      'sid-9',
+      encodeURIComponent('real@example.com'),
+      encodeURIComponent('Sharad Pawar'),
+    ].join('|');
+    const res = await app.inject({
+      method: 'GET',
+      url: '/settings',
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(db.user.update).toHaveBeenCalledWith({
+      where: { id: 'user-9' },
+      data: { fullName: 'Sharad Pawar' },
+      select: { id: true, email: true, fullName: true, avatarUrl: true },
+    });
+    const body = res.json() as { profile: { email: string; name: string } };
+    expect(body.profile.email).toBe('user-9@placeholder.local');
     expect(body.profile.name).toBe('Sharad Pawar');
   });
 
