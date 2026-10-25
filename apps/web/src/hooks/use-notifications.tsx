@@ -66,6 +66,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     enabled: !!session,
     staleTime: 30_000,
     refetchInterval: 60_000,
+    // The badge polls on a fixed cadence; focus refetch on top of that doubled
+    // the traffic every time the tab came back to the foreground.
+    refetchOnWindowFocus: false,
   });
 
   const countQuery = useQuery({
@@ -77,6 +80,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     enabled: !!session,
     staleTime: 30_000,
     refetchInterval: 60_000,
+    refetchOnWindowFocus: false,
   });
 
   const markReadMutation = useMutation({
