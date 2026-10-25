@@ -118,21 +118,18 @@ export function DashboardPage() {
     const repoName = gh.selectedRepoName || gh.repositories[0]?.full_name;
     if (!repoName) return;
 
-    if (fetchedPRsForRepo.current === repoName && gh.pulls.length > 0) return;
+    // The ref — not `pulls.length` — is the "already asked" marker. A repo with
+    // no open PRs resolves to `pulls: []`, so gating on the array length made
+    // every completed (or failed) response re-arm this effect and fire the
+    // endpoint again forever.
+    if (fetchedPRsForRepo.current === repoName) return;
 
     const [owner, repo] = repoName.split('/');
     if (owner && repo) {
       fetchedPRsForRepo.current = repoName;
       gh.fetchPulls(owner, repo);
     }
-  }, [
-    gh.connected,
-    gh.loading,
-    gh.repositories,
-    gh.selectedRepoName,
-    gh.fetchPulls,
-    gh.pulls.length,
-  ]);
+  }, [gh.connected, gh.loading, gh.repositories, gh.selectedRepoName, gh.fetchPulls]);
 
   const isNewUser = !gh.connected && !dashboardData?.activity?.length;
   const isLoading =

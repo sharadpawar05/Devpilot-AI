@@ -53,8 +53,21 @@ function isClean(form: ProfileForm, saved: SettingsData['profile']): boolean {
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 const ALLOWED_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
 
+// Rows provisioned before the token's claims were threaded through carry this
+// address; the sign-in provider's real email is the truth for those.
+const PLACEHOLDER_EMAIL_SUFFIX = '@placeholder.local';
+
+function isPlaceholderEmail(email: string): boolean {
+  return email.endsWith(PLACEHOLDER_EMAIL_SUFFIX);
+}
+
+// The seeded default name, never a displayable identity.
+function isDefaultName(name: string): boolean {
+  return name.trim() === '' || name === 'User';
+}
+
 export function ProfileSettings() {
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const { addToast } = useToast();
   const { data, isLoading } = useSettingsQuery();
   const updateProfile = useUpdateProfile();
@@ -71,22 +84,27 @@ export function ProfileSettings() {
   // Seed the form once the server data arrives. The schema default timezone is
   // 'UTC' (never customized); suggest the browser zone so a fresh user gets
   // their real timezone — the form is dirty so they just click Save.
+  // Wait for auth too: the token is the fallback when the stored profile still
+  // holds a placeholder, so seeding without it would flash the wrong identity.
   useEffect(() => {
-    if (data && form === null) {
+    if (data && !authLoading && form === null) {
       const savedTz = data.profile.timezone;
       const bz = browserTimezone();
       const tz = savedTz === 'UTC' ? bz : savedTz;
-      const seeded = { name: data.profile.name, timezone: tz };
+      const name = isDefaultName(data.profile.name) && user?.name ? user.name : data.profile.name;
+      const seeded = { name, timezone: tz };
       setForm(seeded);
       setDirty(!isClean(seeded, data.profile));
     }
-  }, [data, form]);
+  }, [data, authLoading, user, form]);
 
   if (isLoading || !data || !form) {
     return <ProfileSkeleton />;
   }
 
   const avatarUrl = data.profile.avatarUrl || user?.avatarUrl || null;
+  const email =
+    isPlaceholderEmail(data.profile.email) && user?.email ? user.email : data.profile.email;
 
   const handleChange = (patch: Partial<ProfileForm>) => {
     const next = { ...form, ...patch };
@@ -183,7 +201,7 @@ export function ProfileSettings() {
         </div>
         <div className="space-y-1">
           <p className="text-sm font-medium">{form.name || 'User'}</p>
-          <p className="text-xs text-muted-foreground">{data.profile.email}</p>
+          <p className="text-xs text-muted-foreground">{email}</p>
           {avatarUrl && (
             <button
               type="button"
@@ -210,7 +228,7 @@ export function ProfileSettings() {
         </Field>
 
         <Field label="Email" htmlFor="profile-email">
-          <Input id="profile-email" value={data.profile.email} type="email" disabled readOnly />
+          <Input id="profile-email" value={email} type="email" disabled readOnly />
           <p className="mt-1 text-xs text-muted-foreground">
             Your email is provided by your sign-in provider and cannot be changed here.
           </p>

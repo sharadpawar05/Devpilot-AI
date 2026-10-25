@@ -22,6 +22,24 @@ interface LocalUser {
   avatarUrl: string | null;
 }
 
+// Value written by resolveLocalUserId()/ensureUserExists before the token's
+// claims were threaded through — never a real address.
+const PLACEHOLDER_EMAIL_SUFFIX = '@placeholder.local';
+const DEFAULT_FULL_NAME = 'User';
+
+interface LocalIdentity {
+  email?: string;
+  name?: string;
+}
+
+// Claims Supabase puts on the access token. They are the only source of truth
+// for a provider-owned email and the OAuth display name.
+function identityFromAuth(auth: AuthJWTPayload): LocalIdentity {
+  const meta = auth.user_metadata as { full_name?: unknown; name?: unknown } | undefined;
+  const claim = meta?.full_name ?? meta?.name;
+  return { email: auth.email, name: typeof claim === 'string' ? claim : undefined };
+}
+
 async function findUser(sub: string): Promise<LocalUser | null> {
   return db.user.findUnique({
     where: { supabaseUserId: sub },
@@ -29,19 +47,40 @@ async function findUser(sub: string): Promise<LocalUser | null> {
   });
 }
 
+// Repairs a row that was provisioned without the token's profile (the GitHub
+// OAuth path creates users through resolveLocalUserId, which has no identity
+// to hand). Only the placeholder/default values are overwritten, so a name the
+// user typed themselves is never clobbered.
+async function healUser(user: LocalUser, identity: LocalIdentity): Promise<LocalUser> {
+  const data: { email?: string; fullName?: string } = {};
+  if (identity.email && user.email.endsWith(PLACEHOLDER_EMAIL_SUFFIX)) {
+    data.email = identity.email;
+  }
+  if (identity.name && user.fullName === DEFAULT_FULL_NAME) {
+    data.fullName = identity.name;
+  }
+  if (Object.keys(data).length === 0) return user;
+  return db.user.update({
+    where: { id: user.id },
+    data,
+    select: { id: true, email: true, fullName: true, avatarUrl: true },
+  });
+}
+
 // Mirrors the ensure helpers in ai-history/dashboard: the settings read/write
 // paths self-heal a missing local row instead of hard-404ing on first access.
-async function ensureUser(sub: string, email?: string): Promise<LocalUser> {
-  const existing = await findUser(sub);
-  if (existing) return existing;
+async function ensureUser(auth: AuthJWTPayload): Promise<LocalUser> {
+  const identity = identityFromAuth(auth);
+  const existing = await findUser(auth.sub);
+  if (existing) return healUser(existing, identity);
   await db.user.create({
     data: {
-      supabaseUserId: sub,
-      email: email || `${sub}@placeholder.local`,
-      fullName: 'User',
+      supabaseUserId: auth.sub,
+      email: identity.email || `${auth.sub}${PLACEHOLDER_EMAIL_SUFFIX}`,
+      fullName: identity.name || DEFAULT_FULL_NAME,
     },
   });
-  const created = await findUser(sub);
+  const created = await findUser(auth.sub);
   if (!created) throw new Error('Failed to provision user');
   return created;
 }
@@ -162,7 +201,7 @@ export async function settingsRoutes(app: FastifyInstance) {
   // GET /settings — merged profile + all persisted sections (upsert-on-read).
   app.get('/settings', { preHandler: [authenticate] }, async (request, reply) => {
     const auth = (request as FastifyRequest & { auth: AuthJWTPayload }).auth;
-    const user = await ensureUser(auth.sub, auth.email);
+    const user = await ensureUser(auth);
     const settings = await getOrCreateSettings(user.id);
     return reply.send({ success: true, ...toSettingsResponse(user, settings) });
   });
@@ -187,7 +226,7 @@ export async function settingsRoutes(app: FastifyInstance) {
           },
         });
       }
-      const user = await ensureUser(auth.sub, auth.email);
+      const user = await ensureUser(auth);
       // Name (User.fullName) and timezone (UserSettings.timezone) live in two
       // tables; update them atomically so a partial write never leaves the two
       // out of sync.
@@ -228,7 +267,7 @@ export async function settingsRoutes(app: FastifyInstance) {
           },
         });
       }
-      const user = await ensureUser(auth.sub, auth.email);
+      const user = await ensureUser(auth);
       const settings = await db.userSettings.upsert({
         where: { userId: user.id },
         update: parsed.data,
@@ -258,7 +297,7 @@ export async function settingsRoutes(app: FastifyInstance) {
           },
         });
       }
-      const user = await ensureUser(auth.sub, auth.email);
+      const user = await ensureUser(auth);
       const settings = await db.userSettings.upsert({
         where: { userId: user.id },
         update: parsed.data,
@@ -288,7 +327,7 @@ export async function settingsRoutes(app: FastifyInstance) {
           },
         });
       }
-      const user = await ensureUser(auth.sub, auth.email);
+      const user = await ensureUser(auth);
       const settings = await db.userSettings.upsert({
         where: { userId: user.id },
         update: parsed.data,
@@ -318,7 +357,7 @@ export async function settingsRoutes(app: FastifyInstance) {
           },
         });
       }
-      const user = await ensureUser(auth.sub, auth.email);
+      const user = await ensureUser(auth);
       const settings = await db.userSettings.upsert({
         where: { userId: user.id },
         update: parsed.data,
@@ -350,7 +389,7 @@ export async function settingsRoutes(app: FastifyInstance) {
           },
         });
       }
-      const user = await ensureUser(auth.sub, auth.email);
+      const user = await ensureUser(auth);
 
       let decoded: { mime: string; buffer: Buffer; ext: string };
       try {
@@ -549,7 +588,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const auth = (request as FastifyRequest & { auth: AuthJWTPayload }).auth;
-      await ensureUser(auth.sub, auth.email);
+      await ensureUser(auth);
       const sid = await currentSessionId(auth);
       if (!sid) {
         // Without a session id the challenge could never prove re-auth (a

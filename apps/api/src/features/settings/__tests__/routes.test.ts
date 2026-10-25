@@ -24,10 +24,15 @@ vi.mock('@/core/auth/middleware', () => ({
         error: { code: 'UNAUTHORIZED', message: 'Missing or invalid authorization header' },
       });
     }
-    // Token format: "sub" or "sub|sessionId"
+    // Token format: "sub", "sub|sessionId", or "sub|sessionId|email|fullName"
     const raw = header.slice(7);
-    const [sub, sessionId] = raw.split('|');
-    request.auth = { sub, session_id: sessionId };
+    const [sub, sessionId, email, fullName] = raw.split('|');
+    request.auth = {
+      sub,
+      session_id: sessionId,
+      email: email ? decodeURIComponent(email) : undefined,
+      user_metadata: fullName ? { full_name: decodeURIComponent(fullName) } : undefined,
+    };
   },
 }));
 
@@ -168,6 +173,64 @@ describe('settings routes', () => {
       update: {},
       create: { userId: 'user-1' },
     });
+  });
+
+  it('heals a placeholder profile from the claims on the token', async () => {
+    const placeholder = {
+      id: 'user-9',
+      email: 'user-9@placeholder.local',
+      fullName: 'User',
+      avatarUrl: null,
+    };
+    const healed = { ...placeholder, email: 'real@example.com', fullName: 'Sharad Pawar' };
+    db.user.findUnique.mockResolvedValueOnce(placeholder).mockResolvedValue(healed);
+    db.user.update.mockResolvedValue(healed);
+    db.userSettings.upsert.mockResolvedValue(defaultSettingsRow);
+
+    const token = [
+      'user-9',
+      'sid-9',
+      encodeURIComponent('real@example.com'),
+      encodeURIComponent('Sharad Pawar'),
+    ].join('|');
+    const res = await app.inject({
+      method: 'GET',
+      url: '/settings',
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(db.user.update).toHaveBeenCalledWith({
+      where: { id: 'user-9' },
+      data: { email: 'real@example.com', fullName: 'Sharad Pawar' },
+      select: { id: true, email: true, fullName: true, avatarUrl: true },
+    });
+    const body = res.json() as { profile: { email: string; name: string } };
+    expect(body.profile.email).toBe('real@example.com');
+    expect(body.profile.name).toBe('Sharad Pawar');
+  });
+
+  it('leaves a customized profile alone even when the token carries claims', async () => {
+    db.user.findUnique.mockResolvedValue(localUser);
+    db.userSettings.upsert.mockResolvedValue(defaultSettingsRow);
+
+    const token = [
+      'supa-1',
+      'sid-1',
+      encodeURIComponent('other@example.com'),
+      encodeURIComponent('Someone Else'),
+    ].join('|');
+    const res = await app.inject({
+      method: 'GET',
+      url: '/settings',
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(db.user.update).not.toHaveBeenCalled();
+    const body = res.json() as { profile: { email: string; name: string } };
+    expect(body.profile.email).toBe('a@test.com');
+    expect(body.profile.name).toBe('Alice');
   });
 
   it('PATCH /settings/profile persists timezone for the authenticated user only', async () => {
