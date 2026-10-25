@@ -624,7 +624,10 @@ describe('settings routes', () => {
     db.user.findUnique.mockResolvedValue({ ...localUser, avatarUrl });
     db.user.update.mockResolvedValue({ ...localUser, avatarUrl: null });
     db.userSettings.upsert.mockResolvedValue(defaultSettingsRow);
-    const fetchMock = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({}) }));
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit) =>
+        ({ ok: true, status: 200, json: async () => ({}) }) as unknown as Response,
+    );
     vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
 
     const res = await app.inject({

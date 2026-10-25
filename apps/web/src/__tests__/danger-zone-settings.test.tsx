@@ -198,7 +198,7 @@ describe('DangerZoneSettings', () => {
 
     await waitFor(() => {
       expect(mockSignInWithOAuth).toHaveBeenCalledWith('google', {
-        redirectTo: expect.stringContaining('/settings?tab=danger-zone'),
+        redirectTo: expect.stringContaining('/settings?tab=danger'),
         forceLogin: true,
       });
     });
