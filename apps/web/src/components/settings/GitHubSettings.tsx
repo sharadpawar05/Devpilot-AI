@@ -1,13 +1,108 @@
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Github, Link, Unlink, RefreshCw } from 'lucide-react';
+import { Github, Link, Unlink, RefreshCw, Save, Loader2 } from 'lucide-react';
+import { useAuth } from '@/auth';
 import { useGitHub } from '@/hooks/use-github';
-import { useSettings } from '@/lib/settings-context';
+import { useToast } from '@/components/ui/toast';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useSettingsQuery, useUpdateGitHub } from '@/hooks/use-settings';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
 
 export function GitHubSettings() {
   const navigate = useNavigate();
   const gh = useGitHub();
-  const { settings, updateGitHub } = useSettings();
+  const { session } = useAuth();
+  const { addToast } = useToast();
+  const { data, isLoading } = useSettingsQuery();
+  const updateGitHub = useUpdateGitHub();
+
+  const token = session?.accessToken;
+  const savedRepo = data?.github.defaultRepository ?? '';
+  const savedBranch = data?.github.defaultBranch ?? 'main';
+
+  const [repo, setRepo] = useState('');
+  const [branch, setBranch] = useState('main');
+  const [branchList, setBranchList] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [seeded, setSeeded] = useState(false);
+
+  // Seed the form from the saved server values once.
+  useEffect(() => {
+    if (data && !seeded) {
+      setRepo(data.github.defaultRepository ?? '');
+      setBranch(data.github.defaultBranch ?? 'main');
+      setSeeded(true);
+    }
+  }, [data, seeded]);
+
+  // Load branches for the chosen default repository so the branch dropdown
+  // reflects that repo (gh.branches tracks the currently selected review repo).
+  useEffect(() => {
+    if (!repo || !token) {
+      setBranchList([]);
+      return;
+    }
+    const [owner, name] = repo.split('/');
+    if (!owner || !name) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `${API_BASE_URL}/github/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/branches`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+        const body = (await res.json()) as {
+          success?: boolean;
+          branches?: Array<{ name: string }>;
+        };
+        if (!cancelled && body.success && body.branches) {
+          setBranchList(body.branches.map((b) => b.name));
+        }
+      } catch {
+        // ignore — the saved branch still renders even if the list is stale
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [repo, token]);
+
+  if (isLoading || !data || !seeded) {
+    return <GitHubSkeleton />;
+  }
+
+  const dirty = repo !== savedRepo || branch !== savedBranch;
+  const saving = updateGitHub.isPending;
+
+  const handleSave = async () => {
+    setError(null);
+    try {
+      await updateGitHub.mutateAsync({
+        defaultRepository: repo || null,
+        defaultBranch: branch || null,
+      });
+      addToast('GitHub defaults saved', 'success');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save GitHub defaults');
+    }
+  };
+
+  const handleReconnect = async () => {
+    setError(null);
+    // Kick off the GitHub OAuth flow and come back to this tab afterwards.
+    const url = await gh.connect('/settings?tab=github');
+    if (url) window.location.href = url;
+  };
+
+  const repoOptions = gh.repositories.map((r) => r.full_name);
+  // Keep the saved repo selectable even if it is not in the loaded list yet
+  // (still syncing / no longer accessible) so the value never silently resets.
+  if (repo && !repoOptions.includes(repo)) repoOptions.unshift(repo);
+
+  const branchOptions = [...branchList];
+  if (branch && !branchOptions.includes(branch)) branchOptions.unshift(branch);
 
   return (
     <div className="space-y-8">
@@ -19,7 +114,7 @@ export function GitHubSettings() {
       {gh.connected && gh.githubUser ? (
         <div className="space-y-6">
           <div className="rounded-xl border border-input bg-card p-5">
-            <div className="flex items-center justify-between mb-4">
+            <div className="mb-4 flex items-center justify-between">
               <h3 className="text-sm font-semibold">Connected Account</h3>
               <span className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
@@ -47,32 +142,43 @@ export function GitHubSettings() {
             <h3 className="mb-4 text-sm font-semibold">Defaults</h3>
             <div className="space-y-4">
               <div>
-                <label className="mb-1.5 block text-sm font-medium">Default Repository</label>
+                <label htmlFor="gh-default-repo" className="mb-1.5 block text-sm font-medium">
+                  Default Repository
+                </label>
                 <select
-                  value={settings.github.defaultRepository}
-                  onChange={(e) => updateGitHub({ defaultRepository: e.target.value })}
-                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                  id="gh-default-repo"
+                  value={repo}
+                  onChange={(e) => {
+                    setRepo(e.target.value);
+                    setBranch('main');
+                  }}
+                  disabled={saving}
+                  className={selectCls}
                 >
                   <option value="">Select repository...</option>
-                  {gh.repositories.map((repo) => (
-                    <option key={repo.full_name} value={repo.full_name}>
-                      {repo.full_name}
+                  {repoOptions.map((full) => (
+                    <option key={full} value={full}>
+                      {full}
                     </option>
                   ))}
                 </select>
               </div>
 
-              {settings.github.defaultRepository && (
+              {repo && (
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium">Default Branch</label>
+                  <label htmlFor="gh-default-branch" className="mb-1.5 block text-sm font-medium">
+                    Default Branch
+                  </label>
                   <select
-                    value={settings.github.defaultBranch}
-                    onChange={(e) => updateGitHub({ defaultBranch: e.target.value })}
-                    className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                    id="gh-default-branch"
+                    value={branch}
+                    onChange={(e) => setBranch(e.target.value)}
+                    disabled={saving}
+                    className={selectCls}
                   >
-                    {gh.branches.map((b) => (
-                      <option key={b.name} value={b.name}>
-                        {b.name}
+                    {branchOptions.map((b) => (
+                      <option key={b} value={b}>
+                        {b}
                       </option>
                     ))}
                   </select>
@@ -81,8 +187,20 @@ export function GitHubSettings() {
             </div>
           </div>
 
-          <div className="flex gap-3">
-            <Button variant="outline" onClick={() => gh.refreshConnection()} className="gap-2">
+          {error && <p className="text-sm text-destructive">{error}</p>}
+
+          <div className="flex items-center gap-3">
+            <Button onClick={handleSave} disabled={saving || !dirty} className="gap-2">
+              {saving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <>
+                  <Save className="h-4 w-4" />
+                  Save Defaults
+                </>
+              )}
+            </Button>
+            <Button variant="outline" onClick={handleReconnect} className="gap-2">
               <RefreshCw className="h-4 w-4" />
               Reconnect
             </Button>
@@ -110,6 +228,22 @@ export function GitHubSettings() {
           </Button>
         </div>
       )}
+    </div>
+  );
+}
+
+const selectCls =
+  'w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary disabled:opacity-50';
+
+function GitHubSkeleton() {
+  return (
+    <div className="space-y-8">
+      <div className="space-y-2">
+        <Skeleton className="h-6 w-24" />
+        <Skeleton className="h-4 w-64" />
+      </div>
+      <Skeleton className="h-40 w-full" />
+      <Skeleton className="h-48 w-full" />
     </div>
   );
 }

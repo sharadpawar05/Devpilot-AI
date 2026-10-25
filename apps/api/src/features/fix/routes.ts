@@ -5,6 +5,7 @@ import { aiService } from '@/core/ai/service';
 import { classifyAIError } from '@/core/ai/classify-error';
 import { usageService, sendUsageLimitReached, AI_CREDIT_COSTS } from '@/core/usage';
 import { PromptRegistry, loadMarkdownPrompts } from '@devpilot/ai-prompts';
+import { resolveAIRequestDefaults } from '@/features/settings/ai-prefs';
 
 const registry = new PromptRegistry();
 registry.registerAll(loadMarkdownPrompts());
@@ -69,7 +70,11 @@ export async function fixRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const auth = (request as { auth: { sub: string } }).auth;
-      const parsed = fixRequestSchema.safeParse(request.body);
+      const body = await resolveAIRequestDefaults(
+        auth.sub,
+        request.body as Record<string, unknown>,
+      );
+      const parsed = fixRequestSchema.safeParse(body);
 
       if (!parsed.success) {
         return reply.status(400).send({

@@ -19,6 +19,8 @@ import { sprintSummaryRoutes } from '@/features/sprint-summary';
 import { releaseNotesRoutes } from '@/features/release-notes';
 import { engineeringStatusRoutes } from '@/features/engineering-status';
 import { incidentSummaryRoutes } from '@/features/incident-summary';
+import { settingsRoutes } from '@/features/settings';
+import { notificationsRoutes } from '@/features/notifications';
 
 export async function apiV1Routes(app: FastifyInstance) {
   await app.register(healthRoutes);
@@ -42,4 +44,6 @@ export async function apiV1Routes(app: FastifyInstance) {
   await app.register(releaseNotesRoutes);
   await app.register(engineeringStatusRoutes);
   await app.register(incidentSummaryRoutes);
+  await app.register(settingsRoutes);
+  await app.register(notificationsRoutes);
 }

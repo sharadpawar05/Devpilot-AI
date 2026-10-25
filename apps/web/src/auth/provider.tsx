@@ -8,15 +8,20 @@ import {
   type ReactNode,
 } from 'react';
 import type { Session, AuthUser, AuthProvider as OAuthProvider } from '@devpilot/types';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { AuthUnavailableError, isAuthServiceReachable } from '@/lib/supabase-health';
+import { clearAppearance } from '@/lib/appearance';
 
 interface AuthContextType {
   user: AuthUser | null;
   session: Session | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  signInWithOAuth: (provider: OAuthProvider) => Promise<void>;
+  signInWithOAuth: (
+    provider: OAuthProvider,
+    options?: { redirectTo?: string; forceLogin?: boolean },
+  ) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -89,6 +94,7 @@ function mapSession(
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     let mounted = true;
@@ -123,31 +129,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const signInWithOAuth = useCallback(async (provider: OAuthProvider) => {
-    const reachable = await isAuthServiceReachable();
-    if (!reachable) {
-      throw new AuthUnavailableError();
-    }
+  const signInWithOAuth = useCallback(
+    async (provider: OAuthProvider, options?: { redirectTo?: string; forceLogin?: boolean }) => {
+      const reachable = await isAuthServiceReachable();
+      if (!reachable) {
+        throw new AuthUnavailableError();
+      }
 
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: {
-        redirectTo: `${window.location.origin}/dashboard`,
-      },
-    });
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: options?.redirectTo ?? `${window.location.origin}/dashboard`,
+          // Ask the provider to re-prompt credentials (used for re-auth flows
+          // such as account deletion confirmation).
+          ...(options?.forceLogin ? { queryParams: { prompt: 'login' } } : {}),
+        },
+      });
 
-    if (error) {
-      throw error;
-    }
-  }, []);
+      if (error) {
+        throw error;
+      }
+    },
+    [],
+  );
 
   const signOut = useCallback(async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      throw error;
+    // Local sign-out must always succeed: a server-side logout can fail when
+    // the auth user was already deleted (e.g. account deletion). Fall back to
+    // clearing the local session so the app can leave authenticated routes.
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        await supabase.auth.signOut({ scope: 'local' });
+      }
+    } catch {
+      try {
+        await supabase.auth.signOut({ scope: 'local' });
+      } catch {
+        // ignore — cleared in state below regardless
+      }
     }
     setSession(null);
-  }, []);
+    // Drop every cached query and document appearance so the next account
+    // never starts from the previous user's settings/notifications/theme.
+    queryClient.clear();
+    clearAppearance();
+  }, [queryClient]);
 
   const value: AuthContextType = useMemo(
     () => ({

@@ -9,6 +9,10 @@ const envSchema = z.object({
   CORS_ORIGIN: z.string().default('http://localhost:3000,https://devpilot-ai-phi.vercel.app'),
   SUPABASE_URL: z.string().url('SUPABASE_URL must be a valid URL'),
   SUPABASE_ANON_KEY: z.string().min(1, 'SUPABASE_ANON_KEY is required'),
+  // Service-role key (server-only). Optional at boot so the app still starts
+  // when avatar storage / account deletion are unconfigured; those routes
+  // return a clear CONFIGURATION_ERROR instead.
+  SUPABASE_SERVICE_ROLE_KEY: z.string().default(''),
   DATABASE_URL: z.string().url('DATABASE_URL must be a valid PostgreSQL connection string'),
   ENCRYPTION_SECRET: z.string().min(16, 'ENCRYPTION_SECRET must be at least 16 characters'),
   COOKIE_SECRET: z.string().min(16, 'COOKIE_SECRET must be at least 16 characters'),

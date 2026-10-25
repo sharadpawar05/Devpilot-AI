@@ -1,13 +1,13 @@
 import { Menu, Moon, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useTheme } from '@/lib/theme';
+import { useThemeToggle } from '@/hooks/use-theme-toggle';
 import { SearchBar } from '@/components/search';
 import { useSidebar } from './sidebar-provider';
 import { UserMenu } from './user-menu';
 import { NotificationBell } from './notification-bell';
 
 export function TopNavigation() {
-  const { theme, setTheme } = useTheme();
+  const { resolvedTheme, toggle } = useThemeToggle();
   const { isMobile, setMobileOpen } = useSidebar();
 
   return (
@@ -38,8 +38,8 @@ export function TopNavigation() {
           variant="ghost"
           size="icon"
           className="shrink-0"
-          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-          aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
+          onClick={toggle}
+          aria-label={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} theme`}
         >
           <Sun
             className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0"

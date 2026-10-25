@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { User, Sparkles, Github, Palette, Bell, Shield, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ProfileSettings } from './ProfileSettings';
@@ -11,6 +11,20 @@ import { DangerZoneSettings } from './DangerZoneSettings';
 
 export type SettingsSection =
   'profile' | 'ai' | 'github' | 'appearance' | 'notifications' | 'security' | 'danger';
+
+const SECTION_KEYS = [
+  'profile',
+  'ai',
+  'github',
+  'appearance',
+  'notifications',
+  'security',
+  'danger',
+] as const;
+
+function isSection(value: string): value is SettingsSection {
+  return (SECTION_KEYS as readonly string[]).includes(value);
+}
 
 const sections: { key: SettingsSection; label: string; icon: typeof User; danger?: boolean }[] = [
   { key: 'profile', label: 'Profile', icon: User },
@@ -33,8 +47,16 @@ const sectionComponents: Record<SettingsSection, React.ComponentType> = {
 };
 
 export function SettingsLayout() {
-  const [activeSection, setActiveSection] = useState<SettingsSection>('profile');
+  // Tab lives in the URL (?tab=profile) so it is shareable, back/forward
+  // works, and a reload lands on the same section.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab') ?? 'profile';
+  const activeSection: SettingsSection = isSection(tabParam) ? tabParam : 'profile';
   const ActiveComponent = sectionComponents[activeSection];
+
+  const setActiveSection = (section: SettingsSection) => {
+    setSearchParams({ tab: section }, { replace: true });
+  };
 
   return (
     <div className="flex h-full">

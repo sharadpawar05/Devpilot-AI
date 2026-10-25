@@ -119,9 +119,64 @@ model User {
   repoHealthSnapshots RepoHealthSnapshot[]
   userUsages       UserUsage[]
   aiUsageEvents    AIUsageEvent[]
+  settings         UserSettings?
+  notifications    Notification[]
 
   @@index([organizationId])
   @@map("users")
+}
+
+model UserSettings {
+  id                     String   @id @default(uuid()) @db.Uuid
+  userId                 String   @unique @db.Uuid
+  // profile
+  timezone               String   @default("UTC")
+  // ai
+  defaultProvider        String   @default("gemini")
+  defaultModel           String   @default("gemini-3.6-flash")
+  temperature            Float    @default(0.7)
+  maxTokens              Int      @default(4096)
+  streamResponses        Boolean  @default(true)
+  markdownOutput         Boolean  @default(true)
+  autoScroll             Boolean  @default(true)
+  autoCopy               Boolean  @default(false)
+  defaultReviewType      String   @default("standard")
+  defaultReviewDepth     String   @default("moderate")
+  // github
+  defaultRepository      String?
+  defaultBranch          String?  @default("main")
+  // appearance
+  theme                  String   @default("system")
+  compactMode            Boolean  @default(false)
+  fontSize               String   @default("default")
+  accentColor            String   @default("blue")
+  // notifications
+  notifyReviewComplete   Boolean  @default(true)
+  notifyPrAnalysis       Boolean  @default(true)
+  notifyRepositorySync   Boolean  @default(false)
+  notifyGithubAlerts     Boolean  @default(true)
+  notifyWeeklySummary    Boolean  @default(false)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_settings")
+}
+
+model Notification {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @db.Uuid
+  title       String
+  description String
+  type        String
+  read        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read, createdAt(sort: Desc)])
+  @@map("notifications")
 }
 
 model Project {

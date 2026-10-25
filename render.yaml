@@ -38,6 +38,9 @@ services:
         sync: false
       - key: SUPABASE_ANON_KEY
         sync: false
+      # Optional but needed for avatar storage + account deletion (server-only).
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
       - key: ENCRYPTION_SECRET
         sync: false
       - key: COOKIE_SECRET

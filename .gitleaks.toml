@@ -6,6 +6,10 @@ description = "Known historical findings in .env.example committed by dc8bfd1b. 
 commits = ["dc8bfd1b1e9320a8b9811b65d67f33c49bf7567d"]
 
 [[allowlists]]
+description = "Supabase service_role JWT in .env.example committed by 87437ca (placeholder restored in bb688cc). Rotate the key; remove this entry once history is scrubbed."
+commits = ["87437ca197ae745252c7c7d333e755ecebcda171"]
+
+[[allowlists]]
 description = "Synthetic tokens in unit tests that exercise the log-redaction patterns (ghp_*, JWTs). Not real credentials."
 paths = [
   '''apps/api/src/core/logging/__tests__/redact\.test\.ts''',

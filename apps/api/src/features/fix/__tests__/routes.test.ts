@@ -18,6 +18,20 @@ vi.mock('@/config', () => ({
   PACKAGE_VERSION: '0.0.0',
 }));
 
+// resolveAIRequestDefaults reads saved prefs — never let unit tests reach a
+// real database. null → fail-soft defaults.
+vi.mock('@/core/db', () => ({
+  db: {
+    user: {
+      findUnique: vi.fn().mockResolvedValue(null),
+      create: vi.fn().mockResolvedValue({ id: 'local-user' }),
+    },
+    userSettings: {
+      findUnique: vi.fn().mockResolvedValue(null),
+    },
+  },
+}));
+
 type Handler = (request: unknown, reply: FakeReply) => Promise<unknown>;
 
 interface FakeReply {

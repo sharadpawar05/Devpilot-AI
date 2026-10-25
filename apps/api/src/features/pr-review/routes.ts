@@ -6,6 +6,7 @@ import { classifyAIError } from '@/core/ai/classify-error';
 import { usageService, sendUsageLimitReached, AI_CREDIT_COSTS } from '@/core/usage';
 import { PromptRegistry, loadMarkdownPrompts } from '@devpilot/ai-prompts';
 import { repositoryIntelligenceService } from '@/features/repo-intelligence';
+import { resolveAIRequestDefaults } from '@/features/settings/ai-prefs';
 import { sanitizeError } from '@/core/errors/sanitize';
 import { githubOwnerSchema, githubRepoSchema } from '@/core/validation/repository';
 
@@ -147,7 +148,11 @@ export async function prReviewRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const auth = (request as { auth: { sub: string } }).auth;
-      const parsed = reviewSchema.safeParse(request.body);
+      const body = await resolveAIRequestDefaults(
+        auth.sub,
+        request.body as Record<string, unknown>,
+      );
+      const parsed = reviewSchema.safeParse(body);
 
       if (!parsed.success) {
         return reply.status(400).send({
@@ -342,7 +347,11 @@ export async function prReviewRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       const auth = (request as { auth: { sub: string } }).auth;
-      const parsed = analyzeSchema.safeParse(request.body);
+      const body = await resolveAIRequestDefaults(
+        auth.sub,
+        request.body as Record<string, unknown>,
+      );
+      const parsed = analyzeSchema.safeParse(body);
 
       if (!parsed.success) {
         return reply.status(400).send({

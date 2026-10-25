@@ -4,6 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import { codeReviewRoutes } from '@/features/code-review/routes';
 import { aiService } from '@/core/ai/service';
 import { usageService, type ConsumeResult } from '@/core/usage';
+import { notifyIfEnabled } from '@/features/notifications/routes';
 
 vi.mock('@/core/ai/service', () => ({
   aiService: {
@@ -16,6 +17,24 @@ vi.mock('@/config', () => ({
   getEnv: () => ({ CORS_ORIGIN: '*' }),
   loadEnv: () => ({}),
   PACKAGE_VERSION: '0.0.0',
+}));
+
+vi.mock('@/features/notifications/routes', () => ({
+  notifyIfEnabled: vi.fn(),
+}));
+
+// resolveAIRequestDefaults reads saved prefs — never let unit tests reach a
+// real database. null → fail-soft defaults.
+vi.mock('@/core/db', () => ({
+  db: {
+    user: {
+      findUnique: vi.fn().mockResolvedValue(null),
+      create: vi.fn().mockResolvedValue({ id: 'local-user' }),
+    },
+    userSettings: {
+      findUnique: vi.fn().mockResolvedValue(null),
+    },
+  },
 }));
 
 type Handler = (request: unknown, reply: FakeReply) => Promise<unknown>;
@@ -111,5 +130,56 @@ describe('POST /code-review error sanitization', () => {
       'AI_CREDITS',
       expect.any(Number),
     );
+  });
+});
+
+describe('POST /code-review completion notification', () => {
+  let handler: Handler;
+  let generateMock: MockInstance<typeof aiService.generate>;
+
+  beforeEach(async () => {
+    handler = await codeReviewHandler();
+    generateMock = vi.mocked(aiService.generate);
+    vi.spyOn(usageService, 'consumeQuota').mockResolvedValue(consumeOk());
+    vi.spyOn(usageService, 'refundQuota').mockResolvedValue(undefined as never);
+    vi.spyOn(usageService, 'recordAIUsageEvent').mockResolvedValue(undefined as never);
+    vi.mocked(notifyIfEnabled).mockClear();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('creates an in-app notification when a review completes', async () => {
+    generateMock.mockResolvedValue({
+      content: 'Looks good.',
+      provider: 'gemini',
+      model: 'gemini-3.6-flash',
+      tokens: { input: 10, output: 20, total: 30 },
+      latencyMs: 42,
+      cost: { totalCost: 0.01 },
+    } as never);
+
+    const reply = makeReply();
+    await handler(requestBody({ reviewType: 'Security', reviewDepth: 'Quick' }), reply);
+
+    expect(reply.payload).toMatchObject({ success: true });
+    expect(notifyIfEnabled).toHaveBeenCalledTimes(1);
+    expect(notifyIfEnabled).toHaveBeenCalledWith(
+      'supa-user',
+      'review_complete',
+      'Code review completed',
+      expect.stringContaining('Security'),
+    );
+  });
+
+  it('does not notify when the review fails', async () => {
+    generateMock.mockRejectedValue(new Error('upstream exploded'));
+
+    const reply = makeReply();
+    await handler(requestBody(), reply);
+
+    expect(reply.statusCode).toBeGreaterThanOrEqual(400);
+    expect(notifyIfEnabled).not.toHaveBeenCalled();
   });
 });
